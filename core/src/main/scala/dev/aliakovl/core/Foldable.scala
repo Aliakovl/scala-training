@@ -1,7 +1,7 @@
-package core
+package dev.aliakovl.core
 
-import core.Semigroup.SemigroupOps
-import core.Traverse.listTraverse
+import dev.aliakovl.core.Semigroup._
+import dev.aliakovl.core.Traverse._
 
 trait Foldable[T[_]] {
   def fold[M: Monoid](tm: T[M]): M = foldMap[M, M](tm)(identity)

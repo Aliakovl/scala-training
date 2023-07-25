@@ -1,7 +1,7 @@
-package optics
+package dev.aliakovl.optics
 
-import core.{Applicative, Functor}
-import core.data._
+import dev.aliakovl.core.data.Const
+import dev.aliakovl.core._
 
 import scala.language.existentials
 

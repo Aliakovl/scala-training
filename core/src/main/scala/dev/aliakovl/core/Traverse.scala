@@ -1,4 +1,4 @@
-package core
+package dev.aliakovl.core
 
 trait Traverse[T[_]] extends Functor[T] with Foldable[T] {
   def traverse[F[_]: Applicative, A, B](ta: T[A])(f: A => F[B]): F[T[B]] =

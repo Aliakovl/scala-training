@@ -1,6 +1,6 @@
-package core
+package dev.aliakovl.core
 
-import core.Monoid._
+import dev.aliakovl.core.Monoid._
 
 trait Semigroup[A] {
   def combine(x: A, y: A): A

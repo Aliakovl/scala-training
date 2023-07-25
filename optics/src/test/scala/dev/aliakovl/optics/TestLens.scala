@@ -1,4 +1,4 @@
-import optics.Lens
+package dev.aliakovl.optics
 
 import scala.language.existentials
 
@@ -26,5 +26,6 @@ object TestLens {
     assert(personAddressLens.get(john) == address)
     assert(personStreetLens.set("New Street")(john) == Person("John", 20, Address(10, "New Street")))
     assert(personStreetLens.modify(_.reverse)(john) == Person("John", 20, Address(10, "teertS hgiH")))
+    println("TestLens")
   }
 }

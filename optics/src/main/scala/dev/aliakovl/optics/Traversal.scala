@@ -1,7 +1,7 @@
-package optics
+package dev.aliakovl.optics
 
-import core.{Applicative, Traverse}
-import core.data.Identity
+import dev.aliakovl.core.data.Identity
+import dev.aliakovl.core._
 
 trait Traversal[S, A] {
   def modifyA[F[_]: Applicative](f: A => F[A])(s: S): F[S]

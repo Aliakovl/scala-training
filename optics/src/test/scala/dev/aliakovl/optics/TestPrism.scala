@@ -1,4 +1,4 @@
-import optics.Prism
+package dev.aliakovl.optics
 
 object TestPrism {
   sealed trait Json
@@ -17,5 +17,6 @@ object TestPrism {
     assert(jStr.getOption(JStr("Hello")) == Some("Hello"))
     assert(jStr.modify(_.reverse)(JStr("Hello")) == JStr("olleH"))
     assert(jStr.modify(_.toUpperCase)(JNum(234)) == JNum(234))
+    println("TestPrism")
   }
 }

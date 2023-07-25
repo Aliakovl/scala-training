@@ -1,4 +1,4 @@
-package core
+package dev.aliakovl.core
 
 trait Applicative[F[_]] extends Functor[F] {
   def pure[A](a: A): F[A]

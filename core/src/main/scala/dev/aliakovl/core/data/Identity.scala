@@ -1,6 +1,6 @@
-package core.data
+package dev.aliakovl.core.data
 
-import core.{Applicative, Functor}
+import dev.aliakovl.core._
 
 case class Identity[A](value: A) extends AnyVal
 

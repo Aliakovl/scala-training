@@ -1,7 +1,7 @@
-package optics
+package dev.aliakovl.optics
 
-import core.Applicative
-import core.data.Const
+import dev.aliakovl.core.Applicative
+import dev.aliakovl.core.data.Const
 
 trait Prism[S, A] extends Traversal[S, A] {
   def getOrModify(s: S): Either[S, A] = getOption(s) match {

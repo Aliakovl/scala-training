@@ -1,7 +1,7 @@
-package core
+package dev.aliakovl.core
 
-import core.Semigroup.SemigroupOps
-import core.data.Const
+import dev.aliakovl.core.Semigroup._
+import dev.aliakovl.core.data.Const
 
 trait Monoid[A] extends Semigroup[A] {
   def empty: A

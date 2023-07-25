@@ -1,6 +1,6 @@
-package core.data
+package dev.aliakovl.core.data
 
-import core.{Applicative, Functor, Monoid}
+import dev.aliakovl.core._
 
 case class Const[A, B](value: A) extends AnyVal
 

@@ -1,4 +1,4 @@
-package core
+package dev.aliakovl.core
 
 trait Functor[F[_]] {
   def map[A, B](f: A => B)(fa: F[A]): F[B]
