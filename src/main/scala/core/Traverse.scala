@@ -3,6 +3,7 @@ package core
 trait Traverse[T[_]] extends Functor[T] with Foldable[T] {
   def traverse[F[_]: Applicative, A, B](ta: T[A])(f: A => F[B]): F[T[B]] =
     sequenceA(map(f)(ta))
+
   def sequenceA[F[_]: Applicative, A](tfa: T[F[A]]): F[T[A]] =
     traverse(tfa)(identity)
 }

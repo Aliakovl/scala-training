@@ -7,9 +7,7 @@ import scala.language.existentials
 
 trait Lens[S, A] extends Traversal[S, A] {
   def get(s: S): A = modifyF(Const[A, A])(s).value
-  // = map(_set(_)(s))(Const[A, A](_get(s))).value
-  // = Const[A, S](_get(s)).value
-  // = _get(s)
+
   def modifyF[F[_]: Functor](f: A => F[A])(s: S): F[S]
 
   override def modifyA[F[_]: Applicative](f: A => F[A])(s: S): F[S] =

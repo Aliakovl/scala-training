@@ -2,7 +2,9 @@ package core
 
 trait Applicative[F[_]] extends Functor[F] {
   def pure[A](a: A): F[A]
+
   def ap[A, B](ff: F[A => B])(fa: F[A]): F[B]
+
   override def map[A, B](f: A => B)(fa: F[A]): F[B] = ap(pure(f))(fa)
 
   def product[A, B](fa: F[A], fb: F[B]): F[(A, B)] =

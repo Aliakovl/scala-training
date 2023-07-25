@@ -8,9 +8,12 @@ trait Prism[S, A] extends Traversal[S, A] {
     case Some(value) => Right(value)
     case None        => Left(s)
   }
+
   def getOption(s: S): Option[A] =
     modifyA(a => Const[Option[A], A](Some(a)))(s).value
+
   def reverseGet(a: A): S
+
   def modifyA[F[_]: Applicative](f: A => F[A])(s: S): F[S]
 }
 
