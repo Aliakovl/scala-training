@@ -1,23 +1,19 @@
 package optics
 
-import core.Functor
+import core.{Applicative, Functor}
 import core.data._
 
 import scala.language.existentials
 
-trait Lens[S, A] {
+trait Lens[S, A] extends Traversal[S, A] {
   def get(s: S): A = modifyF(Const[A, A])(s).value
   // = map(_set(_)(s))(Const[A, A](_get(s))).value
   // = Const[A, S](_get(s)).value
   // = _get(s)
-  def set(a: A)(s: S): S = modify(_ => a)(s)
-  // = _set((_ => a)(_get(s)))(s)
-  // = _set(a)(s)
-  def modify(f: A => A)(s: S): S = modifyF(a => Identity(f(a)))(s).value
-  // = map(_set(_)(s))(Identity(f(_get(s)))).value
-  // = Identity(_set(f(_get(s)))(s)).value
-  // = _set(f(_get(s)))(s)
   def modifyF[F[_]: Functor](f: A => F[A])(s: S): F[S]
+
+  override def modifyA[F[_]: Applicative](f: A => F[A])(s: S): F[S] =
+    modifyF(f)(s)
 }
 
 object Lens {
