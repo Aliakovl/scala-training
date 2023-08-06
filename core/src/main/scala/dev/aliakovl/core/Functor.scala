@@ -7,9 +7,7 @@ trait Functor[F[_]] {
 object Functor {
   def apply[F[_]](implicit inst: Functor[F]): Functor[F] = inst
 
-  implicit class FunctorOps[A, F[_]](private val fa: F[A])(implicit
-      inst: Functor[F]
-  ) {
-    def map[B](f: A => B): F[B] = inst.map(f)(fa)
+  implicit class FunctorOps[F[_]: Functor, A](private val fa: F[A]) {
+    def map[B](f: A => B): F[B] = Functor[F].map(f)(fa)
   }
 }

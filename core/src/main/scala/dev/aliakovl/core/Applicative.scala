@@ -17,13 +17,15 @@ trait Applicative[F[_]] extends Functor[F] {
 object Applicative {
   def apply[F[_]](implicit inst: Applicative[F]): Applicative[F] = inst
 
-  implicit class ApplicativeOps[A, F[_]](private val fa: F[A])(implicit
-      inst: Applicative[F]
-  ) {
-    def pure(a: A): F[A] = inst.pure(a)
+  def pure[F[_]: Applicative, A](a: A): F[A] = {
+    implicitly[Applicative[F]].pure(a)
+  }
+
+  implicit class ApplicativeOps[F[_]: Applicative, A](private val fa: F[A]) {
+    def pure(a: A): F[A] = Applicative[F].pure(a)
     def ap[B, C](fb: F[B])(implicit ev: A <:< (B => C)): F[C] =
-      inst.ap(fa.asInstanceOf[F[B => C]])(fb)
-    def product[B](fb: F[B]): F[(A, B)] = inst.product(fa, fb)
+      Applicative[F].ap(fa.asInstanceOf[F[B => C]])(fb)
+    def product[B](fb: F[B]): F[(A, B)] = Applicative[F].product(fa, fb)
   }
 
   implicit val listApplicative: Applicative[List] = new Applicative[List] {
