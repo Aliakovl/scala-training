@@ -2,7 +2,7 @@ package dev.aliakovl.core.data
 
 import dev.aliakovl.core._
 
-case class Const[A, B](value: A) extends AnyVal
+final case class Const[A, B](value: A)
 
 object Const {
   implicit def constFunctor[C]: Functor[({type λ[α] = Const[C, α]})#λ] =
