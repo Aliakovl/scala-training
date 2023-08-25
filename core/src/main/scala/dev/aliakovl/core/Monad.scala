@@ -1,5 +1,7 @@
 package dev.aliakovl.core
 
+import dev.aliakovl.core.data.IO
+
 trait Monad[F[_]] extends Applicative[F] {
   def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
 
@@ -14,5 +16,12 @@ object Monad {
 
   implicit class MonadOps[F[_]: Monad, A](private val fa: F[A]) {
     def flatMap[B](f: A => F[B]): F[B] = Monad[F].flatMap(fa)(f)
+  }
+
+  implicit val monadIO: Monad[IO] = new Monad[IO] {
+    override def flatMap[A, B](fa: IO[A])(f: A => IO[B]): IO[B] =
+      fa >>= f
+
+    override def pure[A](a: A): IO[A] = IO.pure(a)
   }
 }

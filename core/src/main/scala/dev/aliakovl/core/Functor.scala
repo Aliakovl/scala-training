@@ -9,5 +9,6 @@ object Functor {
 
   implicit class FunctorOps[F[_]: Functor, A](private val fa: F[A]) {
     def map[B](f: A => B): F[B] = Functor[F].map(f)(fa)
+    def as[B](b: => B): F[B] = Functor[F].map[A, B](_ => b)(fa)
   }
 }

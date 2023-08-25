@@ -24,3 +24,11 @@ lazy val optics = (project in file("./optics"))
     scalacOptions += "-Ymacro-annotations"
   )
   .dependsOn(core)
+
+lazy val expressionProblem = (project in file("./tffree"))
+  .settings(
+    name := "tffree",
+    scalaVersion := "2.13.11",
+    scalacOptions += "-Ymacro-annotations"
+  )
+  .dependsOn(core, free)
