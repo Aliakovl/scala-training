@@ -5,6 +5,5 @@ import dev.aliakovl.kernel.Monad
 trait MonadTrans[T[_[_], _]]:
   def lift[M[_] : Monad, A](ma: M[A]): T[M, A]
 
-object MonadTrans {
+object MonadTrans:
   def apply[T[_[_], _]](using t: MonadTrans[T]): MonadTrans[T] = t
-}

@@ -1,10 +1,16 @@
 package dev.aliakovl.kernel
 
-trait Monad[M[_]] extends Functor[M]:
-  def pure[A](a: A): M[A]
-  extension[A] (ma: M[A]) def flatMap[B](f: A => M[B]): M[B]
-  extension[A] (ma: M[A]) override def map[B](f: A => B): M[B] =
-    ma.flatMap { a => pure(f(a)) }
+trait Monad[M[_]] extends Applicative[M]:
+  extension[A] (ma: M[A])
+    def flatMap[B](f: A => M[B]): M[B]
+
+  extension[A, B] (ff: M[A => B])
+    def ap(fa: M[A]): M[B] =
+      ff.flatMap{ f => fa.map(f) }
+
+  extension[A] (ma: M[A]) override
+    def map[B](f: A => B): M[B] =
+      ma.flatMap { a => pure(f(a)) }
 
 object Monad:
   def apply[M[_]](using m: Monad[M]): Monad[M] = m

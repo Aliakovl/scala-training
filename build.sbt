@@ -1,4 +1,4 @@
-lazy val root = (project in file("."))
+lazy val `scala-training` = (project in file("."))
   .aggregate(core, optics)
 
 lazy val core = (project in file("./core"))
