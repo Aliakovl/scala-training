@@ -1,7 +1,7 @@
 package dev.aliakovl.optics
 
-import cats.Id
 import dev.aliakovl.core._
+import dev.aliakovl.core.data.Id
 import dev.aliakovl.core.data.Id._
 
 trait Traversal[S, A] {
