@@ -24,7 +24,7 @@ lazy val optics = (project in file("./optics"))
   )
   .dependsOn(core)
 
-lazy val expressionProblem = (project in file("./tffree"))
+lazy val tffree = (project in file("./tffree"))
   .settings(
     name := "tffree",
     scalaVersion := "2.13.11",
