@@ -5,8 +5,7 @@ lazy val core = (project in file("./core"))
   .settings(
     name := "core",
     scalaVersion := "2.13.11",
-    scalacOptions += "-Ymacro-annotations",
-    libraryDependencies += "org.typelevel" %% "cats-free" % "2.9.0"
+    scalacOptions += "-Ymacro-annotations"
   )
 
 lazy val free = (project in file("./free"))
@@ -32,3 +31,15 @@ lazy val expressionProblem = (project in file("./tffree"))
     scalacOptions += "-Ymacro-annotations"
   )
   .dependsOn(core, free)
+
+lazy val kernel = (project in file("./kernel"))
+  .settings(
+    name := "kernel",
+    scalaVersion := "3.3.0"
+  )
+
+lazy val meta = (project in file("./meta"))
+  .settings(
+    name := "meta",
+    scalaVersion := "3.3.0"
+  )
