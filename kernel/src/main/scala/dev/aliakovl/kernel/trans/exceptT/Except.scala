@@ -1,4 +1,4 @@
-package dev.aliakovl.kernel.trans.data
+package dev.aliakovl.kernel.trans.exceptT
 
 import dev.aliakovl.kernel.Monad
 import dev.aliakovl.kernel.data.Id

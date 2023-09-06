@@ -1,5 +1,7 @@
 package dev.aliakovl.kernel.trans.data
 
+import dev.aliakovl.kernel.trans.exceptT.ExceptT
+
 object ExceptTSpec {
   val someRight_3: ExceptT[Option, String, Int] = ExceptT.right(Some(3))
   val someRight_5: ExceptT[Option, String, Long] = ExceptT.right(Some(5))
