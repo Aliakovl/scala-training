@@ -1,4 +1,4 @@
-package dev.aliakovl.kernel.trans.exceptT
+package dev.aliakovl.kernel.trans.except
 
 opaque type ExceptT[M[_], E, A] = M[Either[E, A]]
 
@@ -8,5 +8,5 @@ object ExceptT:
 
   def apply[M[_], E, A](m: M[Either[E, A]]): ExceptT[M, E, A] = m
 
-  extension[M[_], E, A] (e: ExceptT[M, E, A])
-    def run: M[Either[E, A]] = e
+  extension[M[_], E, A] (exceptT: ExceptT[M, E, A])
+    def runExceptT: M[Either[E, A]] = exceptT

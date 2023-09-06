@@ -1,4 +1,4 @@
-package dev.aliakovl.kernel.trans.exceptT
+package dev.aliakovl.kernel.trans.except
 
 import dev.aliakovl.kernel.{Functor, Monad}
 import dev.aliakovl.kernel.trans.MonadTrans
@@ -16,18 +16,18 @@ private object Inner:
 
     extension[A] (ta: ExceptT[M, E, A])
       def flatMap[B](f: A => ExceptT[M, E, B]): ExceptT[M, E, B] = ExceptT(
-        ta.run.flatMap {
-          case Right(a) => f(a).run
+        ta.runExceptT.flatMap {
+          case Right(a) => f(a).runExceptT
           case Left(e) => Monad[M].pure(Left(e))
         }
       )
 
   extension[M[_], E, A] (ta: ExceptT[M, E, A])
-    def mapExceptT[N[_], E1, B](f: M[Either[E, A]] => N[Either[E1, B]]): ExceptT[N, E1, B] = ExceptT(f(ta.run))
+    def mapExceptT[N[_], E1, B](f: M[Either[E, A]] => N[Either[E1, B]]): ExceptT[N, E1, B] = ExceptT(f(ta.runExceptT))
 
   extension[M[_] : Functor, E, A] (ta: ExceptT[M, E, A])
     def withExceptT[E1](f: E => E1): ExceptT[M, E1, A] = ExceptT(
-      ta.run.map {
+      ta.runExceptT.map {
         case Left(e) => Left(f(e))
         case Right(a) => Right(a)
       }
@@ -35,14 +35,14 @@ private object Inner:
 
   extension[M[_] : Monad, E, A] (ta: ExceptT[M, E, A])
     def catchE[E1](f: E => ExceptT[M, E1, A]): ExceptT[M, E1, A] = ExceptT(
-      ta.run.flatMap {
-        case Left(e) => f(e).run
+      ta.runExceptT.flatMap {
+        case Left(e) => f(e).runExceptT
         case Right(a) => Monad[M].pure(Right(a))
       }
     )
 
     def tryE: ExceptT[M, E, Either[E, A]] = ExceptT(
-      ta.run.map {
+      ta.runExceptT.map {
         case Left(e) => Right(Left(e))
         case Right(a) => Right(Right(a))
       }

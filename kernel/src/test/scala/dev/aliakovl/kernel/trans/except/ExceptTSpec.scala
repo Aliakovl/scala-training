@@ -1,6 +1,6 @@
-package dev.aliakovl.kernel.trans.data
+package dev.aliakovl.kernel.trans.except
 
-import dev.aliakovl.kernel.trans.exceptT.ExceptT
+import dev.aliakovl.kernel.trans.except.ExceptT
 
 object ExceptTSpec {
   val someRight_3: ExceptT[Option, String, Int] = ExceptT.right(Some(3))
