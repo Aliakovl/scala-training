@@ -41,6 +41,13 @@ private object Inner:
       }
     )
 
+    def fold[E1, B](failure: E => ExceptT[M, E1, B], success: A => ExceptT[M, E1, B]): ExceptT[M, E1, B] = ExceptT {
+      ta.runExceptT.flatMap[Either[E1, B]] {
+        case Left(e) => failure(e).runExceptT
+        case Right(a) => success(a).runExceptT
+      }
+    }
+
     def tryE: ExceptT[M, E, Either[E, A]] = ExceptT(
       ta.runExceptT.map {
         case Left(e) => Right(Left(e))
