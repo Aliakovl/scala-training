@@ -26,7 +26,17 @@ object ZIOSpec {
     }
     .provide(str)
 
+  def fib(n: Int): ZIO[Any, Nothing, Int] = if n <= 1 then
+    ZIO.success(n)
+  else ZIO.suspendSucceed(for {
+    a <- fib(n - 1)
+    b <- fib(n - 2)
+    _ <- ZIO.printLine(a + b).orDie
+  } yield a + b)
+
   def main(args: Array[String]): Unit = {
-    program.run
+    program.run()
+
+    fib(100).flatMap(ZIO.printLine(_)).run()
   }
 }

@@ -75,7 +75,7 @@ object ZIO:
     def orDie: ZIO[R, Nothing, A] = zio.catchAll { e => throw e }
 
   extension[E <: Throwable, A] (zio: ZIO[Any, E, A])
-    def run: A = zio.orDie.runReaderT(()).runExceptT.runUnsafe.toOption.get
+    def run(): Unit = new IORuntime(zio.orDie.runReaderT(()).runExceptT).runUnsafe(_ => ())
 
   final class ServiceWithPartiallyApplied[R](private val dummy: Boolean = true) extends AnyVal {
     def apply[A](f: R => A): ZIO[R, Nothing, A] = ReaderT.asks(f)
