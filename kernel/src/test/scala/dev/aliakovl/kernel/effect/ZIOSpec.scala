@@ -11,7 +11,6 @@ object ZIOSpec {
 
   val program = for {
     n <- ZIO.serviceWith[String](_.length)
-//    _ <- ZIO.fail(ToLong)
   } yield n
 
   def main(args: Array[String]): Unit = {
