@@ -41,5 +41,6 @@ lazy val kernel = (project in file("./kernel"))
 lazy val meta = (project in file("./meta"))
   .settings(
     name := "meta",
-    scalaVersion := "3.3.0"
+    scalaVersion := "3.3.0",
+    scalacOptions += "-Xcheck-macros"
   )

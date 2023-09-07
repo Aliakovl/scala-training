@@ -4,9 +4,9 @@ import scala.quoted.{Expr, Quotes}
 
 object Macros {
 
-  inline def blub: Unit = ${ blubImpl }
+  inline def blub: String = $ { blubImpl }
 
-  def blubImpl(using Quotes): Expr[Unit] = '{ () }
+  def blubImpl(using Quotes): Expr[String] = '{ "wefqef" }
 
   inline def length(str: String): Int = ${ lengthImpl('str) }
 

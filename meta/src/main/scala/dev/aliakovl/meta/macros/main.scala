@@ -1,6 +1,5 @@
 package dev.aliakovl.meta.macros
 
-
 import Macros.{blub, length}
 
 @main
