@@ -1,6 +1,7 @@
 package dev.aliakovl.kernel.trans.except
 
 import dev.aliakovl.kernel.trans.except.ExceptT
+import dev.aliakovl.kernel.given
 
 object ExceptTSpec {
   val someRight_3: ExceptT[Option, String, Int] = ExceptT.right(Some(3))
@@ -65,8 +66,6 @@ object ExceptTSpec {
     }
 
     {
-      import dev.aliakovl.kernel.Monad.given_Monad_Option
-
       val res = someLeft.withExceptT(a => s"$a$a")
       assert(res == ExceptT(Some(Left("texttext"))))
     }

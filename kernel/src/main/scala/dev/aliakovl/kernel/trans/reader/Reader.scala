@@ -6,7 +6,7 @@ import dev.aliakovl.kernel.trans.reader.Inner.{mapReaderT, withReaderT}
 
 type Reader[-R, +A] = ReaderT[Id, R, A]
 
-object Reader {
+object Reader:
   export Inner.given
   export Inner.*
 
@@ -19,4 +19,3 @@ object Reader {
       Id(f(a.runId))
     }
     def withReader[R1](f: R1 => R): Reader[R1, A] = reader.withReaderT(f)
-}
