@@ -34,7 +34,7 @@ private object Inner:
     Monad[M].pure(f(r))
   }
 
-  def lift[M[_] : Monad, R, A](ma: M[A]): ReaderT[M, R, A] =
+  def lift[M[+_] : Monad, R, A](ma: M[A]): ReaderT[M, R, A] =
     MonadTrans[[MM[_], AA] =>> ReaderT[MM, R, AA]].lift[M, A](ma)
 
   def pure[M[_] : Monad, R, A](a: A): ReaderT[M, R, A] =

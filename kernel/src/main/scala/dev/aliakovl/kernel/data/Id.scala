@@ -2,7 +2,7 @@ package dev.aliakovl.kernel.data
 
 import dev.aliakovl.kernel.Monad
 
-opaque type Id[A] = A
+opaque type Id[+A] = A
 
 object Id:
   def apply[A](a: A): Id[A] = a

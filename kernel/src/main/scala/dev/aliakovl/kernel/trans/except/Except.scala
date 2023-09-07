@@ -10,7 +10,7 @@ object Except:
   export Inner.given
   export Inner.*
 
-  def except[M[_] : Monad, E, A](either: Either[E, A]): ExceptT[M, E, A] =
+  def except[M[+_] : Monad, E, A](either: Either[E, A]): ExceptT[M, E, A] =
     ExceptT(Monad[M].pure(either))
 
   extension[E, A] (except: Except[E, A])
