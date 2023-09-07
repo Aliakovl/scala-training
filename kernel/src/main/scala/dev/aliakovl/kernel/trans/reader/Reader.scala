@@ -4,13 +4,13 @@ import dev.aliakovl.kernel.Monad
 import dev.aliakovl.kernel.data.Id
 import dev.aliakovl.kernel.trans.reader.Inner.{mapReaderT, withReaderT}
 
-type Reader[R, A] = ReaderT[Id, R, A]
+type Reader[-R, +A] = ReaderT[Id, R, A]
 
 object Reader {
   export Inner.given
   export Inner.*
 
-  def reader[M[_] : Monad, R, A](f: R => A): ReaderT[M, R, A] = ReaderT[M, R, A] { r =>
+  def reader[M[+_] : Monad, R, A](f: R => A): ReaderT[M, R, A] = ReaderT[M, R, A] { r =>
     Monad[M].pure(f(r))
   }
 

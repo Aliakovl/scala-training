@@ -4,7 +4,7 @@ import dev.aliakovl.kernel.Monad
 import dev.aliakovl.kernel.data.Id
 
 
-type Except[E, A] = ExceptT[Id, E, A]
+type Except[+E, +A] = ExceptT[Id, E, A]
 
 object Except:
   export Inner.given
