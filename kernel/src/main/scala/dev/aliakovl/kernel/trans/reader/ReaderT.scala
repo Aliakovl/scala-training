@@ -1,6 +1,6 @@
 package dev.aliakovl.kernel.trans.reader
 
-opaque type ReaderT[M[+_], -R, +A] = R => M[A]
+opaque type ReaderT[+M[+_], -R, +A] = R => M[A]
 
 object ReaderT:
   export Inner.given

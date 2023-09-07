@@ -3,7 +3,7 @@ package dev.aliakovl.kernel.effect
 import dev.aliakovl.kernel.trans.except.ExceptT
 import dev.aliakovl.kernel.trans.reader.ReaderT
 
-type ZIO[R, E, A] = ReaderT[[T] =>> ExceptT[IO, E, T], R, A]
+type ZIO[-R, +E, +A] = ReaderT[[T] =>> ExceptT[IO, E, T], R, A]
 
 object ZIO:
   def fromReader[R, E, A](r: R => ExceptT[IO, E, A]): ZIO[R, E, A] = ReaderT(r)
@@ -24,10 +24,7 @@ object ZIO:
       )
     }
 
-    def catchAll[E2](h: E => ZIO[R, E2, A]): ZIO[R, E2, A] = {
-      def success[AA, EE](a: => AA): ZIO[R, EE, AA] = ReaderT.lift(ExceptT.lift(IO.success(a)))
-      foldZIO(h, success)
-    }
+    def catchAll[E2](h: E => ZIO[R, E2, A]): ZIO[R, E2, A] = foldZIO(h, success)
 
     def mapError[E2](f: E => E2): ZIO[R, E2, A] = fromReader { r =>
       zio.runReaderT(r).withExceptT(f)
