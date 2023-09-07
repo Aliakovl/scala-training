@@ -20,6 +20,3 @@ trait Applicative[F[_]] extends Functor[F]:
 
   def map3[A, B, C, D](fa: F[A], fb: F[B], fc: F[C])(f: (A, B, C) => D): F[D] =
     zip3(fa, fb, fc).map(f.tupled)
-
-object Applicative:
-  def apply[F[_]](using f: Applicative[F]): Applicative[F] = f

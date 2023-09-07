@@ -11,7 +11,7 @@ object Reader:
   export Inner.*
 
   def reader[M[+_] : Monad, R, A](f: R => A): ReaderT[M, R, A] = ReaderT[M, R, A] { r =>
-    Monad[M].pure(f(r))
+    summon[Monad[M]].pure(f(r))
   }
 
   extension[R, A] (reader: Reader[R, A])

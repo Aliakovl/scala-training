@@ -11,6 +11,3 @@ trait Monad[M[_]] extends Applicative[M]:
   extension[A, MM[T] <: M[T]] (ma: MM[A]) override
     def map[B](f: A => B): M[B] =
       ma.flatMap { a => pure(f(a)) }
-
-object Monad:
-  def apply[M[_]](using m: Monad[M]): Monad[M] = m

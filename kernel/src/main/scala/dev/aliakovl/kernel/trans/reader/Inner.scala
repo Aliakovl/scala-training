@@ -8,7 +8,7 @@ private object Inner:
     def lift[M[+_] : Monad, A](ma: M[A]): ReaderT[M, R, A] = ReaderT { _ => ma }
 
   given[M[+_] : Monad, R]: Monad[[A] =>> ReaderT[M, R, A]] with
-    override def pure[A](a: A): ReaderT[M, R, A] = ReaderT { _ => Monad[M].pure(a) }
+    override def pure[A](a: A): ReaderT[M, R, A] = ReaderT { _ => summon[Monad[M]].pure(a) }
 
     extension[A, MM[T] <: ReaderT[M, R, T]] (readerT: MM[A])
       def flatMap[B](f: A => ReaderT[M, R, B]): ReaderT[M, R, B] = ReaderT { r =>
@@ -28,14 +28,14 @@ private object Inner:
 
     def local(f: R => R): ReaderT[M, R, A] = withReaderT(f)
 
-  def ask[M[+_] : Monad, R]: ReaderT[M, R, R] = ReaderT { r => Monad[M].pure(r) }
+  def ask[M[+_] : Monad, R]: ReaderT[M, R, R] = ReaderT { r => summon[Monad[M]].pure(r) }
 
   def asks[M[+_] : Monad, R, A](f: R => A): ReaderT[M, R, A] = ReaderT { r =>
-    Monad[M].pure(f(r))
+    summon[Monad[M]].pure(f(r))
   }
 
   def lift[M[+_] : Monad, R, A](ma: M[A]): ReaderT[M, R, A] =
     MonadTrans[[MM[+_], AA] =>> ReaderT[MM, R, AA]].lift[M, A](ma)
 
   def pure[M[+_] : Monad, R, A](a: A): ReaderT[M, R, A] =
-    Monad[[T] =>> ReaderT[M, R, T]].pure[A](a)
+    summon[Monad[[T] =>> ReaderT[M, R, T]]].pure[A](a)

@@ -9,6 +9,6 @@ object ComposeSpec:
   val b: Either[String, Option[Int]] = Left("kjhwef")
 
   def main(args: Array[String]): Unit = {
-    val c = Applicative[[T] =>> Either[String, Option[T]]].zip(a, b)
+    val c = summon[Applicative[[T] =>> Either[String, Option[T]]]].zip(a, b)
     println(c)
   }

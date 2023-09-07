@@ -7,18 +7,18 @@ private object Inner:
   given[E]: MonadTrans[[M[+_], A] =>> ExceptT[M, E, A]] with
     def lift[M[+_] : Monad, A](ma: M[A]): ExceptT[M, E, A] = ExceptT(
       ma.flatMap { a =>
-        Monad[M].pure[Either[E, A]](Right(a))
+        summon[Monad[M]].pure[Either[E, A]](Right(a))
       }
     )
 
   given[M[+_] : Monad, E]: Monad[[A] =>> ExceptT[M, E, A]] with
-    def pure[A](a: A): ExceptT[M, E, A] = ExceptT(Monad[M].pure(Right(a)))
+    def pure[A](a: A): ExceptT[M, E, A] = ExceptT(summon[Monad[M]].pure(Right(a)))
 
     extension[A, MM[T] <: ExceptT[M, E, T]] (ta: MM[A])
       def flatMap[B](f: A => ExceptT[M, E, B]): ExceptT[M, E, B] = ExceptT(
         ta.runExceptT.flatMap {
           case Right(a) => f(a).runExceptT
-          case Left(e) => Monad[M].pure(Left(e))
+          case Left(e) => summon[Monad[M]].pure(Left(e))
         }
       )
 
@@ -37,7 +37,7 @@ private object Inner:
     def catchE[E1](f: E => ExceptT[M, E1, A]): ExceptT[M, E1, A] = ExceptT(
       ta.runExceptT.flatMap {
         case Left(e) => f(e).runExceptT
-        case Right(a) => Monad[M].pure(Right(a))
+        case Right(a) => summon[Monad[M]].pure(Right(a))
       }
     )
 
@@ -73,18 +73,18 @@ private object Inner:
     t.catchE(f)
 
   def throwE[M[+_] : Monad, E, A](e: E): ExceptT[M, E, A] =
-    ExceptT(Monad[M].pure(Left(e)))
+    ExceptT(summon[Monad[M]].pure(Left(e)))
 
   def lift[M[+_] : Monad, E, A](ma: M[A]): ExceptT[M, E, A] =
     MonadTrans[[MM[+_], AA] =>> ExceptT[MM, E, AA]].lift[M, A](ma)
 
   def pure[M[+_] : Monad, E, A](a: A): ExceptT[M, E, A] =
-    Monad[[T] =>> ExceptT[M, E, T]].pure[A](a)
+    summon[Monad[[T] =>> ExceptT[M, E, T]]].pure[A](a)
 
   def right[M[+_] : Monad, E, A](ma: M[A]): ExceptT[M, E, A] = lift(ma)
 
   def left[M[+_] : Monad, E, A](me: M[E]): ExceptT[M, E, A] = ExceptT(
     me.flatMap { e =>
-      Monad[M].pure[Either[E, A]](Left(e))
+      summon[Monad[M]].pure[Either[E, A]](Left(e))
     }
   )
