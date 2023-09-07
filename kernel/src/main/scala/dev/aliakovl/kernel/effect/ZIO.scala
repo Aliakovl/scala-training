@@ -33,7 +33,10 @@ object ZIO:
   def printLine(line: => Any): ZIO[Any, IOException, Unit] = Console[[T] =>> ZIO[Any, IOException, T]].printLine(line)
 
   extension[R, E, A] (zio: ZIO[R, E, A])
-    def foldZIO[R1 <: R, E1, B](failure: E => ZIO[R1, E1, B], success: A => ZIO[R1, E1, B]): ZIO[R1, E1, B] = fromReader[R1, E1, B] { r =>
+    def foldZIO[R1 <: R, E1, B](
+      failure: E => ZIO[R1, E1, B],
+      success: A => ZIO[R1, E1, B]
+    ): ZIO[R1, E1, B] = fromReader[R1, E1, B] { r =>
       zio.runReaderT(r).fold(
         e => failure(e).runReaderT(r),
         a => success(a).runReaderT(r)

@@ -9,7 +9,6 @@ object ExceptTSpec {
   val noneRight: ExceptT[Option, String, Int] = ExceptT.right(None)
   val noneLeft: ExceptT[Option, String, Int] = ExceptT.left(None)
 
-
   def main(args: Array[String]): Unit = {
     {
       val res = for {
