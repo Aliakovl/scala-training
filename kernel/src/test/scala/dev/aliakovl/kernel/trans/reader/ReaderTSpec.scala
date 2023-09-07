@@ -21,21 +21,22 @@ object ReaderTSpec {
 
   type M[T] = Except[LengthException, T]
 
-  val program: ZIO[String, LengthException, Int] = for {
-    n <- asks[M, String, Int](_.length)
-    _ <- if n > 5 then
+  def rightString(min: Int, max: Int): ZIO[String, LengthException, Int] = for {
+    n <- ReaderT.asks[M, String, Int](_.length)
+    _ <- if n > max then
       ReaderT.lift[M, String, Unit](throwE(ToLong))
-    else if n < 1 then
+    else if n < min then
       ReaderT.lift[M, String, Unit](throwE(ToShort))
     else
       ReaderT.pure[M, String, Unit](())
   } yield n
 
-  val result: String = ReaderT[[T] =>> Except[Nothing, T], String, String] { r =>
-    program.map(_.toString).runReaderT(r).catchE(e => ExceptT.pure(e.toString))
-  }.runReaderT(str).runExceptT.runId.getSafe
+  val program: ZIO[String, Nothing, String] = ReaderT[[T] =>> Except[Nothing, T], String, String] { r =>
+    rightString(1, 6).map(_.toString).runReaderT(r).catchE(e => ExceptT.pure(e.toString))
+  }
 
   def main(args: Array[String]): Unit = {
+    val result = program.runReaderT(str).runExceptT.runId.getSafe
     println(result)
   }
 }

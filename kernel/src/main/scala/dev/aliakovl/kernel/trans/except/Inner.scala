@@ -55,6 +55,13 @@ private object Inner:
       }
     )
 
+    def tryT: ExceptT[M, Nothing, Either[E, A]] = ExceptT(
+      ta.runExceptT.map {
+        case Left(e) => Right(Left(e))
+        case Right(a) => Right(Right(a))
+      }
+    )
+
     def finallyE(closer: ExceptT[M, E, Unit]): ExceptT[M, E, A] =
       for {
         res <- ta.tryE
