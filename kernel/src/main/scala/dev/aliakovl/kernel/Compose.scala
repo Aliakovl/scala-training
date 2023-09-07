@@ -7,6 +7,6 @@ object Compose:
     def pure[A](a: A): F[G[A]] = Applicative[F].pure(Applicative[G].pure(a))
 
     extension[A, B, FG[T] <: F[G[T]]] (fg: FG[A => B])
-      def ap(fa: F[G[A]]): F[G[B]] = Applicative[F].map2(fg, fa) { case (gf, ga) =>
+      def ap(fa: F[G[A]]): F[G[B]] = Applicative[F].map2(fg, fa) { (gf, ga) =>
         gf.ap(ga)
       }
