@@ -3,10 +3,10 @@ package dev.aliakovl.kernel
 trait Applicative[F[_]] extends Functor[F]:
   def pure[A](a: A): F[A]
 
-  extension[A, B] (ff: F[A => B])
+  extension[A, B, FF[T] <: F[T]] (ff: FF[A => B])
     def ap(fa: F[A]): F[B]
 
-  extension[A] (fa: F[A])
+  extension[A, FF[T] <: F[T]] (fa: FF[A])
     override def map[B](f: A => B): F[B] = ap(pure(f))(fa)
 
   def product[A, B](fa: F[A], fb: F[B]): F[(A, B)] =

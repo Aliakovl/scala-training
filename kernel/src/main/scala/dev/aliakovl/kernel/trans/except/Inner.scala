@@ -14,7 +14,7 @@ private object Inner:
   given[M[_] : Monad, E]: Monad[[A] =>> ExceptT[M, E, A]] with
     def pure[A](a: A): ExceptT[M, E, A] = ExceptT(Monad[M].pure(Right(a)))
 
-    extension[A] (ta: ExceptT[M, E, A])
+    extension[A, MM[T] <: ExceptT[M, E, T]] (ta: MM[A])
       def flatMap[B](f: A => ExceptT[M, E, B]): ExceptT[M, E, B] = ExceptT(
         ta.runExceptT.flatMap {
           case Right(a) => f(a).runExceptT

@@ -19,5 +19,5 @@ object IO:
   given Monad[IO] with
     def pure[A](a: A): IO[A] = Success(() => a)
 
-    extension[A] (ma: IO[A])
+    extension[A, MM[T] <: IO[T]] (ma: MM[A])
       def flatMap[B](f: A => IO[B]): IO[B] = FlatMap(ma, f)

@@ -10,7 +10,7 @@ private object Inner:
   given[M[_] : Monad, R]: Monad[[A] =>> ReaderT[M, R, A]] with
     override def pure[A](a: A): ReaderT[M, R, A] = ReaderT { _ => Monad[M].pure(a) }
 
-    extension[A] (readerT: ReaderT[M, R, A])
+    extension[A, MM[T] <: ReaderT[M, R, T]] (readerT: MM[A])
       def flatMap[B](f: A => ReaderT[M, R, B]): ReaderT[M, R, B] = ReaderT { r =>
         readerT.runReaderT(r).flatMap { a =>
           f(a).runReaderT(r)

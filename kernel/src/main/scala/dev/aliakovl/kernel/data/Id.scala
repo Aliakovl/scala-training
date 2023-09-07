@@ -13,5 +13,5 @@ object Id:
   given Monad[Id] with
     override def pure[A](a: A): Id[A] = a
 
-    extension[A] (ma: Id[A])
+    extension[A, MM[T] <: Id[T]] (ma: MM[A])
       def flatMap[B](f: A => Id[B]): Id[B] = f(ma)
