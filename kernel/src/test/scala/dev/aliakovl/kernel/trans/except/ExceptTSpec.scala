@@ -3,7 +3,7 @@ package dev.aliakovl.kernel.trans.except
 import dev.aliakovl.kernel.trans.except.ExceptT
 import dev.aliakovl.kernel.given
 
-object ExceptTSpec {
+object ExceptTSpec:
   val someRight_3: ExceptT[Option, String, Int] = ExceptT.right(Some(3))
   val someRight_5: ExceptT[Option, String, Long] = ExceptT.right(Some(5))
   val someLeft: ExceptT[Option, String, Unit] = ExceptT.left(Some("text"))
@@ -71,5 +71,3 @@ object ExceptTSpec {
     }
 
   }
-
-}

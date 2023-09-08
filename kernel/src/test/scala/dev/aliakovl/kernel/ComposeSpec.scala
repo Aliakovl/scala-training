@@ -1,10 +1,8 @@
 package dev.aliakovl.kernel
 
-import instances.given
 import Compose.given
 
 object ComposeSpec:
-
   val a: Either[String, Option[Int]] = Right(Some(3))
   val b: Either[String, Option[Int]] = Left("kjhwef")
 

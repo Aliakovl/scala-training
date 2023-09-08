@@ -2,7 +2,7 @@ package dev.aliakovl.meta
 
 import dev.aliakovl.meta.Nat._
 
-object NatSpec {
+object NatSpec:
   type _1 = Succ[_0]
   type _2 = Succ[_1]
   type _3 = Succ[_2]
@@ -21,4 +21,3 @@ object NatSpec {
     println(s"${toStringT[_15]} -> ${toIntT[_15]}")
     println(s"${toStringT[Sum[_8, _15]]} -> ${toIntT[Sum[_8, _15]]}")
   }
-}

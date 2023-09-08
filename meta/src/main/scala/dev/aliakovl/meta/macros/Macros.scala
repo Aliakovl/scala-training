@@ -2,8 +2,7 @@ package dev.aliakovl.meta.macros
 
 import scala.quoted.{Expr, Quotes}
 
-object Macros {
-
+object Macros:
   inline def blub: String = $ { blubImpl }
 
   def blubImpl(using Quotes): Expr[String] = '{ "wefqef" }
@@ -12,5 +11,3 @@ object Macros {
 
   def lengthImpl(str: Expr[String])(using Quotes): Expr[Int] =
     '{ $str.length() }
-
-}

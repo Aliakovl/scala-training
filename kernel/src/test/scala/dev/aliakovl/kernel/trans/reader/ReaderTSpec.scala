@@ -12,7 +12,7 @@ type ZIO[R, E, A] = ReaderT[[T] =>> ExceptT[Id, E, T], R, A]
 extension[A] (either: Either[Nothing, A])
   def getSafe: A = either.toOption.get
 
-object ReaderTSpec {
+object ReaderTSpec:
   import ReaderT.*
   import ExceptT.*
   import LengthException.*
@@ -39,4 +39,3 @@ object ReaderTSpec {
     val result = program.runReaderT(str).runExceptT.runId.getSafe
     println(result)
   }
-}

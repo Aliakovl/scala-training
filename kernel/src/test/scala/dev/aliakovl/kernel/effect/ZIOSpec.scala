@@ -8,7 +8,7 @@ import java.io.IOException
 enum LengthException:
   case ToShort, ToLong
 
-object ZIOSpec {
+object ZIOSpec:
   val str = "Hello"
 
   def rightString(min: Int, max: Int): ZIO[String, LengthException, Int] = for {
@@ -38,4 +38,3 @@ object ZIOSpec {
     _ <- program
     _ <- fib(10).flatMap(ZIO.printLine(_))
   } yield ()).run()
-}

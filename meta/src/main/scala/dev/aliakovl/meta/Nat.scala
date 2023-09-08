@@ -6,7 +6,7 @@ sealed trait Nat
 class _0 extends Nat
 class Succ[A <: Nat] extends Nat
 
-object Nat {
+object Nat:
   transparent inline def toStringT[A <: Nat]: String = {
     inline erasedValue[A] match
       case _: _0 => "z"
@@ -25,4 +25,3 @@ object Nat {
   type Mult[A <: Nat, B <: Nat] = A match
     case _0 => _0
     case Succ[c] => Sum[B, Mult[c, B]]
-}
