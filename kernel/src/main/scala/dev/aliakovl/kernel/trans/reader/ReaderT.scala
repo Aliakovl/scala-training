@@ -6,7 +6,7 @@ object ReaderT:
   export Inner.given
   export Inner.*
 
-  def apply[M[+_], R, A](arrow: R => M[A]): ReaderT[M, R, A] = arrow
+  inline def apply[M[+_], R, A](arrow: R => M[A]): ReaderT[M, R, A] = arrow
 
   extension[M[+_], R, A] (readerT: ReaderT[M, R, A])
-    def runReaderT: R => M[A] = readerT
+    inline def runReaderT: R => M[A] = readerT

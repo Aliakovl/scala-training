@@ -34,9 +34,8 @@ object ZIOSpec {
     _ <- ZIO.printLine(a + b)
   } yield a + b
 
-  def main(args: Array[String]): Unit = {
-    program.run()
-
-    fib(10).flatMap(ZIO.printLine(_)).run()
-  }
+  def main(args: Array[String]): Unit = (for {
+    _ <- program
+    _ <- fib(10).flatMap(ZIO.printLine(_))
+  } yield ()).run()
 }
