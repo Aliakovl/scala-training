@@ -55,7 +55,7 @@ object MatLang:
   def Concat[A](l: A, r: A): MatLang[A] =
     alg ?=> alg.concat(l, r)
 
-def testExpr[A]: ExprLang[A] =
+def testExprLang[A]: ExprLang[A] =
   ExprLang.Mul(
     ExprLang.Plus(
       ExprLang.Const(1),
@@ -123,5 +123,3 @@ def checkTFC(): Unit =
   println(json.spaces2)
   val parsed = json.as[ExprTFC]
   println(parsed.map(_[String]))
-
-
