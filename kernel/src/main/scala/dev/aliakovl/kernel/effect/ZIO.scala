@@ -28,7 +28,7 @@ object ZIO:
 
   def service[R]: ZIO[R, Nothing, R] = ReaderT.ask[[T] =>> ExceptT[IO, Nothing, T], R]
 
-  def serviceWith[R]: ServiceWithPartiallyApplied[R] = ServiceWithPartiallyApplied[R]()
+  def serviceWith[R]: [A] => (R => A) => ZIO[R, Nothing, A] = [A] => (f: R => A) => ReaderT.asks(f)
 
   def printLine(line: => Any): ZIO[Any, IOException, Unit] = Console[[T] =>> ZIO[Any, IOException, T]].printLine(line)
 
@@ -79,7 +79,3 @@ object ZIO:
 
   extension[E <: Throwable, A] (zio: ZIO[Any, E, A])
     def run(): Unit = new IORuntime(zio.orDie.runReaderT(()).runExceptT).runUnsafe(_ => ())
-
-  final class ServiceWithPartiallyApplied[R](private val dummy: Boolean = true) extends AnyVal {
-    def apply[A](f: R => A): ZIO[R, Nothing, A] = ReaderT.asks(f)
-  }

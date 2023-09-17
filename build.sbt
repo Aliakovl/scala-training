@@ -35,12 +35,29 @@ lazy val tffree = (project in file("./tffree"))
 lazy val kernel = (project in file("./kernel"))
   .settings(
     name := "kernel",
-    scalaVersion := "3.3.0"
+    scalaVersion := "3.3.1"
   )
 
 lazy val meta = (project in file("./meta"))
   .settings(
     name := "meta",
-    scalaVersion := "3.3.0",
+    scalaVersion := "3.3.1",
     scalacOptions += "-Xcheck-macros"
+  )
+
+lazy val awk = (project in file("./awk"))
+  .settings(
+    name := "awk",
+    scalaVersion := "3.3.1",
+    scalacOptions += "-Xcheck-macros"
+  )
+
+lazy val tf = (project in file("./tf"))
+  .settings(
+    name := "tf",
+    scalaVersion := "3.3.1",
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core" % "0.14.5",
+      "io.circe" %% "circe-parser" % "0.14.5"
+    )
   )

@@ -9,3 +9,4 @@
 #### Scala libs
 - [Monocle](https://www.optics.dev/Monocle/)
 - [ZIO Optics](https://zio.github.io/zio-optics/)
+- [Quicklens](https://github.com/softwaremill/quicklens)
