@@ -81,3 +81,10 @@ object Macros:
       case t => t
 
   inline def fuseMapCode[T](inline list: List[T]): List[T] = ${ fuseMapCodeImpl('list) }
+
+  def emptyImpl[T: Type](using Quotes): Expr[T] =
+    Type.of[T] match
+      case '[String] => '{ "" }.asExprOf[T]
+      case '[List[t]] => '{ List.empty[t] }.asExprOf[T]
+
+  inline def empty[T]: T = ${ emptyImpl[T] }

@@ -2,8 +2,6 @@ package dev.aliakovl.meta.macros
 
 import Macros.*
 
-import scala.io.StdIn
-
 def func(a: Int): Int = a * a
 
 @main
@@ -54,3 +52,7 @@ def demo(): Unit =
   fuseMapCode(
     List("4", "7", "2").map(g).map(f).map(h).map(y)
   )
+
+  val e = empty[List[Int]]
+
+  println(e)
