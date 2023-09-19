@@ -72,3 +72,9 @@ lazy val management = (project in file("./management"))
       "dev.zio" %% "zio" % "2.0.16"
     )
   )
+
+lazy val dtbrt = (project in file("./dtbrt"))
+  .settings(
+    name := "dtbrt",
+    scalaVersion := "3.0.0"
+  )
