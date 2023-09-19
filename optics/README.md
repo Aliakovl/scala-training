@@ -1,9 +1,7 @@
-### Optics
-
-
-#### Источники
+## Optics
+___
+### Sources:
 - [Подробная преза с разными имплементациями](https://monadplus.pro/scala-lenses/)
-
 - [Оптика в Haskell](https://youtu.be/g8UAA2ZQn7M)
 
 #### Scala libs
