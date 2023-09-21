@@ -78,3 +78,9 @@ lazy val dtbrt = (project in file("./dtbrt"))
     name := "dtbrt",
     scalaVersion := "3.0.0"
   )
+
+lazy val derive = (project in file("./derive"))
+  .settings(
+    name := "derive",
+    scalaVersion := "3.0.0"
+  )
