@@ -84,13 +84,13 @@ def extractTransformation[From: Type, To: Type](
       val symbol: Symbol = selector.asTerm match
         case Lambda(_, select @ Select(_, _)) => select.symbol
         case term => report.throwError("only projection is available", term.pos)
-      val transformation = Transformation[From, quotes.type]()(symbol, _ => value)
+      val transformation = Transformation[From, quotes.type](symbol, _ => value)
       loop(nested, transformation :: acc)
     case '{ dev.aliakovl.dtbrt.withComputed[From, To]($nested)[field]($selector, $f) } =>
       val symbol: Symbol = selector.asTerm match
         case Lambda(_, select@Select(_, _)) => select.symbol
         case term => report.throwError("only projection is available", term.pos)
-      val transformation = Transformation[From, quotes.type]()(
+      val transformation = Transformation[From, quotes.type](
         symbol,
         fromExpr => Expr.betaReduce('{ $f($fromExpr) })
       )

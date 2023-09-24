@@ -76,11 +76,11 @@ lazy val management = (project in file("./management"))
 lazy val dtbrt = (project in file("./dtbrt"))
   .settings(
     name := "dtbrt",
-    scalaVersion := "3.0.0"
+    scalaVersion := "3.3.0"
   )
 
 lazy val derive = (project in file("./derive"))
   .settings(
     name := "derive",
-    scalaVersion := "3.0.0"
+    scalaVersion := "3.3.0"
   )
