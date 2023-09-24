@@ -17,12 +17,13 @@ def demo(): Unit =
 
   val p: Int = 3
 
-  val res = power (
+  val res = power(
     {
       val a = "RRer"
       println(a)
       p
-    }, 4
+    },
+    4
   )
 
   println(res)

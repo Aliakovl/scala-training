@@ -33,7 +33,7 @@ val testExprTFC: ExprTFC =
     ),
     ExprTFC.Plus(
       ExprTFC.Const(3),
-      ExprTFC.Const(4),
+      ExprTFC.Const(4)
     )
   )
 
@@ -63,16 +63,17 @@ def testExprLang[A]: ExprLang[A] =
     ),
     ExprLang.Plus(
       ExprLang.Const(3),
-      ExprLang.Const(4),
+      ExprLang.Const(4)
     )
   )
 
 def testExpr2[A]: ExprLangV[A] =
-  ExprLang.Mul(ExprLang.Plus(VarLang.Var("x"), ExprLang.Const(2)), VarLang.Var("y"))
+  ExprLang.Mul(
+    ExprLang.Plus(VarLang.Var("x"), ExprLang.Const(2)),
+    VarLang.Var("y")
+  )
 
 def testExpr2M[A]: ExprLangVM[A] = testExpr2
-
-
 
 given ExprA[String] with
   def plus(l: String, r: String) = s"($l + $r)"
@@ -96,21 +97,25 @@ import ExprTFC._
 
 given Decoder[ExprTFC] with
   def apply(c: HCursor): Decoder.Result[ExprTFC] =
-    c.value.asNumber.flatMap(num => num.toBigInt.map(Const(_)))
+    c.value.asNumber
+      .flatMap(num => num.toBigInt.map(Const(_)))
       .orElse(
         c.downField("plus")
           .as[Vector[ExprTFC]]
-          .toOption.collect{
-            case Vector(expr1, expr2) => Plus(expr1, expr2)
+          .toOption
+          .collect { case Vector(expr1, expr2) =>
+            Plus(expr1, expr2)
           }
-      ).orElse(
+      )
+      .orElse(
         c.downField("mul")
           .as[Vector[ExprTFC]]
-          .toOption.collect{
-            case Vector(expr1, expr2) => Mul(expr1, expr2)
+          .toOption
+          .collect { case Vector(expr1, expr2) =>
+            Mul(expr1, expr2)
           }
-      ).toRight(DecodingFailure("it's a wrong format, bro", Nil))
-
+      )
+      .toRight(DecodingFailure("it's a wrong format, bro", Nil))
 
 def enhanceWithVariablesC(e: ExprTFC): ExprVTFC =
   [A] => (alg: ExprA[A], vars: Vars[A]) ?=> e[A]

@@ -12,4 +12,5 @@ object Console:
   inline def apply[F[_]](using c: Console[F]): Console[F] = c
 
   given Console[[T] =>> ZIO[Any, IOException, T]] with
-    def printLine(line: => Any): ZIO[Any, IOException, Unit] = ZIO.attempt(println(line)).refineToOrDie[IOException]
+    def printLine(line: => Any): ZIO[Any, IOException, Unit] =
+      ZIO.attempt(println(line)).refineToOrDie[IOException]

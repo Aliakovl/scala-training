@@ -1,31 +1,35 @@
 package dev.aliakovl.tf
 
 type ExprC =
-  [A] =>
-    (A => A => A) =>
-      (A => A => A) =>
-        (BigInt => A) => A
+  [A] => (A => A => A) => (A => A => A) => (BigInt => A) => A
 
 object ExprC:
   def Plus(left: ExprC, right: ExprC): ExprC =
-    [A] => (ifPlus: A => A => A) => (ifMul: A => A => A) => (ifConst: BigInt => A) =>
-      ifPlus(
-        left(ifPlus)(ifMul)(ifConst)
-      )(
-        right(ifPlus)(ifMul)(ifConst)
-      )
+    [A] =>
+      (ifPlus: A => A => A) =>
+        (ifMul: A => A => A) =>
+          (ifConst: BigInt => A) =>
+            ifPlus(
+              left(ifPlus)(ifMul)(ifConst)
+            )(
+              right(ifPlus)(ifMul)(ifConst)
+          )
 
   def Mul(left: ExprC, right: ExprC): ExprC =
-    [A] => (ifPlus: A => A => A) => (ifMul: A => A => A) => (ifConst: BigInt => A) =>
-      ifMul(
-        left(ifPlus)(ifMul)(ifConst)
-      )(
-        right(ifPlus)(ifMul)(ifConst)
-      )
+    [A] =>
+      (ifPlus: A => A => A) =>
+        (ifMul: A => A => A) =>
+          (ifConst: BigInt => A) =>
+            ifMul(
+              left(ifPlus)(ifMul)(ifConst)
+            )(
+              right(ifPlus)(ifMul)(ifConst)
+          )
 
   def Const(v: BigInt): ExprC =
-    [A] => (ifPlus: A => A => A) => (ifMul: A => A => A) => (ifConst: BigInt => A) =>
-      ifConst(v)
+    [A] =>
+      (ifPlus: A => A => A) =>
+        (ifMul: A => A => A) => (ifConst: BigInt => A) => ifConst(v)
 
 val testExprC: ExprC =
   ExprC.Mul(
@@ -35,7 +39,7 @@ val testExprC: ExprC =
     ),
     ExprC.Plus(
       ExprC.Const(3),
-      ExprC.Const(4),
+      ExprC.Const(4)
     )
   )
 
