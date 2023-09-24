@@ -17,32 +17,39 @@ val testExpr =
     ),
     Expr.Plus(
       Expr.Const(3),
-      Expr.Const(4),
+      Expr.Const(4)
     )
   )
 
 given Encoder[Expr] with
   def apply(expr: Expr): Json = expr match
-    case Plus(left, right) => Map("plus" -> Vector(left.asJson, right.asJson)).asJson
-    case Mul(left, right) => Map("mul" -> Vector(left.asJson, right.asJson)).asJson
+    case Plus(left, right) =>
+      Map("plus" -> Vector(left.asJson, right.asJson)).asJson
+    case Mul(left, right) =>
+      Map("mul" -> Vector(left.asJson, right.asJson)).asJson
     case Const(v) => v.asJson
 
 given Decoder[Expr] with
   def apply(c: HCursor): Decoder.Result[Expr] =
-    c.value.asNumber.flatMap(num => num.toBigInt.map(Const(_)))
+    c.value.asNumber
+      .flatMap(num => num.toBigInt.map(Const(_)))
       .orElse(
         c.downField("plus")
           .as[Vector[Expr]]
-          .toOption.collect{
-            case Vector(expr1, expr2) => Plus(expr1, expr2)
+          .toOption
+          .collect { case Vector(expr1, expr2) =>
+            Plus(expr1, expr2)
           }
-      ).orElse(
+      )
+      .orElse(
         c.downField("mul")
           .as[Vector[Expr]]
-          .toOption.collect{
-            case Vector(expr1, expr2) => Mul(expr1, expr2)
+          .toOption
+          .collect { case Vector(expr1, expr2) =>
+            Mul(expr1, expr2)
           }
-      ).toRight(DecodingFailure("it's a wrong format, bro", Nil))
+      )
+      .toRight(DecodingFailure("it's a wrong format, bro", Nil))
 
 @main
 def check(): Unit =

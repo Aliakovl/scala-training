@@ -4,7 +4,7 @@ import scala.annotation.tailrec
 import scala.quoted.*
 
 object Macros:
-  inline def blub: String = $ { blubImpl }
+  inline def blub: String = ${ blubImpl }
 
   def blubImpl(using Quotes): Expr[String] = '{ "wefqef" }
 
@@ -18,7 +18,8 @@ object Macros:
   def reifyImpl(a: Expr[Any])(using quotes: Quotes): Expr[String] = {
     import quotes.reflect.*
 
-    Literal(StringConstant(Printer.TreeStructure.show(a.asTerm))).asExprOf[String]
+    Literal(StringConstant(Printer.TreeStructure.show(a.asTerm)))
+      .asExprOf[String]
   }
 
   def unrolledPowerCode(x: Expr[Double], n: Int)(using Quotes): Expr[Double] =
@@ -52,7 +53,7 @@ object Macros:
     )
   }
 
-  inline def test: String = $ { testImpl }
+  inline def test: String = ${ testImpl }
 
   def ctx(using Quotes) = {
     def later[T: Type, U: Type](f: Expr[T] => Expr[U]): Expr[T => U] =
@@ -62,29 +63,35 @@ object Macros:
       (x: Expr[T]) => Expr.betaReduce('{ $f($x) })
 
     '{ (x: Int) => x + 1 } match
-      case '{ (y: Int) => ${ z } : Int } => z
+      case '{ (y: Int) => ${ z }: Int } => z
 
   }
 
-  def fusedUnrolledPowCode(x: Expr[Double], n: Int)(using Quotes): Expr[Double] =
+  def fusedUnrolledPowCode(x: Expr[Double], n: Int)(using
+      Quotes
+  ): Expr[Double] =
     x match
-      case '{ power($y, ${Expr(m)}) } => // we have (y^m)^n
+      case '{ power($y, ${ Expr(m) }) } => // we have (y^m)^n
         fusedUnrolledPowCode(y, n * m) // generate code for y^(n*m)
       case _ =>
         unrolledPowerCode(x, n)
 
   @tailrec
-  private def fuseMapCodeImpl[T: Type](x: Expr[List[T]])(using Quotes): Expr[List[T]] =
+  private def fuseMapCodeImpl[T: Type](x: Expr[List[T]])(using
+      Quotes
+  ): Expr[List[T]] =
     x match
       case '{ ($ls: List[t]).map[u]($f).map[T]($g) } =>
         fuseMapCodeImpl[T]('{ ${ ls }.map($g.compose($f)) })
       case t => t
 
-  inline def fuseMapCode[T](inline list: List[T]): List[T] = ${ fuseMapCodeImpl('list) }
+  inline def fuseMapCode[T](inline list: List[T]): List[T] = ${
+    fuseMapCodeImpl('list)
+  }
 
   def emptyImpl[T: Type](using Quotes): Expr[T] =
     Type.of[T] match
-      case '[String] => '{ "" }.asExprOf[T]
+      case '[String]  => '{ "" }.asExprOf[T]
       case '[List[t]] => '{ List.empty[t] }.asExprOf[T]
 
   inline def empty[T]: T = ${ emptyImpl[T] }

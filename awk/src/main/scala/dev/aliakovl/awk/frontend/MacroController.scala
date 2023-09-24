@@ -15,7 +15,9 @@ object Quoted:
 
 object MacroController:
 
-  def process[T](bodyRaw: Expr[T])(using quotes: Quotes, t: Type[T]): Expr[Quoted[T]] =
+  def process[T](
+      bodyRaw: Expr[T]
+  )(using quotes: Quotes, t: Type[T]): Expr[Quoted[T]] =
     import quotes.reflect._
     val ast = ExprParser.parseQuery(bodyRaw)
     import quotes.reflect.report

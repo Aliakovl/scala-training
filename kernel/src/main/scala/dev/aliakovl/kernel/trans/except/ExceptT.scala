@@ -8,5 +8,5 @@ object ExceptT:
 
   inline def apply[M[+_], E, A](m: M[Either[E, A]]): ExceptT[M, E, A] = m
 
-  extension[M[+_], E, A] (exceptT: ExceptT[M, E, A])
+  extension [M[+_], E, A](exceptT: ExceptT[M, E, A])
     inline def runExceptT: M[Either[E, A]] = exceptT

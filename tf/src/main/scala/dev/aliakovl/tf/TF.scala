@@ -25,7 +25,7 @@ val testExprTF: ExprTF =
     ),
     ExprTFC.Plus(
       ExprTFC.Const(3),
-      ExprTFC.Const(4),
+      ExprTFC.Const(4)
     )
   )
 

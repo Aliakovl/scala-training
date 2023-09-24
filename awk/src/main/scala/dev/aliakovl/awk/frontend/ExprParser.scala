@@ -6,7 +6,8 @@ import scala.quoted.*
 
 object ExprParser:
 
-  def from[T: Type, R: Type](f: Expr[T => R])(using Quotes
+  def from[T: Type, R: Type](f: Expr[T => R])(using
+      Quotes
   ): Expr[T] => Expr[R] =
     (x: Expr[T]) => '{ $f($x) }
 
@@ -35,19 +36,19 @@ object ExprParser:
   def parseTuples[BaseT](expr: Expr[_])(using quotes: Quotes, t: Type[BaseT]) =
     expr match {
       case '{
-        type t1
-        type t2
-        Tuple2($v1: `t1`, $v2: `t2`)
-      } =>
+            type t1
+            type t2
+            Tuple2($v1: `t1`, $v2: `t2`)
+          } =>
         import quotes.reflect.report
         import quotes.reflect._
         Projection(computeIndex[BaseT](v1), computeIndex[BaseT](v2))
       case '{
-        type t1
-        type t2
-        type t3
-        Tuple3($v1: `t1`, $v2: `t2`, $v3: `t3`)
-      } =>
+            type t1
+            type t2
+            type t3
+            Tuple3($v1: `t1`, $v2: `t2`, $v3: `t3`)
+          } =>
         import quotes.reflect.report
         import quotes.reflect._
         Projection(
@@ -56,8 +57,8 @@ object ExprParser:
           computeIndex[BaseT](v3)
         )
       case '{
-        $v1
-      } =>
+            $v1
+          } =>
         import quotes.reflect.report
         import quotes.reflect._
         Projection(computeIndex[BaseT](v1))
@@ -68,10 +69,10 @@ object ExprParser:
     }
 
   def parseLambda[T, R](using
-                        quotes: Quotes,
-                        t: Type[T],
-                        r: Type[R]
-                       ): PartialFunction[Expr[_], Projection] = { case '{ ((x: T) => $f(x): R) } =>
+      quotes: Quotes,
+      t: Type[T],
+      r: Type[R]
+  ): PartialFunction[Expr[_], Projection] = { case '{ ((x: T) => $f(x): R) } =>
     import quotes.reflect._
     val myX: Expr[T] = '{ ??? }
     val res = Expr.betaReduce(from(f).apply(myX))
@@ -86,8 +87,8 @@ object ExprParser:
   }
 
   def parseQuery[T](using
-                    qctx: Quotes
-                   ): PartialFunction[Expr[_], AwkQueryAST] = {
+      qctx: Quotes
+  ): PartialFunction[Expr[_], AwkQueryAST] = {
 
     import qctx.reflect._
     {

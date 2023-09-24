@@ -8,5 +8,5 @@ object ReaderT:
 
   inline def apply[M[+_], R, A](arrow: R => M[A]): ReaderT[M, R, A] = arrow
 
-  extension[M[+_], R, A] (readerT: ReaderT[M, R, A])
+  extension [M[+_], R, A](readerT: ReaderT[M, R, A])
     inline def runReaderT: R => M[A] = readerT

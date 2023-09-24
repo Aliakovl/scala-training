@@ -10,11 +10,12 @@ object Reader:
   export Inner.given
   export Inner.*
 
-  def reader[M[+_] : Monad, R, A](f: R => A): ReaderT[M, R, A] = ReaderT[M, R, A] { r =>
-    summon[Monad[M]].pure(f(r))
-  }
+  def reader[M[+_]: Monad, R, A](f: R => A): ReaderT[M, R, A] =
+    ReaderT[M, R, A] { r =>
+      summon[Monad[M]].pure(f(r))
+    }
 
-  extension[R, A] (reader: Reader[R, A])
+  extension [R, A](reader: Reader[R, A])
     def mapReader[B](f: A => B): Reader[R, B] = reader.mapReaderT { a =>
       Id(f(a.runId))
     }

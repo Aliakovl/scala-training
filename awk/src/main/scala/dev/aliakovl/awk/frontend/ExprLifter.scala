@@ -4,12 +4,11 @@ import dev.aliakovl.awk.backend.*
 
 import scala.quoted.{Expr, Quotes}
 
-
 object ExprLifter:
 
   def liftMapFilter(
-                     awkRootExpr: AwkMapExpr
-                   )(using Quotes): Expr[AwkMapExpr] =
+      awkRootExpr: AwkMapExpr
+  )(using Quotes): Expr[AwkMapExpr] =
     awkRootExpr match {
       case MapExpr(Projection(s: _*)) =>
         val ss = Expr(s)
