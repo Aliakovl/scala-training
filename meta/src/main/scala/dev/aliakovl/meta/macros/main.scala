@@ -2,8 +2,15 @@ package dev.aliakovl.meta.macros
 
 import Macros.*
 
-def func(a: Int): Int = a * a
+import scala.annotation.experimental
 
+@memoize
+@experimental
+def fib(n: Int): Int =
+//  println(s"compute fib of $n")
+  if n <= 1 then n else fib(n - 1) + fib(n - 2)
+
+@experimental
 @main
 def demo(): Unit =
   println(blub)
@@ -57,3 +64,6 @@ def demo(): Unit =
   val e = empty[List[Int]]
 
   println(e)
+
+  val a = fib(1000)
+  println(a)
