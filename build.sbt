@@ -1,7 +1,7 @@
 ThisBuild / scalaVersion := "3.3.0"
 
 lazy val `scala-training` = (project in file("."))
-  .aggregate(core, optics, free, tffree, kernel, meta, awk, tf, management)
+  .aggregate(core, optics, free, tffree, kernel, meta, awk, tf, management, `recursion-schemes`)
 
 lazy val core = (project in file("./core"))
   .settings(
@@ -69,7 +69,8 @@ lazy val management = (project in file("./management"))
     name := "management",
     scalaVersion := "2.13.10",
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "2.0.16"
+      "dev.zio" %% "zio" % "2.0.16",
+      "dev.zio" %% "zio-streams" % "2.0.16"
     )
   )
 
@@ -83,4 +84,10 @@ lazy val derive = (project in file("./derive"))
   .settings(
     name := "derive",
     scalaVersion := "3.3.0"
+  )
+
+lazy val `recursion-schemes` = (project in file("./recursion-schemes"))
+  .settings(
+    name := "recursion-schemes",
+    scalaVersion := "2.13.10",
   )
