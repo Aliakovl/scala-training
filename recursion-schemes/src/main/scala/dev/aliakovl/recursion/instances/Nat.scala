@@ -20,18 +20,20 @@ object N:
         case S(x) => S(f(x))
         case Z => Z
 
+type Z = Z.type
 type Nat = Fix[N]
 
 object NatMain:
+  val rec: S[S[S[S[S[Z]]]]] = S(S(S(S(S(Z)))))
 
-  val z: N[Nat] = Z
-  val _z: Nat = In(Z)
-  val sz: N[Nat] = S(In(Z))
-  val _sz: Nat = In(S(In(Z)))
-  val ssz: N[Nat] = S(In(S(In(Z))))
-  val _ssz: Nat = In(S(In(S(In(Z)))))
+  val _z: N[Nat] = Z
+  val z: Nat = In(Z)
+  val _sz: N[Nat] = S(In(Z))
+  val sz: Nat = In(S(In(Z)))
+  val _ssz: N[Nat] = S(In(S(In(Z))))
+  val ssz: Nat = In(S(In(S(In(Z)))))
 
-  val two: Int = _ssz.cata[Int] {
+  val two: Int = ssz.cata[Int] {
     case S(x) => x + 1
     case Z => 0
   }
