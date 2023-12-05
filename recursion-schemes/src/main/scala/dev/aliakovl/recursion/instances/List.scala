@@ -36,11 +36,11 @@ object ListMain:
   def main(args: Array[String]): Unit =
     println(factorial(5))
     println(
-      scala.collection.immutable.List(1,2,3,4,5).foldRight(scala.collection.immutable.List.empty)((a, r) => a :: r)
+      List(1,2,3,4,5).foldRight(List.empty)((a, r) => a :: r)
     )
     println(
       list.cata[scala.collection.immutable.List[Int]] {
-        case NL => scala.collection.immutable.List.empty[Int]
-        case CL(a, r) => scala.collection.immutable.::(a, r)
+        case NL => List.empty[Int]
+        case CL(a, r) => a :: r
       }
     )
