@@ -89,5 +89,5 @@ lazy val derive = (project in file("./derive"))
 lazy val `recursion-schemes` = (project in file("./recursion-schemes"))
   .settings(
     name := "recursion-schemes",
-    scalaVersion := "2.13.10",
-  )
+    scalaVersion := "3.3.0",
+  ).dependsOn(kernel)
