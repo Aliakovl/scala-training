@@ -6,3 +6,5 @@ project/project/
 .metals/
 .bloop/
 metals.sbt
+.DS_Store
+.obsidian
