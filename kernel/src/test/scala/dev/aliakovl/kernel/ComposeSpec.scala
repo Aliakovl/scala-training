@@ -9,4 +9,6 @@ object ComposeSpec:
   def main(args: Array[String]): Unit = {
     val c = summon[Applicative[[T] =>> Either[String, Option[T]]]].zip(a, b)
     println(c)
+    val p = Applicative.pure[Option](4)
+    print(p)
   }

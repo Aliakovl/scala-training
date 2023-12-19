@@ -17,8 +17,12 @@ trait Applicative[F[_]] extends Functor[F] {
 object Applicative {
   def apply[F[_]](implicit inst: Applicative[F]): Applicative[F] = inst
 
-  def pure[F[_]: Applicative, A](a: A): F[A] = {
-    implicitly[Applicative[F]].pure(a)
+  def pure[F[_]: Applicative]: PurePartiallyApplied[F] =
+    new PurePartiallyApplied[F]
+
+  final class PurePartiallyApplied[F[_]](val dummy: Boolean = true)
+      extends AnyVal {
+    def apply[A](a: A)(implicit inst: Applicative[F]): F[A] = inst.pure(a)
   }
 
   implicit class ApplicativeOps[F[_]: Applicative, A](private val fa: F[A]) {
