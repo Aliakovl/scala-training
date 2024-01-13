@@ -18,15 +18,14 @@ object Main extends ZIOApp {
     ZIO.attempt(new RandomAccessFile("file", "rw")).mapAttempt(_.getChannel)
   )(a => ZIO.succeed(a.close()))
 
-  override def run = {
-        for {
-          _ <- ZIO.serviceWithZIO[Server](_.push("12345"))
-        } yield ()
-      }
-      .onInterrupt(_ => ZIO.succeed(println("stooooped")))
-      .exitCode
-      .debug
-
+  override def run: ZIO[Server, Nothing, ExitCode] = {
+    for {
+      _ <- ZIO.serviceWithZIO[Server](_.push("12345"))
+    } yield ()
+  }
+    .onInterrupt(_ => ZIO.succeed(println("stooooped")))
+    .exitCode
+    .debug
 
   override val bootstrap: ZLayer[ZIOAppArgs, Throwable, Server] = ZLayer.scoped(
     for {
