@@ -15,10 +15,10 @@ case class S[+R](r: R) extends N[R]
 
 object N:
   given Functor[N] with
-    extension[A, FF[T] <: N[T]] (fa: FF[A])
+    extension [A, FF[T] <: N[T]](fa: FF[A])
       def map[B](f: A => B): N[B] = fa match
         case S(x) => S(f(x))
-        case Z => Z
+        case Z    => Z
 
 type Z = Z.type
 type Nat = Fix[N]
@@ -35,7 +35,7 @@ object NatMain:
 
   val two: Int = ssz.cata[Int] {
     case S(x) => x + 1
-    case Z => 0
+    case Z    => 0
   }
 
   def main(args: Array[String]): Unit = println(two)

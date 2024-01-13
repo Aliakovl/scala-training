@@ -42,7 +42,6 @@ object HListSpec {
       }
     listView.toList
 
-
 //    import scala.concurrent.ExecutionContext.Implicits.global
 
 //    val r: Future[Int] = for {
@@ -57,7 +56,6 @@ object HListSpec {
 
 //    Await.ready(r, 1.minute)
 
-
 //    val p = Promise[Nothing]()
 //    val f = p.future
 //
@@ -67,7 +65,7 @@ object HListSpec {
       future.map(f)(parasitic)
     }
 
-    val r: Future[Int] = g(Future.successful[Int]{
+    val r: Future[Int] = g(Future.successful[Int] {
       Thread.sleep(3.second.toMillis)
       5
     })(i => i + 1)
