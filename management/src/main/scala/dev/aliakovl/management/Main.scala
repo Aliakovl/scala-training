@@ -4,10 +4,9 @@ import dev.aliakovl.management
 import zio._
 
 import java.io.RandomAccessFile
-import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 
-object Main extends ZIOAppDefault {
+object Main extends ZIOApp {
 
   val makeDb: ZIO[Scope, Throwable, DB] =
     ZIO.acquireRelease(management.DB.open())(_.close())
@@ -19,29 +18,26 @@ object Main extends ZIOAppDefault {
     ZIO.attempt(new RandomAccessFile("file", "rw")).mapAttempt(_.getChannel)
   )(a => ZIO.succeed(a.close()))
 
-  override def run: ZIO[Any with ZIOAppArgs with Scope, Throwable, ExitCode] =
-    ZIO
-      .scoped {
+  override def run = {
         for {
-          db <- makeDb
-          server <- makeServer(db)
-          _ <- zio.Console.printLine("do something")
-          c <- file
-          lock = c.lock(0, 1073742335, false)
-          _ <- zio.Console.printLine(lock.isValid)
-          _ <- ZIO
-            .attempt(
-              lock.channel().write(ByteBuffer.wrap(Array('.').map(_.toByte)))
-            )
-            .repeat(Schedule.fixed(1.second) && Schedule.recurs(100))
-          _ <- ZIO.attempt(lock.release())
-          _ <- ZIO.never
-          _ <- zio.Console.printLine("do something 2")
+          _ <- ZIO.serviceWithZIO[Server](_.push("12345"))
         } yield ()
       }
       .onInterrupt(_ => ZIO.succeed(println("stooooped")))
       .exitCode
       .debug
+
+
+  override val bootstrap: ZLayer[ZIOAppArgs, Throwable, Server] = ZLayer.scoped(
+    for {
+      db <- makeDb
+      server <- makeServer(db)
+    } yield server
+  )
+
+  override val environmentTag: EnvironmentTag[Server] = EnvironmentTag[Server]
+
+  override type Environment = Server
 }
 
 trait Closable[R] {
@@ -49,6 +45,7 @@ trait Closable[R] {
 }
 
 class DB extends Closable[DB] {
+  def get(message: String): Task[String] = ZIO.succeed(message.reverse)
   def close(): UIO[Unit] = zio.Console.printLine("db close").!
 }
 
@@ -57,6 +54,8 @@ object DB {
 }
 
 class Server(db: DB) extends Closable[Server] {
+  def push(message: String): Task[Unit] = db.get(message).tap(ZIO.log(_)).unit
+
   override def close(): UIO[Unit] = zio.Console.printLine("server close").!
 }
 

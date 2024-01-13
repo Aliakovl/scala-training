@@ -21,7 +21,7 @@ object TaglessInitial {
     case I(i)             => i
     case Sum(left, right) => eval(left) + eval(right)
     case B2I(b)           => if (eval(b)) 1 else 0
-    case I2B(i)           => i != 0
+    case I2B(i)           => eval(i) != 0
   }
 
   def asString[A](alg: Expr[A]): String = alg match {
