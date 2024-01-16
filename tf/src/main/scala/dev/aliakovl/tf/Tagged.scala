@@ -6,8 +6,8 @@ enum Expr:
   case Const(v: BigInt) extends Expr
 
 import Expr.*
-import io.circe._
-import io.circe.syntax._
+import io.circe.*
+import io.circe.syntax.*
 
 val testExpr =
   Expr.Mul(
