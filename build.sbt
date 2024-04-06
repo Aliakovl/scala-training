@@ -1,5 +1,3 @@
-ThisBuild / scalaVersion := "3.3.0"
-
 lazy val `scala-training` = (project in file("."))
   .aggregate(
     core,
@@ -12,6 +10,9 @@ lazy val `scala-training` = (project in file("."))
     tf,
     management,
     `recursion-schemes`,
+    dtbrt,
+    derive,
+    monad,
     `shapeless-guide`
   )
 
@@ -119,5 +120,15 @@ lazy val `shapeless-guide` = (project in file("./shapeless-guide"))
       "com.chuusai" %% "shapeless" % "2.3.10",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.typelevel" %% "cats-core" % "2.10.0"
+    )
+  )
+
+lazy val gin = (project in file("./gin"))
+  .settings(
+    name := "gin",
+    scalaVersion := "3.3.0",
+    libraryDependencies ++= Seq(
+      "dev.zio" %% "zio" % "2.0.21",
+      "org.typelevel" %% "shapeless3-deriving" % "3.4.1"
     )
   )
