@@ -104,6 +104,7 @@ lazy val `shapeless-guide` = (project in file("./shapeless-guide"))
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
       "com.chuusai" %% "shapeless" % "2.3.10",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.typelevel" %% "cats-core" % "2.10.0"
     )
   )

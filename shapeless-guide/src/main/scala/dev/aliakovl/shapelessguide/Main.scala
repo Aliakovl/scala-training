@@ -1,17 +1,32 @@
 package dev.aliakovl.shapelessguide
 
+import cats.Monoid
+import dev.aliakovl.shapelessguide.Migration.MigrationOps
 import dev.aliakovl.shapelessguide.examples.CsvEncoder.writeCsv
 import dev.aliakovl.shapelessguide.examples._
+import dev.aliakovl.shapelessguide.examples.json.JsonEncoder
 import shapeless._
 import shapeless.labelled.{FieldType, field}
 import shapeless.ops.hlist.Last
-import shapeless.syntax.SingletonOps
 import shapeless.syntax.singleton.mkSingletonOps
 
 import scala.reflect.runtime.universe.reify
 
 case class Bar(baz: Int, qux: String)
 case class Foo(bar: Bar)
+
+case class IceCreamV1(name: String, numCherries: Int, inCone: Boolean)
+
+case class IceCreamV2a(name: String, inCone: Boolean)
+
+case class IceCreamV2b(name: String, inCone: Boolean, numCherries: Int)
+
+case class IceCreamV2c(
+    name: String,
+    inCone: Boolean,
+    numCherries: Int,
+    numWaffles: Int
+)
 
 object Main {
   def getFieldName[K, V](value: FieldType[K, V])(implicit
@@ -76,6 +91,44 @@ object Main {
     val str = getFieldName(numCherries)
     println(str)
     println(getFieldValue(numCherries))
+
+    println(Witness[23].value)
+
+    val iceCream = IceCream("Sundae", 1, false)
+
+    val gen = LabelledGeneric[IceCream].to(iceCream)
+    println(gen)
+
+    println(JsonEncoder[IceCream].encode(iceCream))
+
+    val shape: Shape = Circle(1.0)
+    println(JsonEncoder[Shape].encode(shape))
+
+    def createMonoid[A](zero: A)(add: (A, A) => A): Monoid[A] =
+      new Monoid[A] {
+        def empty: A = zero
+        def combine(x: A, y: A): A = add(x, y)
+      }
+
+    implicit val hnilMonoid: Monoid[HNil] =
+      createMonoid[HNil](HNil)((_, _) => HNil)
+
+    implicit def emptyHList[K <: Symbol, H, T <: HList](implicit
+        hMonoid: Lazy[Monoid[H]],
+        tMonoid: Monoid[T]
+    ): Monoid[FieldType[K, H] :: T] =
+      createMonoid(field[K](hMonoid.value.empty) :: tMonoid.empty) { (x, y) =>
+        field[K](hMonoid.value.combine(x.head, y.head)) :: tMonoid.combine(
+          x.tail,
+          y.tail
+        )
+      }
+
+    println(IceCreamV1("Sundae", 1, true).migrateTo[IceCreamV2a])
+
+    println(IceCreamV1("Sundae", 1, true).migrateTo[IceCreamV2b])
+
+    println(IceCreamV1("Sundae", 1, true).migrateTo[IceCreamV2c])
 
   }
 }
