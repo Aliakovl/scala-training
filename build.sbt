@@ -97,3 +97,13 @@ lazy val monad = (project in file("./monad"))
     name := "monad",
     scalaVersion := "3.3.0"
   )
+
+lazy val `shapeless-guide` = (project in file("./shapeless-guide"))
+  .settings(
+    name := "shapeless-guide",
+    scalaVersion := "2.13.13",
+    libraryDependencies ++= Seq(
+      "com.chuusai" %% "shapeless" % "2.3.10",
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+    )
+  )
