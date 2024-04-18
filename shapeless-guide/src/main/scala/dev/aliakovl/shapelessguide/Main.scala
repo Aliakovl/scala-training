@@ -2,12 +2,14 @@ package dev.aliakovl.shapelessguide
 
 import cats.Monoid
 import dev.aliakovl.shapelessguide.Migration.MigrationOps
+import dev.aliakovl.shapelessguide.ProductMapper.ProductMapperOps
 import dev.aliakovl.shapelessguide.examples.CsvEncoder.writeCsv
 import dev.aliakovl.shapelessguide.examples._
 import dev.aliakovl.shapelessguide.examples.json.JsonEncoder
 import shapeless._
 import shapeless.labelled.{FieldType, field}
 import shapeless.ops.hlist.Last
+import shapeless.record._
 import shapeless.syntax.singleton.mkSingletonOps
 
 import scala.reflect.runtime.universe.reify
@@ -130,5 +132,33 @@ object Main {
 
     println(IceCreamV1("Sundae", 1, true).migrateTo[IceCreamV2c])
 
+    val sundae = LabelledGeneric[IceCream].to(IceCream("Sundae", 1, false))
+    println(sundae)
+
+    println(sundae.toMap)
+
+    val t: Double = myPoly[Int](123)
+
+    println(IceCream1("Sundae", 1, false).mapTo[IceCream2](conversions))
+
   }
+
+  object myPoly extends Poly1 {
+    implicit val intCase: Case.Aux[Int, Double] =
+      at(num => num / 2.0)
+
+    implicit val stringCase: Case.Aux[String, Int] =
+      at(str => str.length)
+  }
+
+  object conversions extends Poly1 {
+    implicit val intCase:  Case.Aux[Int, Boolean]   = at(_ > 0)
+    implicit val boolCase: Case.Aux[Boolean, Int]   = at(if(_) 1 else 0)
+    implicit val strCase:  Case.Aux[String, String] = at(identity)
+  }
+
+
+  case class IceCream1(name: String, numCherries: Int, inCone: Boolean)
+  case class IceCream2(name: String, hasCherries: Boolean, numCones: Int)
+
 }
