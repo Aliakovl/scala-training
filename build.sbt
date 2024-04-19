@@ -1,7 +1,19 @@
 ThisBuild / scalaVersion := "3.3.0"
 
 lazy val `scala-training` = (project in file("."))
-  .aggregate(core, optics, free, tffree, kernel, meta, awk, tf, management, `recursion-schemes`)
+  .aggregate(
+    core,
+    optics,
+    free,
+    tffree,
+    kernel,
+    meta,
+    awk,
+    tf,
+    management,
+    `recursion-schemes`,
+    `shapeless-guide`
+  )
 
 lazy val core = (project in file("./core"))
   .settings(
@@ -89,8 +101,9 @@ lazy val derive = (project in file("./derive"))
 lazy val `recursion-schemes` = (project in file("./recursion-schemes"))
   .settings(
     name := "recursion-schemes",
-    scalaVersion := "3.3.0",
-  ).dependsOn(kernel)
+    scalaVersion := "3.3.0"
+  )
+  .dependsOn(kernel)
 
 lazy val monad = (project in file("./monad"))
   .settings(
