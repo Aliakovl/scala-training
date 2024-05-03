@@ -5,8 +5,8 @@ import shapeless._
 import shapeless.ops.coproduct.Length
 import shapeless.ops.nat.ToInt
 
-trait Random[A] {
-  def get: A
+trait Random[A] extends (() => A) {
+  def apply(): A
 }
 
 object Random {
@@ -14,7 +14,7 @@ object Random {
 
   def createRandom[A](func: () => A): Random[A] =
     new Random[A] {
-      def get: A = func()
+      def apply(): A = func()
     }
 
   implicit val intRandom: Random[Int] =
@@ -32,7 +32,7 @@ object Random {
   implicit def genericRandom[A, R](implicit
       gen: Generic.Aux[A, R],
       random: Lazy[Random[R]]
-  ): Random[A] = createRandom(() => gen.from(random.value.get))
+  ): Random[A] = createRandom(() => gen.from(random.value()))
 
   implicit val hnilRandom: Random[HNil] =
     createRandom(() => HNil)
@@ -41,7 +41,7 @@ object Random {
       hRandom: Lazy[Random[H]],
       tRandom: Random[T]
   ): Random[H :: T] =
-    createRandom(() => hRandom.value.get :: tRandom.get)
+    createRandom(() => hRandom.value() :: tRandom())
 
   implicit val cnimRandom: Random[CNil] =
     createRandom(() => throw new Exception("Inconceivable!"))
@@ -54,13 +54,13 @@ object Random {
   ): Random[H :+: T] = createRandom { () =>
     val length = 1 + tLengthAsInt()
     val chooseH = scala.util.Random.nextDouble < (1.0 / length)
-    if (chooseH) Inl(hRandom.value.get) else Inr(tRandom.get)
+    if (chooseH) Inl(hRandom.value()) else Inr(tRandom())
   }
 
   implicit val randomFunctor: Functor[Random] = new Functor[Random] {
     override def map[A, B](fa: Random[A])(f: A => B): Random[B] =
       new Random[B] {
-        override def get: B = f(fa.get)
+        override def apply(): B = f(fa())
       }
   }
 }
