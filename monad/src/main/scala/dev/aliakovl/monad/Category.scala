@@ -3,8 +3,8 @@ package dev.aliakovl.monad
 import dev.aliakovl.monad.data.{<=, Iso, Op}
 
 trait Category[->[_, _]]:
-  def andThen[A, B, C](f: A -> B, g: B -> C): A -> C
   def id[A]: A -> A
+  def andThen[A, B, C](f: A -> B, g: B -> C): A -> C
 
 object Category:
   given Category[Function] with

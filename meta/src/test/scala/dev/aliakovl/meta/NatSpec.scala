@@ -1,6 +1,6 @@
 package dev.aliakovl.meta
 
-import dev.aliakovl.meta.Nat._
+import dev.aliakovl.meta.Nat.*
 
 object NatSpec:
   type _1 = Succ[_0]

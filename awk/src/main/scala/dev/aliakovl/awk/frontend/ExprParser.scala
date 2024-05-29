@@ -1,6 +1,6 @@
 package dev.aliakovl.awk.frontend
 
-import dev.aliakovl.awk.backend._
+import dev.aliakovl.awk.backend.*
 
 import scala.quoted.*
 
@@ -12,7 +12,7 @@ object ExprParser:
     (x: Expr[T]) => '{ $f($x) }
 
   def computeIndex[T](expr: Expr[_])(using quoted: Quotes, t: Type[T]) =
-    import quoted.reflect._
+    import quoted.reflect.*
     expr.asTerm match {
       case Select(Ident(_), propertyName) =>
         val tpe = TypeRepr.of[T]
@@ -41,7 +41,7 @@ object ExprParser:
             Tuple2($v1: `t1`, $v2: `t2`)
           } =>
         import quotes.reflect.report
-        import quotes.reflect._
+        import quotes.reflect.*
         Projection(computeIndex[BaseT](v1), computeIndex[BaseT](v2))
       case '{
             type t1
@@ -50,7 +50,7 @@ object ExprParser:
             Tuple3($v1: `t1`, $v2: `t2`, $v3: `t3`)
           } =>
         import quotes.reflect.report
-        import quotes.reflect._
+        import quotes.reflect.*
         Projection(
           computeIndex[BaseT](v1),
           computeIndex[BaseT](v2),
@@ -60,7 +60,7 @@ object ExprParser:
             $v1
           } =>
         import quotes.reflect.report
-        import quotes.reflect._
+        import quotes.reflect.*
         Projection(computeIndex[BaseT](v1))
       case e =>
         import quotes.reflect.report
@@ -73,7 +73,7 @@ object ExprParser:
       t: Type[T],
       r: Type[R]
   ): PartialFunction[Expr[_], Projection] = { case '{ ((x: T) => $f(x): R) } =>
-    import quotes.reflect._
+    import quotes.reflect.*
     val myX: Expr[T] = '{ ??? }
     val res = Expr.betaReduce(from(f).apply(myX))
     res.asTerm match {
@@ -90,7 +90,7 @@ object ExprParser:
       qctx: Quotes
   ): PartialFunction[Expr[_], AwkQueryAST] = {
 
-    import qctx.reflect._
+    import qctx.reflect.*
     {
       case expr @ '{ type t; AwkQuery.apply[`t`] } =>
         val tpe = TypeRepr.of[t]
@@ -110,7 +110,7 @@ object ExprParser:
         )
       case expr: Expr[?] =>
         import qctx.reflect.report
-        import quotes.reflect._
+        import quotes.reflect.*
         report.error("Expression not supported: " + expr.asTerm)
         ???
     }
