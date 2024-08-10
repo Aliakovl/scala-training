@@ -9,6 +9,8 @@ case object MyClass4 extends MyClass
 object Main {
   def main(args: Array[String]): Unit = {
     println(Random[Map[String, List[Option[MyClass]]]].get())
-    println(Random[String].get[List](10))
+    println(Random[String].get[List](3))
+    println(Random[String, Int].get[Map](3))
+    println(Random[Either[String, Int]].get())
   }
 }
