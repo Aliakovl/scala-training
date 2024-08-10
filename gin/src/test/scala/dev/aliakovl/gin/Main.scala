@@ -12,5 +12,7 @@ object Main {
     println(Random[String].get[List](3))
     println(Random[String, Int].get[Map](3))
     println(Random[Either[String, Int]].get())
+    val a: MyClass = Random.oneOf[MyClass2, MyClass1].get()
+    println(a)
   }
 }
