@@ -1,7 +1,6 @@
 package dev.aliakovl.gin
 
 import dev.aliakovl.gin.internal.GenericRandom
-import shapeless.{:+:, Coproduct, Generic, Inl, Inr}
 
 import scala.collection.Factory
 import scala.language.implicitConversions
@@ -10,10 +9,11 @@ import scala.util.{Random => ScalaRandom}
 trait Random[A] { self =>
   def get(): A
 
+  def map[B](f: A => B): Random[B] = Random(f(get()))
+
   def get[C[E] <: IterableOnce[E]](size: Int)(implicit
-      f: Factory[A, C[A]],
-      ra: Random[A]
-  ): C[A] = f.fromSpecific(Iterable.fill(size)(Random[A].get()))
+      f: Factory[A, C[A]]
+  ): C[A] = f.fromSpecific(Iterable.fill(size)(get()))
 }
 
 object Random extends GeneratorInstances with GenericRandom {
@@ -48,9 +48,21 @@ object Random extends GeneratorInstances with GenericRandom {
     }
   }
 
+  def oneOf[A, B, C](implicit
+      ar: Random[A],
+      br: Random[B],
+      cr: Random[C],
+      ev: Lub3[A, B, C]
+  ): Random[ev.Out] = {
+    ScalaRandom.nextInt(3) match {
+      case 0 => ar.map(ev.f1)
+      case 1 => br.map(ev.f2)
+      case 2 => cr.map(ev.f3)
+    }
+  }
+
   private def choose[A](values: A*): A = {
     val index = ScalaRandom.nextInt(values.size)
     values(index)
   }
 }
-
