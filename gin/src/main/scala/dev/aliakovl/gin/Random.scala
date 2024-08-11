@@ -39,7 +39,7 @@ object Random extends GeneratorInstances with GenericRandom {
   def oneOf[A, B](implicit
       ar: Random[A],
       br: Random[B],
-      ev: SubType[A, B]
+      ev: Lub[A, B]
   ): Random[ev.Out] = {
     if (ScalaRandom.nextInt(2) == 0) {
       Random(ev.left(ar.get()))
@@ -54,36 +54,3 @@ object Random extends GeneratorInstances with GenericRandom {
   }
 }
 
-trait SubType[-A, -B] {
-  type Out
-  def left(a: A): Out
-  def right(b: B): Out
-}
-
-object SubType {
-  def make[A, B, T](left: A => T, right: B => T): SubType.Aux[A, B, T] = {
-    val l = left
-    val r = right
-    new SubType[A, B] {
-      override type Out = T
-      override def left(a: A): T = l(a)
-      override def right(b: B): T = r(b)
-    }
-  }
-
-  type Aux[A, B, T] = SubType[A, B] { type Out = T }
-
-  implicit def subType[A, B <: A]: SubType.Aux[A, B, A] =
-    make[A, B, A](identity, identity)
-
-  implicit def coproduct[A, B <: Coproduct]: SubType.Aux[A, B, A :+: B] =
-    make[A, B, A :+: B](Inl.apply, Inr.apply)
-
-  implicit def generic[A, B, C <: Coproduct, T](implicit
-      genB: Generic.Aux[B, C],
-      genT: Generic.Aux[T, A :+: C],
-      ev: SubType.Aux[A, C, A :+: C]
-  ): SubType.Aux[A, B, T] =
-    make(a => genT.from(ev.left(a)), b => genT.from(ev.right(genB.to(b))))
-
-}
