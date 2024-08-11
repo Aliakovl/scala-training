@@ -1,6 +1,6 @@
 package dev.aliakovl.gin
 
-sealed trait MyClass
+sealed trait MyClass extends Product with Serializable
 case class MyClass1(m: MyClass2) extends MyClass
 case class MyClass2(int: Int, string: String) extends MyClass
 case class MyClass3() extends MyClass
@@ -12,7 +12,9 @@ object Main {
     println(Random[String].get[List](3))
     println(Random[String, Int].get[Map](3))
     println(Random[Either[String, Int]].get())
-    val a: MyClass = Random.oneOf[MyClass2, MyClass1].get()
-    println(a)
+    val a: Random[MyClass] = Random.oneOf[MyClass2, MyClass1]
+    println(a.get())
+
+    Random[MyClass2]
   }
 }

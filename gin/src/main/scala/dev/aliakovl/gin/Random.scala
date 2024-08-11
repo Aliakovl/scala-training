@@ -40,13 +40,17 @@ object Random extends GeneratorInstances with GenericRandom {
       ar: Random[A],
       br: Random[B],
       ev: SubType[A, B]
-  ): Random[ev.Out] = new Random[ev.Out] {
-    override def get(): ev.Out = choose(ev.left(ar.get()), ev.right(br.get()))
+  ): Random[ev.Out] = {
+    if (ScalaRandom.nextInt(2) == 0) {
+      Random(ev.left(ar.get()))
+    } else {
+      Random(ev.right(br.get()))
+    }
   }
 
   private def choose[A](values: A*): A = {
-    val i = ScalaRandom.nextInt(values.size)
-    values(i)
+    val index = ScalaRandom.nextInt(values.size)
+    values(index)
   }
 }
 
@@ -76,10 +80,10 @@ object SubType {
     make[A, B, A :+: B](Inl.apply, Inr.apply)
 
   implicit def generic[A, B, C <: Coproduct, T](implicit
-      gen: Generic.Aux[B, C],
-      gen1: Generic.Aux[T, A :+: C],
+      genB: Generic.Aux[B, C],
+      genT: Generic.Aux[T, A :+: C],
       ev: SubType.Aux[A, C, A :+: C]
   ): SubType.Aux[A, B, T] =
-    make(a => gen1.from(ev.left(a)), c => gen1.from(ev.right(gen.to(c))))
+    make(a => genT.from(ev.left(a)), b => genT.from(ev.right(genB.to(b))))
 
 }
