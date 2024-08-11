@@ -70,145 +70,16 @@ trait OneOfRandom {
     new ApplyOneOf19[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S]()
 
   def oneOf20[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T]
-      : ApplyOneOf20[
-        A,
-        B,
-        C,
-        D,
-        E,
-        F,
-        G,
-        H,
-        I,
-        J,
-        K,
-        L,
-        M,
-        N,
-        O,
-        P,
-        Q,
-        R,
-        S,
-        T
-      ] = new ApplyOneOf20[
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H,
-    I,
-    J,
-    K,
-    L,
-    M,
-    N,
-    O,
-    P,
-    Q,
-    R,
-    S,
-    T
-  ]()
+      : ApplyOneOf20[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T] =
+    new ApplyOneOf20[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T]()
 
   def oneOf21[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U]
-      : ApplyOneOf21[
-        A,
-        B,
-        C,
-        D,
-        E,
-        F,
-        G,
-        H,
-        I,
-        J,
-        K,
-        L,
-        M,
-        N,
-        O,
-        P,
-        Q,
-        R,
-        S,
-        T,
-        U
-      ] = new ApplyOneOf21[
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H,
-    I,
-    J,
-    K,
-    L,
-    M,
-    N,
-    O,
-    P,
-    Q,
-    R,
-    S,
-    T,
-    U
-  ]()
+      : ApplyOneOf21[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U] =
+    new ApplyOneOf21[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U]()
 
   def oneOf22[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V]
-      : ApplyOneOf22[
-        A,
-        B,
-        C,
-        D,
-        E,
-        F,
-        G,
-        H,
-        I,
-        J,
-        K,
-        L,
-        M,
-        N,
-        O,
-        P,
-        Q,
-        R,
-        S,
-        T,
-        U,
-        V
-      ] = new ApplyOneOf22[
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H,
-    I,
-    J,
-    K,
-    L,
-    M,
-    N,
-    O,
-    P,
-    Q,
-    R,
-    S,
-    T,
-    U,
-    V
-  ]()
+      : ApplyOneOf22[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V] =
+    new ApplyOneOf22[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V]()
 }
 
 object OneOfRandom {
@@ -789,26 +660,7 @@ object OneOfRandom {
       rq.widen[TT]
     )
   }
-  final class ApplyOneOf18[
-      A,
-      B,
-      C,
-      D,
-      E,
-      F,
-      G,
-      H,
-      I,
-      J,
-      K,
-      L,
-      M,
-      N,
-      O,
-      P,
-      Q,
-      R
-  ](private val dummy: Boolean = true)
+  final class ApplyOneOf18[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R](private val dummy: Boolean = true)
       extends AnyVal {
     def make[
         TT,
@@ -870,27 +722,7 @@ object OneOfRandom {
       rr.widen[TT]
     )
   }
-  final class ApplyOneOf19[
-      A,
-      B,
-      C,
-      D,
-      E,
-      F,
-      G,
-      H,
-      I,
-      J,
-      K,
-      L,
-      M,
-      N,
-      O,
-      P,
-      Q,
-      R,
-      S
-  ](private val dummy: Boolean = true)
+  final class ApplyOneOf19[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S](private val dummy: Boolean = true)
       extends AnyVal {
     def make[
         TT,
@@ -955,28 +787,7 @@ object OneOfRandom {
       rs.widen[TT]
     )
   }
-  final class ApplyOneOf20[
-      A,
-      B,
-      C,
-      D,
-      E,
-      F,
-      G,
-      H,
-      I,
-      J,
-      K,
-      L,
-      M,
-      N,
-      O,
-      P,
-      Q,
-      R,
-      S,
-      T
-  ](private val dummy: Boolean = true)
+  final class ApplyOneOf20[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T](private val dummy: Boolean = true)
       extends AnyVal {
     def make[
         TT,
@@ -1044,29 +855,7 @@ object OneOfRandom {
       rt.widen[TT]
     )
   }
-  final class ApplyOneOf21[
-      A,
-      B,
-      C,
-      D,
-      E,
-      F,
-      G,
-      H,
-      I,
-      J,
-      K,
-      L,
-      M,
-      N,
-      O,
-      P,
-      Q,
-      R,
-      S,
-      T,
-      U
-  ](private val dummy: Boolean = true)
+  final class ApplyOneOf21[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U](private val dummy: Boolean = true)
       extends AnyVal {
     def make[
         TT,
@@ -1137,30 +926,7 @@ object OneOfRandom {
       ru.widen[TT]
     )
   }
-  final class ApplyOneOf22[
-      A,
-      B,
-      C,
-      D,
-      E,
-      F,
-      G,
-      H,
-      I,
-      J,
-      K,
-      L,
-      M,
-      N,
-      O,
-      P,
-      Q,
-      R,
-      S,
-      T,
-      U,
-      V
-  ](private val dummy: Boolean = true)
+  final class ApplyOneOf22[A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V](private val dummy: Boolean = true)
       extends AnyVal {
     def make[
         TT,
