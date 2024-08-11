@@ -12,26 +12,13 @@ object Main {
     println(Random[String].get[List](3))
     println(Random[String, Int].get[Map](3))
     println(Random[Either[String, Int]].get())
-    val a: MyClass = Random.oneOf[MyClass2, MyClass1].get()
+    val a: MyClass = Random.oneOf2[MyClass2, MyClass1].make.get()
     println(a)
 
-    val b: List[MyClass] = List.fill(3000)(Random.oneOf[MyClass1, MyClass2, MyClass3].get())
+    val b: List[MyClass] =
+      List.fill(3000)(Random.oneOf3[MyClass1, MyClass2, MyClass3].make.get())
     println(b.count(_.isInstanceOf[MyClass1]))
     println(b.count(_.isInstanceOf[MyClass2]))
     println(b.count(_.isInstanceOf[MyClass3]))
-
-    val f1: List[MyClass] = Union.f(MyClass3(), MyClass4)
-    val f2: List[MyClass] = Union[MyClass3, MyClass4.type].f(MyClass3(), MyClass4)
   }
-}
-
-
-object Union {
-  def apply[A, B]: Union[A, B] = new Union[A, B] {}
-
-  def f[T, A <: T, B <: T](a: A, b: B): List[T] = List[T](a,b)
-}
-
-trait Union[A, B] {
-  def f[T, A1 >: A <: T, B1 >: B <: T](a: A1, b: B1): List[T] = List[T](a, b)
 }

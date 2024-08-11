@@ -11,6 +11,8 @@ trait Random[A] { self =>
 
   def map[B](f: A => B): Random[B] = Random(f(get()))
 
+  def widen[T >: A]: Random[T] = Random(get())
+
   def get[C[E] <: IterableOnce[E]](size: Int)(implicit
       f: Factory[A, C[A]]
   ): C[A] = f.fromSpecific(Iterable.fill(size)(get()))
@@ -22,6 +24,15 @@ object Random extends GeneratorInstances with GenericRandom {
   def apply[A](implicit g: Random[A]): Random[A] = g
 
   def apply[K, V]: ApplyGet2d[K, V] = new ApplyGet2d[K, V]
+
+  def oneOf2[A, B]: ApplyOneOf2[A, B] = new ApplyOneOf2[A, B]()
+
+  def oneOf3[A, B, C]: ApplyOneOf3[A, B, C] = new ApplyOneOf3[A, B, C]()
+
+  private def choose[A](values: A*): A = {
+    val index = ScalaRandom.nextInt(values.size)
+    values(index)
+  }
 
   final class ApplyGet2d[K, V](private val dummy: Boolean = true)
       extends AnyVal {
@@ -36,33 +47,18 @@ object Random extends GeneratorInstances with GenericRandom {
     )
   }
 
-  def oneOf[A, B](implicit
-      ar: Random[A],
-      br: Random[B],
-      ev: Lub[A, B]
-  ): Random[ev.Out] = {
-    if (ScalaRandom.nextInt(2) == 0) {
-      Random(ev.left(ar.get()))
-    } else {
-      Random(ev.right(br.get()))
-    }
+  final class ApplyOneOf2[A, B](private val dummy: Boolean = true) {
+    def make[T, A1 >: A <: T, B1 >: B <: T](implicit
+        ra: Random[A1],
+        rb: Random[B1]
+    ): Random[T] = choose(ra.widen[T], rb.widen[T])
   }
 
-  def oneOf[A, B, C](implicit
-      ar: Random[A],
-      br: Random[B],
-      cr: Random[C],
-      ev: Lub3[A, B, C]
-  ): Random[ev.Out] = {
-    ScalaRandom.nextInt(3) match {
-      case 0 => ar.map(ev.f1)
-      case 1 => br.map(ev.f2)
-      case 2 => cr.map(ev.f3)
-    }
-  }
-
-  private def choose[A](values: A*): A = {
-    val index = ScalaRandom.nextInt(values.size)
-    values(index)
+  final class ApplyOneOf3[A, B, C](private val dummy: Boolean = true) {
+    def make[T, A1 >: A <: T, B1 >: B <: T, C1 >: C <: T](implicit
+        ra: Random[A1],
+        rb: Random[B1],
+        rc: Random[C1]
+    ): Random[T] = choose(ra.widen[T], rb.widen[T], rc.widen[T])
   }
 }
