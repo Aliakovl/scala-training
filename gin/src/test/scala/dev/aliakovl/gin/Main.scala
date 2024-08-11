@@ -12,13 +12,14 @@ object Main {
     println(Random[String].get[List](3))
     println(Random[String, Int].get[Map](3))
     println(Random[Either[String, Int]].get())
-    val a: MyClass = Random.oneOf2[MyClass2, MyClass1].make.get()
-    println(a)
+    val a: Random[MyClass] = Random.oneOf2[MyClass2, MyClass1].make
+    println(a.get[List](10))
 
-    val b: List[MyClass] =
-      List.fill(3000)(Random.oneOf3[MyClass1, MyClass2, MyClass3].make.get())
+    val b =
+      Random.oneOf4[MyClass1, MyClass2, MyClass3, Int].make.get[List](4000)
     println(b.count(_.isInstanceOf[MyClass1]))
     println(b.count(_.isInstanceOf[MyClass2]))
     println(b.count(_.isInstanceOf[MyClass3]))
+    println(b.count(_.isInstanceOf[Int]))
   }
 }
