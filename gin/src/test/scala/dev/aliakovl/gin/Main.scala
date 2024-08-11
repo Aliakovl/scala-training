@@ -19,5 +19,19 @@ object Main {
     println(b.count(_.isInstanceOf[MyClass1]))
     println(b.count(_.isInstanceOf[MyClass2]))
     println(b.count(_.isInstanceOf[MyClass3]))
+
+    val f1: List[MyClass] = Union.f(MyClass3(), MyClass4)
+    val f2: List[MyClass] = Union[MyClass3, MyClass4.type].f(MyClass3(), MyClass4)
   }
+}
+
+
+object Union {
+  def apply[A, B]: Union[A, B] = new Union[A, B] {}
+
+  def f[T, A <: T, B <: T](a: A, b: B): List[T] = List[T](a,b)
+}
+
+trait Union[A, B] {
+  def f[T, A1 >: A <: T, B1 >: B <: T](a: A1, b: B1): List[T] = List[T](a, b)
 }
