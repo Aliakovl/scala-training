@@ -6,9 +6,9 @@ import dev.aliakovl.gin.internal.OneOfRandom._
 import scala.util.{Random => ScalaRandom}
 
 trait OneOfRandom {
-  def oneOf[A](values: A*): Random[A] = choose(values.map(a => Random.apply[A](a)): _*)
+  def oneOf[A](values: A*): Random[A] = OneOfRandom.oneOfRandom(values.map(a => Random.apply[A](a)): _*)
 
-//  def oneOf[A](values: Random[A]*): Random[A] = choose(values: _*)
+  def oneOfRandom[A](values: Random[A]*): Random[A] = OneOfRandom.oneOfRandom(values: _*)
 
   def oneOf2[A, B]: ApplyOneOf2[A, B] = new ApplyOneOf2[A, B]()
 
@@ -87,7 +87,7 @@ trait OneOfRandom {
 }
 
 object OneOfRandom {
-  private def choose[A](values: Random[A]*): Random[A] = Random {
+  private def oneOfRandom[A](values: Random[A]*): Random[A] = Random {
     val index = ScalaRandom.nextInt(values.size)
     values(index).get()
   }
@@ -97,7 +97,7 @@ object OneOfRandom {
     def make[TT, A1 >: A <: TT, B1 >: B <: TT](implicit
         ra: Random[A1],
         rb: Random[B1]
-    ): Random[TT] = choose(ra.widen[TT], rb.widen[TT])
+    ): Random[TT] = oneOfRandom(ra.widen[TT], rb.widen[TT])
   }
 
   final class ApplyOneOf3[A, B, C](private val dummy: Boolean = true)
@@ -106,7 +106,7 @@ object OneOfRandom {
         ra: Random[A1],
         rb: Random[B1],
         rc: Random[C1]
-    ): Random[TT] = choose(ra.widen[TT], rb.widen[TT], rc.widen[TT])
+    ): Random[TT] = oneOfRandom(ra.widen[TT], rb.widen[TT], rc.widen[TT])
   }
 
   final class ApplyOneOf4[A, B, C, D](private val dummy: Boolean = true)
@@ -118,7 +118,7 @@ object OneOfRandom {
         rc: Random[C1],
         rd: Random[D1]
     ): Random[TT] =
-      choose(ra.widen[TT], rb.widen[TT], rc.widen[TT], rd.widen[TT])
+      oneOfRandom(ra.widen[TT], rb.widen[TT], rc.widen[TT], rd.widen[TT])
   }
   final class ApplyOneOf5[A, B, C, D, E](private val dummy: Boolean = true)
       extends AnyVal {
@@ -135,7 +135,7 @@ object OneOfRandom {
         rc: Random[C1],
         rd: Random[D1],
         re: Random[E1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -160,7 +160,7 @@ object OneOfRandom {
         rd: Random[D1],
         re: Random[E1],
         rf: Random[F1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -189,7 +189,7 @@ object OneOfRandom {
         re: Random[E1],
         rf: Random[F1],
         rg: Random[G1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -221,7 +221,7 @@ object OneOfRandom {
         rf: Random[F1],
         rg: Random[G1],
         rh: Random[H1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -256,7 +256,7 @@ object OneOfRandom {
         rg: Random[G1],
         rh: Random[H1],
         ri: Random[I1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -294,7 +294,7 @@ object OneOfRandom {
         rh: Random[H1],
         ri: Random[I1],
         rj: Random[J1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -335,7 +335,7 @@ object OneOfRandom {
         ri: Random[I1],
         rj: Random[J1],
         rk: Random[K1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -379,7 +379,7 @@ object OneOfRandom {
         rj: Random[J1],
         rk: Random[K1],
         rl: Random[L1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -426,7 +426,7 @@ object OneOfRandom {
         rk: Random[K1],
         rl: Random[L1],
         rm: Random[M1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -476,7 +476,7 @@ object OneOfRandom {
         rl: Random[L1],
         rm: Random[M1],
         rn: Random[N1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -529,7 +529,7 @@ object OneOfRandom {
         rm: Random[M1],
         rn: Random[N1],
         ro: Random[O1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -585,7 +585,7 @@ object OneOfRandom {
         rn: Random[N1],
         ro: Random[O1],
         rp: Random[P1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -644,7 +644,7 @@ object OneOfRandom {
         ro: Random[O1],
         rp: Random[P1],
         rq: Random[Q1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -705,7 +705,7 @@ object OneOfRandom {
         rp: Random[P1],
         rq: Random[Q1],
         rr: Random[R1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -769,7 +769,7 @@ object OneOfRandom {
         rq: Random[Q1],
         rr: Random[R1],
         rs: Random[S1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -836,7 +836,7 @@ object OneOfRandom {
         rr: Random[R1],
         rs: Random[S1],
         rt: Random[T1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -906,7 +906,7 @@ object OneOfRandom {
         rs: Random[S1],
         rt: Random[T1],
         ru: Random[U1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
@@ -979,7 +979,7 @@ object OneOfRandom {
         rt: Random[T1],
         ru: Random[U1],
         rv: Random[V1]
-    ): Random[TT] = choose(
+    ): Random[TT] = oneOfRandom(
       ra.widen[TT],
       rb.widen[TT],
       rc.widen[TT],
