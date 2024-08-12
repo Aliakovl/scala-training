@@ -6,6 +6,10 @@ import dev.aliakovl.gin.internal.OneOfRandom._
 import scala.util.{Random => ScalaRandom}
 
 trait OneOfRandom {
+  def oneOf[A](values: A*): Random[A] = choose(values.map(a => Random.apply[A](a)): _*)
+
+//  def oneOf[A](values: Random[A]*): Random[A] = choose(values: _*)
+
   def oneOf2[A, B]: ApplyOneOf2[A, B] = new ApplyOneOf2[A, B]()
 
   def oneOf3[A, B, C]: ApplyOneOf3[A, B, C] = new ApplyOneOf3[A, B, C]()

@@ -25,14 +25,19 @@ object Random
 
   def apply[A](const: => A): Random[A] = () => const
 
-  def apply[A](implicit g: Random[A]): Random[A] = g
+  def apply[A](implicit inst: Random[A]): Random[A] = inst
 
   def random[A: Random]: Random[A] = Random[A]
 
-  def uglyString(size: Int): Random[String] = Random(ScalaRandom.nextString(size))
+  def uglyString(size: Int): Random[String] = Random {
+    ScalaRandom.nextString(size)
+  }
 
-  def string(size: Int): Random[String] = many[LazyList](size).make[Char].map(_.mkString)
+  def string(size: Int): Random[String] =
+    many[LazyList](size).make[Char].map(_.mkString)
 
-  def alphanumeric(size: Int): Random[String] = Random(ScalaRandom.alphanumeric.take(size).mkString)
+  def alphanumeric(size: Int): Random[String] = Random {
+    ScalaRandom.alphanumeric.take(size).mkString
+  }
 
 }

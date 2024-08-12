@@ -30,5 +30,6 @@ object Main {
     println(uglyString(10).get())
     println(string(10).get())
     println(alphanumeric(10).get())
+    println(many[List](10)(oneOf(3, 4, 5, 7)).get())
   }
 }

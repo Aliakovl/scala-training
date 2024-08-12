@@ -7,14 +7,10 @@ trait GenericRandom {
   implicit def fromMkHListGenerator[A, L <: HList](implicit
       gen: Generic.Aux[A, L],
       hGen: Lazy[MkHListRandom[L]]
-  ): Random[A] = new Random[A] {
-    override def get(): A = gen.from(hGen.value.get())
-  }
+  ): Random[A] = Random(gen.from(hGen.value.get()))
 
   implicit def fromMkCoproductGenerator[A, C <: Coproduct](implicit
       gen: Generic.Aux[A, C],
       cGen: Lazy[MkCoproductRandom[C]]
-  ): Random[A] = new Random[A] {
-    override def get(): A = gen.from(cGen.value.get())
-  }
+  ): Random[A] = Random(gen.from(cGen.value.get()))
 }
