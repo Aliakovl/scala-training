@@ -121,3 +121,15 @@ lazy val `shapeless-guide` = (project in file("./shapeless-guide"))
       "org.typelevel" %% "cats-core" % "2.10.0"
     )
   )
+
+lazy val gin = (project in file("./gin"))
+  .settings(
+    name := "gin",
+    scalaVersion := "2.13.13",
+    libraryDependencies ++= Seq(
+      "com.chuusai" %% "shapeless" % "2.3.10",
+      "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.typelevel" %% "cats-core" % "2.10.0"
+    )
+  )
