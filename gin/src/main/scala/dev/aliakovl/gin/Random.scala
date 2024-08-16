@@ -1,6 +1,10 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.internal.{GenericRandom, ManyRandom, OneOfRandom}
+import dev.aliakovl.gin.internal.{
+  ManyRandom,
+  OneOfRandom,
+  RandomDerivation
+}
 
 import scala.language.implicitConversions
 import scala.util.{Random => ScalaRandom}
@@ -19,13 +23,15 @@ trait Random[A] { self =>
 
 object Random
     extends GeneratorInstances
-    with GenericRandom
+    with RandomDerivation
     with OneOfRandom
     with ManyRandom {
 
-  def apply[A](const: => A): Random[A] = () => const
+  def apply[A](eval: => A): Random[A] = () => eval
 
   def apply[A](implicit inst: Random[A]): Random[A] = inst
+
+  def const[A](value: A): Random[A] = () => value
 
   def random[A: Random]: Random[A] = Random[A]
 
