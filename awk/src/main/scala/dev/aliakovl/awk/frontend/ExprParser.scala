@@ -79,6 +79,8 @@ object ExprParser:
     res.asTerm match {
       case Inlined(_, _, Block(_, t1)) =>
         parseTuples[T](t1.asExpr)
+      case Block(_, t1) =>
+        parseTuples[T](t1.asExpr)
       case _: Term =>
         import quotes.reflect.report
         report.error("Expression not supported")
