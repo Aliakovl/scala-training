@@ -8,23 +8,11 @@ import scala.reflect.macros.whitebox
 class RandomTransformerImpl(val c: whitebox.Context) {
   import c.universe._
 
-  def specify[A: c.WeakTypeTag, U: c.WeakTypeTag](
+  def common[A: c.WeakTypeTag, U: c.WeakTypeTag](
       selector: c.Expr[A => U],
       ra: c.Expr[Random[A]],
       ru: c.Expr[Random[U]]
-  ): c.Expr[Random[A]] = {
-//    c.Expr[Random[A]](
-//      q"${c.eval[Random[A]](c.Expr[Random[A]](c.untypecheck(ra.tree.duplicate)))}"
-//    )
-
-    ra
-  }
-
-  def help[A: c.WeakTypeTag, U: c.WeakTypeTag](
-      selector: c.Expr[A => U],
-      ra: c.Expr[Random[A]],
-      ru: c.Expr[Random[U]]
-  ): c.Expr[String] = {
+  ): (c.Expr[Random[A]], c.Expr[String]) = {
     val (t1, t2) = selector.tree match {
       case q"(..$arg) => $pathBody" => (arg, pathBody)
     }
@@ -32,7 +20,7 @@ class RandomTransformerImpl(val c: whitebox.Context) {
     val r =
       c.weakTypeOf[A].member(TermName("<init>")).asMethod.paramLists.mkString
 
-//    symbolOf[A].
+    //    symbolOf[A].
 
     val g = c.untypecheck(ra.tree.duplicate)
 
@@ -62,15 +50,29 @@ class RandomTransformerImpl(val c: whitebox.Context) {
     val werf =
       q"${c.eval[Random[A]](c.Expr[Random[A]](c.untypecheck(ra.tree.duplicate)))}"
 
-    mkStr(
-//      showRaw(t1),
-//      showRaw(t2),
-//      r,
-//      showRaw(ru.tree),
+    val str = mkStr(
+      //      showRaw(t1),
+      //      showRaw(t2),
+      //      r,
+      //      showRaw(ru.tree),
       showRaw(ra.tree),
       showCode(werf)
     )
+
+    (ra, str)
   }
+
+  def specify[A: c.WeakTypeTag, U: c.WeakTypeTag](
+      selector: c.Expr[A => U],
+      ra: c.Expr[Random[A]],
+      ru: c.Expr[Random[U]]
+  ): c.Expr[Random[A]] = common(selector, ra, ru)._1
+
+  def help[A: c.WeakTypeTag, U: c.WeakTypeTag](
+      selector: c.Expr[A => U],
+      ra: c.Expr[Random[A]],
+      ru: c.Expr[Random[U]]
+  ): c.Expr[String] = common(selector, ra, ru)._2
 
   private def mkStr(str: String*): c.Expr[String] = c.Expr[String](
     Literal(
