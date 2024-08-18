@@ -138,7 +138,7 @@ lazy val gin = (project in file("./gin"))
       "org.typelevel" %% "cats-core" % "2.10.0",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scala-compiler" % scalaVersion.value
-    ),
+    )
 //    scalacOptions ++= Seq(
 //      "-Ymacro-debug-lite"
 //    )
@@ -157,7 +157,7 @@ lazy val `gin-macros` = (project in file("./gin-macros"))
       "org.scala-lang" % "scala-compiler" % scalaVersion.value
     )
   )
-  .dependsOn(gin % "compile->compile")
+  .dependsOn(gin % "test->test;compile->compile")
 
 lazy val `gin-specify` = (project in file("./gin-specify"))
   .settings(
@@ -174,7 +174,10 @@ lazy val `gin-specify` = (project in file("./gin-specify"))
       "com.softwaremill.quicklens" %% "quicklens" % "1.9.7"
     )
   )
-  .dependsOn(`gin-macros` % "compile->compile", gin % "compile->compile")
+  .dependsOn(
+    `gin-macros` % "test->test;compile->compile",
+    gin % "test->test;compile->compile"
+  )
 
 lazy val reflex = (project in file("./reflex"))
   .settings(
