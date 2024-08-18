@@ -1,4 +1,4 @@
-d . package dev.aliakovl.gin.internal
+package dev.aliakovl.gin.internal
 
 import dev.aliakovl.gin.Random
 import magnolia1._

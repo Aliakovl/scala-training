@@ -1,10 +1,6 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.internal.{
-  ManyRandom,
-  OneOfRandom,
-  RandomDerivation
-}
+import dev.aliakovl.gin.internal.{ManyRandom, OneOfRandom, RandomDerivation}
 
 import scala.language.implicitConversions
 import scala.util.{Random => ScalaRandom}
