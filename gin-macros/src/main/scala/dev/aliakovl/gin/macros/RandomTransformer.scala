@@ -20,7 +20,6 @@ class RandomTransformerImpl(val c: whitebox.Context) {
     val r =
       c.weakTypeOf[A].member(TermName("<init>")).asMethod.paramLists.mkString
 
-    //    symbolOf[A].
 
     val g = c.untypecheck(ra.tree.duplicate)
 
@@ -41,22 +40,19 @@ class RandomTransformerImpl(val c: whitebox.Context) {
     implicit val lra: Liftable[Random[A]] = {
       new Liftable[Random[A]] {
         override def apply(value: Random[A]): c.universe.Tree = {
-          implicitly[Liftable[A]]
           q"""_root_.dev.aliakovl.gin.Random(${value.get()})"""
         }
       }
     }
 
-    val werf =
-      q"${c.eval[Random[A]](c.Expr[Random[A]](c.untypecheck(ra.tree.duplicate)))}"
+//    val werf =
+//      q"${c.eval[Random[A]](c.Expr[Random[A]](c.untypecheck(ra.tree.duplicate)))}"
 
     val str = mkStr(
-      //      showRaw(t1),
-      //      showRaw(t2),
-      //      r,
-      //      showRaw(ru.tree),
-      showRaw(ra.tree),
-      showCode(werf)
+      showRaw(t1),
+      showRaw(t2),
+      showRaw(ru.tree),
+      showCode(ra.tree)
     )
 
     (ra, str)

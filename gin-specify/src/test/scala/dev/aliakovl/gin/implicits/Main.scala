@@ -1,7 +1,7 @@
 package dev.aliakovl.gin.implicits
 
 import dev.aliakovl.gin.Random.{random, uglyString}
-import dev.aliakovl.gin.{MyClass2, Random}
+import dev.aliakovl.gin.MyClass2
 import dev.aliakovl.gin.macros.RandomTransformer
 
 object Main {
@@ -11,8 +11,8 @@ object Main {
 
     val a = RandomTransformer.help[MyClass2, String](
       _.mc2field,
-      Random.random[MyClass2],
-      Random.uglyString(100)
+      random[MyClass2],
+      uglyString(100)
     )
 
     println(a)

@@ -1,6 +1,7 @@
 package dev.aliakovl.gin.internal
 
 import dev.aliakovl.gin.Random
+import dev.aliakovl.gin.Random.random
 import dev.aliakovl.gin.internal.ManyRandom._
 
 import scala.collection.Factory
@@ -18,7 +19,7 @@ object ManyRandom {
       extends AnyVal {
     def apply[A](ra: Random[A])(implicit
         f: Factory[A, C[A]]
-    ): Random[C[A]] = Random {
+    ): Random[C[A]] = random {
       f.fromSpecific(Iterable.fill(size)(ra.get()))
     }
 
@@ -32,7 +33,7 @@ object ManyRandom {
       extends AnyVal {
     def apply[A](ra: Random[A])(implicit
         f: Factory[A, C[A]]
-    ): Random[C[A]] = Random {
+    ): Random[C[A]] = random {
       f.fromSpecific(Iterable.fill(size)(ra.get()))
     }
 
@@ -46,7 +47,7 @@ object ManyRandom {
       extends AnyVal {
     def apply[K, V](rk: Random[K], rv: Random[V])(implicit
         f: Factory[(K, V), M[K, V]]
-    ): Random[M[K, V]] = Random {
+    ): Random[M[K, V]] = random {
       f.fromSpecific(
         Iterable
           .fill(size)(rk.get())

@@ -1,12 +1,13 @@
 package dev.aliakovl.gin.internal
 
 import dev.aliakovl.gin.Random
+import dev.aliakovl.gin.Random.random
 import dev.aliakovl.gin.internal.OneOfRandom._
 
 import scala.util.{Random => ScalaRandom}
 
 trait OneOfRandom {
-  def oneOf[A](values: A*): Random[A] = OneOfRandom.oneOfRandomImpl(values.map(a => Random.apply[A](a)): _*)
+  def oneOf[A](values: A*): Random[A] = OneOfRandom.oneOfRandomImpl(values.map(a => Random.random[A](a)): _*)
 
   def oneOfRandom[A](values: Random[A]*): Random[A] = OneOfRandom.oneOfRandomImpl(values: _*)
 
@@ -87,7 +88,7 @@ trait OneOfRandom {
 }
 
 object OneOfRandom {
-  private def oneOfRandomImpl[A](values: Random[A]*): Random[A] = Random {
+  private def oneOfRandomImpl[A](values: Random[A]*): Random[A] = random {
     val index = ScalaRandom.nextInt(values.size)
     values(index).get()
   }
