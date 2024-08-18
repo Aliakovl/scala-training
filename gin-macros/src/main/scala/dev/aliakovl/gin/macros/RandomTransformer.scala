@@ -6,12 +6,16 @@ import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
 
 class RandomTransformerImpl(val c: whitebox.Context) {
+  import c.universe._
+
   def specify[A: c.WeakTypeTag, U: c.WeakTypeTag](
       selector: c.Expr[A => U],
       ra: c.Expr[Random[A]],
       ru: c.Expr[Random[U]]
   ): c.Expr[Random[A]] = {
-    import c.universe._
+//    c.Expr[Random[A]](
+//      q"${c.eval[Random[A]](c.Expr[Random[A]](c.untypecheck(ra.tree.duplicate)))}"
+//    )
 
     ra
   }
@@ -21,43 +25,61 @@ class RandomTransformerImpl(val c: whitebox.Context) {
       ra: c.Expr[Random[A]],
       ru: c.Expr[Random[U]]
   ): c.Expr[String] = {
-    import c.universe._
-
-    val a: Tree = q""" val e = "qwefqwef" """
-
-    val q"val e = $value" = a
-
-//    c.Expr[String](Literal(Constant(value)))
-
-//    c.Expr[String](value)
-
     val (t1, t2) = selector.tree match {
       case q"(..$arg) => $pathBody" => (arg, pathBody)
     }
 
-//    val q"${name: TermName}" = ra
+    val r =
+      c.weakTypeOf[A].member(TermName("<init>")).asMethod.paramLists.mkString
 
-    implicit def lra[T: Liftable]: Liftable[Random[T]] = new Liftable[Random[T]] {
-      override def apply(value: Random[T]): c.universe.Tree = {
-        q"_root_.dev.aliakovl.gin.Random(null)"
+//    symbolOf[A].
+
+    val g = c.untypecheck(ra.tree.duplicate)
+
+    implicit val la: Liftable[A] = {
+      new Liftable[A] {
+        override def apply(value: A): c.universe.Tree = {
+          val init = c.weakTypeOf[A].member(TermName("<init>"))
+
+          val args = init.asMethod.paramLists.map(_.map { s =>
+            q"${s.name.toTermName} = ${value.toString}.${s.name.toTermName}"
+          })
+
+          q"${init.asMethod}(...$args)"
+        }
       }
     }
 
-    val r = c.weakTypeOf[A].member(TermName("<init>")).asMethod
+    implicit val lra: Liftable[Random[A]] = {
+      new Liftable[Random[A]] {
+        override def apply(value: Random[A]): c.universe.Tree = {
+          implicitly[Liftable[A]]
+          q"""_root_.dev.aliakovl.gin.Random(${value.get()})"""
+        }
+      }
+    }
 
-//    val werf = q"${c.eval[Random[A]](c.Expr[Random[A]](c.untypecheck(ra.tree.duplicate)))}"
+    val werf =
+      q"${c.eval[Random[A]](c.Expr[Random[A]](c.untypecheck(ra.tree.duplicate)))}"
 
-    c.Expr[String](
-      Literal(
-        Constant(
-          showRaw(t1) ++ "\n" ++
-            showRaw(t2) ++ "\n" ++
-            r.fullName ++ "\n" ++
-            showRaw(ru.tree)
-        )
-      )
+    mkStr(
+//      showRaw(t1),
+//      showRaw(t2),
+//      r,
+//      showRaw(ru.tree),
+      showRaw(ra.tree),
+      showCode(werf)
     )
   }
+
+  private def mkStr(str: String*): c.Expr[String] = c.Expr[String](
+    Literal(
+      Constant(
+        str.mkString("\n")
+      )
+    )
+  )
+
 }
 
 object RandomTransformer {
