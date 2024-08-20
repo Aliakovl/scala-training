@@ -3,6 +3,8 @@ package dev.aliakovl.gin
 import dev.aliakovl.gin.Random.{const, random, uglyString}
 import dev.aliakovl.gin._
 
+import scala.::
+
 object Main {
   def main(args: Array[String]): Unit = {
 
@@ -52,11 +54,58 @@ object Main {
 //      .random
 
     val tc = {
-      lazy val _ = ???
+
+      val mc2i = implicitly[Random[Int]]
+      val mc2m = implicitly[Random[String]]
+
+      val res = List(
+        Random(
+          new MyClass1(
+            m = new MyClass2(
+              int = const(3).get(),
+              mc2field = mc2m.get()
+            )
+          )
+        ),
+        Random(
+          new MyClass2(
+            int = mc2i.get(),
+            mc2field = mc2m.get()
+          )
+        ),
+        Random(
+          new MyClass3()
+        ),
+        Random(
+          MyClass4
+        )
+      )
+
+      Random.oneOfRandom(res: _*)
+    }
+
+//    val listR = Gen[List[Int]].random
+
+    val listReal: Random[List[Int]] = {
+      val int = implicitly[Random[Int]]
+
+      lazy val nilR: Random[List[Int]] = Random(List.empty[Int])
+      lazy val lstR: Random[List[Int]] = Random(
+        int.get() :: res.get()
+      )
+
+      lazy val res = Random.oneOfRandom(
+        nilR,
+        lstR
+      )
+
+      res
     }
 
     println(r.get())
     println(rel.get())
+    println(tc.get())
+    println(listReal.get())
 
   }
 }

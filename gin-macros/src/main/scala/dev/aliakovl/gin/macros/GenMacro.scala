@@ -1,10 +1,6 @@
 package dev.aliakovl.gin.macros
 
-import dev.aliakovl.gin.Random
-
 import scala.reflect.macros.whitebox
-
-case class TClass[B <: String](a: Int, b: List[B])
 
 class GenMacro(val c: whitebox.Context) {
   import c.universe._
@@ -16,9 +12,7 @@ class GenMacro(val c: whitebox.Context) {
     val t = other._2.symbol.asClass.primaryConstructor.asMethod.paramLists
     val ttype = other._2.symbol.asClass.primaryConstructor.asMethod
 
-    Expr
-
-    val c1 = Select(New(Ident(other._2.symbol.asClass)), other._2.symbol.asClass.primaryConstructor)
+    val c1 = Select(New(Ident(other._2.symbol)), termNames.CONSTRUCTOR)
 
     val tr = other._2.symbol.asClass
 
