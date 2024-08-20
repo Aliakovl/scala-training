@@ -27,9 +27,9 @@ object Main {
 //    println(ru.showRaw(ru.reify(random[MyClass2]).tree))
 
     val r: String =
-      Gen[MyClass1]
-        .specify(_.m.mc2field, uglyString(100))
-        .specify(_.m.int, const(4))
+      Gen[MyClass]
+        .specify[String](_.when[MyClass1].m.mc2field, uglyString(100))
+        .specify[Int](_.when[MyClass2].int, const(4))
         .random
 
     println(r)

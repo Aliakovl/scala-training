@@ -6,7 +6,13 @@ class GenMacro(val c: whitebox.Context) {
   import c.universe._
 
   def randomImpl[A: c.WeakTypeTag](gen: Tree): c.Expr[GenOps[A]] = {
-    mkGenOps[A](mkStr(showRaw(gen)))
+
+    val q"$expr[..$tpts](..$exprss)" = gen
+
+    mkGenOps[A](
+      mkStr(showRaw(expr) +: showRaw(tpts) +: exprss.map(showRaw(_)): _*)
+//      mkStr(showRaw(gen))
+    )
   }
 
   def mkGenOps[A: c.WeakTypeTag](random: String): c.Expr[GenOps[A]] = {

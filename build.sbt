@@ -157,7 +157,9 @@ lazy val `gin-macros` = (project in file("./gin-macros"))
       "org.scala-lang" % "scala-compiler" % scalaVersion.value
     )
   )
-  .dependsOn(gin % "test->test;compile->compile")
+  .dependsOn(
+    gin % "test->test;compile->compile"
+  )
 
 lazy val `gin-specify` = (project in file("./gin-specify"))
   .settings(
