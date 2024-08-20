@@ -6,7 +6,7 @@ import dev.aliakovl.gin.internal.{ManyRandom, OneOfRandom, RandomDerivation}
 import scala.language.implicitConversions
 import scala.util.{Random => ScalaRandom}
 
-case class Random[A](get: () => A) {
+final class Random[A](val get: () => A) {
   def map[B](f: A => B): Random[B] = random(f(get()))
 
   def flatMap[B](f: A => Random[B]): Random[B] = random(f(get()).get())
@@ -22,13 +22,15 @@ object Random
     with OneOfRandom
     with ManyRandom {
 
+  def apply[A](eval: => A): Random[A] = new Random[A](() => eval)
+
   def apply[A](implicit inst: Random[A]): Random[A] = inst
 
   def random[A: Random]: Random[A] = Random[A]
 
-  def random[A](eval: => A): Random[A] = Random(() => eval)
+  def random[A](eval: => A): Random[A] = Random(eval)
 
-  def const[A](value: A): Random[A] = Random(() => value)
+  def const[A](value: A): Random[A] = Random(value)
 
   def uglyString(size: Int): Random[String] = random {
     ScalaRandom.nextString(size)

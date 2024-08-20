@@ -1,8 +1,7 @@
 package dev.aliakovl.gin
 
 import dev.aliakovl.gin.Random.{const, random, uglyString}
-import dev.aliakovl.gin.{MyClass1, MyClass2}
-import dev.aliakovl.gin.macros.{GenImpl, GenOps, RandomTransformer}
+import dev.aliakovl.gin._
 
 object Main {
   def main(args: Array[String]): Unit = {
@@ -26,13 +25,38 @@ object Main {
 
 //    println(ru.showRaw(ru.reify(random[MyClass2]).tree))
 
-    val r: String =
-      Gen[MyClass]
-        .specify[String](_.when[MyClass1].m.mc2field, uglyString(100))
-        .specify[Int](_.when[MyClass2].int, const(4))
+    val r =
+      Gen[MyClass1]
+        .specify[String](_.m.mc2field, uglyString(100))
+        .specify[Int](_.m.int, const(4))
         .random
 
-    println(r)
+    val rel = {
+      val wefqwef = implicitly[Random[Int]]
+      val _qwef = implicitly[Random[String]]
+
+      val res = Random(
+        new MyClass1(
+          m = new MyClass2(
+            int = wefqwef.get(),
+            mc2field = _qwef.get()
+          )
+        )
+      )
+
+      res
+    }
+
+//    val c = Gen[MyClass]
+//      .specify(_.when[MyClass1].m.int, const(3))
+//      .random
+
+    val tc = {
+      lazy val _ = ???
+    }
+
+    println(r.get())
+    println(rel.get())
 
   }
 }

@@ -1,3 +1,8 @@
 package dev.aliakovl.gin.macros
 
-final case class GenOps[A](random: String) extends AnyVal
+import dev.aliakovl.gin.Random
+
+trait GenOps[A] {
+  def random: Random[A]
+  def debug: String
+}
