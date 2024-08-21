@@ -3,7 +3,9 @@ package dev.aliakovl.gin
 import dev.aliakovl.gin.Random.{const, random, uglyString}
 import dev.aliakovl.gin._
 
-import scala.::
+sealed trait Lst[+A]
+case object Nil extends Lst[Nothing]
+case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
 
 object Main {
   def main(args: Array[String]): Unit = {
@@ -84,17 +86,19 @@ object Main {
       Random.oneOfRandom(res: _*)
     }
 
-//    val listR = Gen[List[Int]].random
+//    val listR = Gen[Lst[Int]]
+//      .specify(_.when[Cons[Int]].head, const(4))
+//      .random
 
-    val listReal: Random[List[Int]] = {
+    val listReal: Random[Lst[Int]] = {
       val int = implicitly[Random[Int]]
 
-      lazy val nilR: Random[List[Int]] = Random(List.empty[Int])
-      lazy val lstR: Random[List[Int]] = Random(
-        int.get() :: res.get()
+      lazy val nilR: Random[Lst[Int]] = Random(Nil)
+      lazy val lstR: Random[Lst[Int]] = Random(
+        Cons(int.get(), res.get())
       )
 
-      lazy val res = Random.oneOfRandom(
+      lazy val res: Random[Lst[Int]] = Random.oneOfRandom(
         nilR,
         lstR
       )
