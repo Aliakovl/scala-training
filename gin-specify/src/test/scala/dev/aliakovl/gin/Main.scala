@@ -1,115 +1,71 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.Random.{const, random, uglyString}
-import dev.aliakovl.gin._
+import dev.aliakovl.gin.Random.{const, uglyString}
 
 sealed trait Lst[+A]
 case object Nil extends Lst[Nothing]
 case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
 
+sealed trait MyClass extends Product with Serializable
+case class MyClass1(m: MyClass) extends MyClass
+case class MyClass2(int: Int, mc2field: String) extends MyClass
+case class MyClass3() extends MyClass
+case object MyClass4 extends MyClass
+
 object Main {
   def main(args: Array[String]): Unit = {
 
-//    val myClass: Random[MyClass2] = Random.random[MyClass2]
-
-//    val a = RandomTransformer.help[MyClass2, String](
-//      _.mc2field,
-//      random[MyClass2],
-//      uglyString(100)
-//    )
-//
-//    println(a)
-//
-//    val wqef = RandomTransformer.specify[MyClass2, String](
-//      _.mc2field,
-//      random[MyClass2],
-//      uglyString(5)
-//    )
-//    println(wqef.get())
-
-//    println(ru.showRaw(ru.reify(random[MyClass2]).tree))
-
-    val r =
-      Gen[MyClass1]
-        .specify[String](_.m.mc2field, uglyString(100))
-        .specify[Int](_.m.int, const(4))
-        .random
+//    val r =
+//      Gen[MyClass]
+//        .specify[String](_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
+//        .specify[Int](_.when[MyClass1].m.when[MyClass2].int, const(4))
+//        .specify[Int](_.when[MyClass2].int, const(4))
+//        .random
 
     val rel = {
-      val wefqwef = implicitly[Random[Int]]
-      val _qwef = implicitly[Random[String]]
+      val random$Int = implicitly[Random[Int]]
+      val random$String = implicitly[Random[String]]
 
-      val res = Random(
-        new MyClass1(
-          m = new MyClass2(
-            int = wefqwef.get(),
-            mc2field = _qwef.get()
-          )
-        )
+      val MyClass$size = 4
+      def MyClass$Trait = scala.util.Random.nextInt(MyClass$size)
+
+      lazy val result: Random[MyClass] = Random(
+        MyClass$Trait match {
+          case 0 =>
+            MyClass1(m = MyClass$Trait match {
+              case 0 =>
+                MyClass1(m = MyClass$Trait match {
+                  case 0 => MyClass1(m = result.get())
+                  case 1 =>
+                    MyClass2(
+                      int = random$Int.get(),
+                      mc2field = uglyString(100).get()
+                    )
+                  case 2 => MyClass3()
+                  case 3 => MyClass4
+                })
+              case 1 =>
+                MyClass2(int = random$Int.get(), mc2field = random$String.get())
+              case 2 => MyClass3()
+              case 3 => MyClass4
+            })
+          case 1 =>
+            MyClass2(int = const(4).get(), mc2field = random$String.get())
+          case 2 => MyClass3()
+          case 3 => MyClass4
+        }
       )
-
-      res
+      result
     }
 
-//    val c = Gen[MyClass]
-//      .specify(_.when[MyClass1].m.int, const(3))
-//      .random
-
-    val tc = {
-
-      val mc2i = implicitly[Random[Int]]
-      val mc2m = implicitly[Random[String]]
-
-      val res = List(
-        Random(
-          new MyClass1(
-            m = new MyClass2(
-              int = const(3).get(),
-              mc2field = mc2m.get()
-            )
-          )
-        ),
-        Random(
-          new MyClass2(
-            int = mc2i.get(),
-            mc2field = mc2m.get()
-          )
-        ),
-        Random(
-          new MyClass3()
-        ),
-        Random(
-          MyClass4
-        )
-      )
-
-      Random.oneOfRandom(res: _*)
+    lazy val loop: MyClass1 = rel.get() match {
+      case a @ MyClass1(
+            MyClass1(MyClass1(MyClass1(MyClass1(MyClass2(_, _)))))
+          ) =>
+        a
+      case _ => loop
     }
 
-//    val listR = Gen[Lst[Int]]
-//      .specify(_.when[Cons[Int]].head, const(4))
-//      .random
-
-    val listReal: Random[Lst[Int]] = {
-      val int = implicitly[Random[Int]]
-
-      lazy val nilR: Random[Lst[Int]] = Random(Nil)
-      lazy val lstR: Random[Lst[Int]] = Random(
-        Cons(int.get(), res.get())
-      )
-
-      lazy val res: Random[Lst[Int]] = Random.oneOfRandom(
-        nilR,
-        lstR
-      )
-
-      res
-    }
-
-    println(r.get())
-    println(rel.get())
-    println(tc.get())
-    println(listReal.get())
-
+    println(loop)
   }
 }

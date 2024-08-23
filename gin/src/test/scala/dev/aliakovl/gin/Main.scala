@@ -3,7 +3,7 @@ package dev.aliakovl.gin
 import Random._
 
 sealed trait MyClass extends Product with Serializable
-case class MyClass1(m: MyClass2) extends MyClass
+case class MyClass1(m: MyClass) extends MyClass
 case class MyClass2(int: Int, mc2field: String) extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass

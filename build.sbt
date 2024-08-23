@@ -177,8 +177,8 @@ lazy val `gin-specify` = (project in file("./gin-specify"))
     )
   )
   .dependsOn(
-    `gin-macros` % "test->test;compile->compile",
-    gin % "test->test;compile->compile"
+    `gin-macros` % "compile->compile",
+    gin % "compile->compile"
   )
 
 lazy val reflex = (project in file("./reflex"))
