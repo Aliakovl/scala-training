@@ -1,7 +1,7 @@
 package dev.aliakovl.tf
 
-import io.circe._
-import io.circe.syntax._
+import io.circe.*
+import io.circe.syntax.*
 
 type ExprTFC = [A] => ExprA[A] ?=> A
 type ExprVTFC = [A] => (ExprA[A], Vars[A]) ?=> A
@@ -93,7 +93,7 @@ given ExprA[Json] with
 given Encoder[ExprTFC] with
   def apply(expr: ExprTFC) = expr[Json]
 
-import ExprTFC._
+import ExprTFC.*
 
 given Decoder[ExprTFC] with
   def apply(c: HCursor): Decoder.Result[ExprTFC] =
