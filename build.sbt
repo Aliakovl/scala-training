@@ -141,7 +141,7 @@ lazy val gin = (project in file("./gin"))
     scalacOptions ++= Seq(
       "--language:experimental.macros",
       "--language:implicitConversions",
-      "-Ymacro-debug-lite"
+//      "-Ymacro-debug-lite"
     )
   )
 

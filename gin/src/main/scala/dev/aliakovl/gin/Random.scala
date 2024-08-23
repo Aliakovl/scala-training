@@ -12,7 +12,7 @@ final class Random[A](val get: () => A) extends AnyVal {
 
   def product[B](fb: Random[B]): Random[(A, B)] = Random((get(), fb.get()))
 
-  def widen[T >: A]: Random[T] = Random(get())
+  def widen[T >: A]: Random[T] = this.asInstanceOf[Random[T]]
 }
 
 object Random

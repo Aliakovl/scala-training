@@ -8,11 +8,15 @@ sealed trait Lst[+A]
 case object Nil extends Lst[Nothing]
 case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
 
-sealed trait MyClass extends Product with Serializable
+sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
 case class MyClass2(int: Int, mc2field: String) extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
+
+sealed trait KJH extends MyClass
+case class K() extends KJH
+case object H extends KJH
 
 object GenTest {
   def main(args: Array[String]): Unit = {
@@ -71,7 +75,10 @@ object GenTest {
 
     println(loop)
 
-    val test = Gen[MyClass1].random.get()
+    val test = Gen[MyClass]
+      .specify(_.when[MyClass1].m, const[MyClass](MyClass1(MyClass2(3, "wef"))))
+      .random
+      .get()
     println(test)
   }
 }

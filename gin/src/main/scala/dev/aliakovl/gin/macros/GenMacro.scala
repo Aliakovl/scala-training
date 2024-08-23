@@ -11,12 +11,16 @@ class GenMacro(val c: whitebox.Context) {
 
     val other = go(gen.tree, List.empty)
 
-    val t = other._2.symbol.asClass.primaryConstructor.asMethod.paramLists
-    val ttype = other._2.symbol.asClass.primaryConstructor.asMethod
-
-    val c1 = Select(New(Ident(other._2.symbol)), termNames.CONSTRUCTOR)
+//    val t = other._2.symbol.asClass.primaryConstructor.asMethod.paramLists
+//    val ttype = other._2.symbol.asClass.primaryConstructor.asMethod
 
     val tr = other._2.symbol.asClass
+    val sub = subclassesOf(tr)
+
+    val c1 = Select(
+      New(Ident(sub.find(_.fullName == "dev.aliakovl.gin.MyClass1").get)),
+      termNames.CONSTRUCTOR
+    )
 
 //    mkGenOps[A](c.Expr[A](t), )
 
@@ -27,7 +31,12 @@ class GenMacro(val c: whitebox.Context) {
           _root_.dev.aliakovl.gin.Random(${c1}(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-          showRaw(tr) +: other._1.map(showRaw(_)): _*
+          showRaw(tr) +: subclassesOf(tr).toList.map{cl => showRaw(cl) + {
+            if (!cl.isModuleClass) publicConstructors(cl.asClass).map(_.map(showRaw(_))).map(_.mkString("(", ",", ")")).mkString("(", ",", ")") else ""
+          } } ++: other._1
+            .map(
+              showRaw(_)
+            ): _*
         )}
       }"""
     )
@@ -49,5 +58,42 @@ class GenMacro(val c: whitebox.Context) {
     }
   }
 
-//  private def subClasses()
+  private def subclassesOf(parent: ClassSymbol): Set[Symbol] = {
+    val (abstractChildren, concreteChildren) =
+      parent.knownDirectSubclasses.partition(_.isAbstract)
+
+    concreteChildren.foreach { child =>
+      if (!child.isFinal && !child.asClass.isCaseClass) {
+        c.abort(
+          c.enclosingPosition,
+          s"child $child of $parent is neither final nor a case class"
+        )
+      }
+    }
+
+    concreteChildren.union {
+      abstractChildren.flatMap { child =>
+        val childClass = child.asClass
+        if (childClass.isSealed) {
+          subclassesOf(childClass)
+        } else {
+          c.abort(c.enclosingPosition, s"child $child of $parent is not sealed")
+        }
+      }
+
+    }
+  }
+
+  def publicConstructors(parent: ClassSymbol): List[List[Symbol]] = {
+    val members = parent.info.members
+    val c = members
+      .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
+      .orElse(
+        members.find(m => m.isMethod && m.asMethod.isConstructor && m.isPublic)
+      )
+      .get
+
+    c.asMethod.paramLists
+  }
+
 }
