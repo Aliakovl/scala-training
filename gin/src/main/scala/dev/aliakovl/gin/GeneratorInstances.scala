@@ -33,11 +33,4 @@ trait GeneratorInstances {
   ](implicit
       f: Factory[(A, B), M[A, B]]
   ): Random[M[A, B]] = Random.many2[M](5).make[A, B]
-
-  def randomFrom[A](xs: IterableOnce[A]): Random[A] = random(ScalaRandom.shuffle(xs.iterator.toIndexedSeq).head)
-
-  def enumerationGenerator[E <: Enumeration](
-      enumeration: E
-  ): Random[E#Value] =
-    randomFrom(enumeration.values)
 }

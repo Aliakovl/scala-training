@@ -43,4 +43,9 @@ object Random
     ScalaRandom.alphanumeric.take(size).mkString
   }
 
+  def enumeration[E <: Enumeration](
+      en: E
+  ): Random[E] = Random {
+    en(ScalaRandom.nextInt(en.maxId))
+  }
 }
