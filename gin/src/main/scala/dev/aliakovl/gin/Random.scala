@@ -16,7 +16,7 @@ final class Random[A](val get: () => A) extends AnyVal {
 }
 
 object Random
-    extends GeneratorInstances
+    extends RandomInstances
     with RandomDerivation
     with OneOfRandom
     with ManyRandom {
