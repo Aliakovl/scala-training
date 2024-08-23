@@ -1,17 +1,11 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.internal.{
-  ManyRandom,
-  OneOfRandom,
-  RandomDerivation
-}
+import dev.aliakovl.gin.internal._
 
 import scala.language.implicitConversions
 import scala.util.{Random => ScalaRandom}
 
-trait Random[A] { self =>
-  def get(): A
-
+final class Random[A](val get: () => A) extends AnyVal {
   def map[B](f: A => B): Random[B] = Random(f(get()))
 
   def flatMap[B](f: A => Random[B]): Random[B] = Random(f(get()).get())
@@ -22,28 +16,31 @@ trait Random[A] { self =>
 }
 
 object Random
-    extends GeneratorInstances
+    extends RandomInstances
     with RandomDerivation
     with OneOfRandom
     with ManyRandom {
 
-  def apply[A](eval: => A): Random[A] = () => eval
+  def apply[A](eval: => A): Random[A] = new Random[A](() => eval)
 
-  def apply[A](implicit inst: Random[A]): Random[A] = inst
+  def random[A](implicit inst: Random[A]): Random[A] = inst
 
-  def const[A](value: A): Random[A] = () => value
+  def const[A](value: A): Random[A] = apply(value)
 
-  def random[A: Random]: Random[A] = Random[A]
-
-  def uglyString(size: Int): Random[String] = Random {
+  def uglyString(size: Int): Random[String] = apply {
     ScalaRandom.nextString(size)
   }
 
   def string(size: Int): Random[String] =
     many[LazyList](size).make[Char].map(_.mkString)
 
-  def alphanumeric(size: Int): Random[String] = Random {
+  def alphanumeric(size: Int): Random[String] = apply {
     ScalaRandom.alphanumeric.take(size).mkString
   }
 
+  def enumeration[E <: Enumeration](
+      en: E
+  ): Random[E#Value] = Random {
+    en(ScalaRandom.nextInt(en.maxId))
+  }
 }

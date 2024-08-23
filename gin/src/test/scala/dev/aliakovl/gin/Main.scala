@@ -1,17 +1,17 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.Random._
-
-sealed trait MyClass extends Product with Serializable
-case class MyClass1(m: MyClass2) extends MyClass
-case class MyClass2(int: Int, string: String) extends MyClass
-case class MyClass3() extends MyClass
-case object MyClass4 extends MyClass
-
-sealed trait SubClass extends MyClass
-case class One() extends SubClass
+import Random._
 
 object Main {
+  sealed trait MyClass extends Product with Serializable
+  case class MyClass1(m: MyClass) extends MyClass
+  case class MyClass2(int: Int, mc2field: String) extends MyClass
+  case class MyClass3() extends MyClass
+  case object MyClass4 extends MyClass
+
+  sealed trait SubClass extends MyClass
+  case class One() extends SubClass
+
   def main(args: Array[String]): Unit = {
     println(random[Map[String, List[Option[MyClass]]]].get())
     println(many[List](3)(random[String]).get())
@@ -20,7 +20,9 @@ object Main {
     println(random[Either[String, Int]].get())
     val a: Random[MyClass] = oneOf2[MyClass2, MyClass1].make
     println(many[List](10)(a).get())
-    val b: List[MyClass] = many[List](4000)(oneOf4[MyClass1, MyClass2, MyClass3, SubClass].make).get()
+    val b: List[MyClass] = many[List](4000)(
+      oneOf4[MyClass1, MyClass2, MyClass3, SubClass].make
+    ).get()
     println(b.count(_.isInstanceOf[MyClass1]))
     println(b.count(_.isInstanceOf[MyClass2]))
     println(b.count(_.isInstanceOf[MyClass3]))

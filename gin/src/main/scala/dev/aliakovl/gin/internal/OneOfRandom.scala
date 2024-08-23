@@ -6,7 +6,7 @@ import dev.aliakovl.gin.internal.OneOfRandom._
 import scala.util.{Random => ScalaRandom}
 
 trait OneOfRandom {
-  def oneOf[A](values: A*): Random[A] = OneOfRandom.oneOfRandomImpl(values.map(a => Random.apply[A](a)): _*)
+  def oneOf[A](values: A*): Random[A] = OneOfRandom.oneOfRandomImpl(values.map(a => Random(a)): _*)
 
   def oneOfRandom[A](values: Random[A]*): Random[A] = OneOfRandom.oneOfRandomImpl(values: _*)
 
