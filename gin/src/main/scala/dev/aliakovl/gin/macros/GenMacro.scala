@@ -48,4 +48,6 @@ class GenMacro(val c: whitebox.Context) {
       case q"$expr[..$tpts]"                  => (acc, tpts.head)
     }
   }
+
+//  private def subClasses()
 }

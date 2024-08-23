@@ -132,6 +132,7 @@ lazy val gin = (project in file("./gin"))
     libraryDependencies ++= Seq(
       "com.chuusai" %% "shapeless" % "2.3.10",
       "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
+      "com.softwaremill.macwire" %% "macros" % "2.5.9" % "provided",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.typelevel" %% "cats-core" % "2.10.0",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
