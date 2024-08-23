@@ -9,20 +9,20 @@ import scala.collection.{Factory, Iterable}
 import scala.util.{Random => ScalaRandom}
 
 trait GeneratorInstances {
-  implicit val uuidGenerator: Random[UUID] = random(UUID.randomUUID())
+  implicit val uuidGenerator: Random[UUID] = Random(UUID.randomUUID())
   implicit val stringGenerator: Random[String] = alphanumeric(10)
-  implicit val char: Random[Char] = random(ScalaRandom.nextPrintableChar())
-  implicit val instantGenerator: Random[Instant] = random(
+  implicit val char: Random[Char] = Random(ScalaRandom.nextPrintableChar())
+  implicit val instantGenerator: Random[Instant] = Random(
     Instant.now().truncatedTo(ChronoUnit.MILLIS)
   )
-  implicit val intGenerator: Random[Int] = random(ScalaRandom.nextInt())
-  implicit val longGenerator: Random[Long] = random(ScalaRandom.nextLong())
-  implicit val doubleGenerator: Random[Double] = random(ScalaRandom.nextDouble())
-  implicit val booleanGenerator: Random[Boolean] = random(ScalaRandom.nextBoolean())
-  implicit val bigDecimalGenerator: Random[BigDecimal] = random(BigDecimal.valueOf(ScalaRandom.nextDouble()))
-  implicit val localDateGenerator: Random[LocalDate] = random(LocalDate.now())
-  implicit val localDateTimeGenerator: Random[LocalDateTime] = random(LocalDateTime.now())
-  implicit val yearMonthGenerator: Random[YearMonth] = random(YearMonth.now())
+  implicit val intGenerator: Random[Int] = Random(ScalaRandom.nextInt())
+  implicit val longGenerator: Random[Long] = Random(ScalaRandom.nextLong())
+  implicit val doubleGenerator: Random[Double] = Random(ScalaRandom.nextDouble())
+  implicit val booleanGenerator: Random[Boolean] = Random(ScalaRandom.nextBoolean())
+  implicit val bigDecimalGenerator: Random[BigDecimal] = Random(BigDecimal.valueOf(ScalaRandom.nextDouble()))
+  implicit val localDateGenerator: Random[LocalDate] = Random(LocalDate.now())
+  implicit val localDateTimeGenerator: Random[LocalDateTime] = Random(LocalDateTime.now())
+  implicit val yearMonthGenerator: Random[YearMonth] = Random(YearMonth.now())
   implicit def defaultIterableGenerator[A: Random, C[E] <: IterableOnce[E]](
       implicit f: Factory[A, C[A]]
   ): Random[C[A]] = Random.many[C](5).make[A]

@@ -2,6 +2,8 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.Random.{const, uglyString}
 
+import scala.annotation.tailrec
+
 sealed trait Lst[+A]
 case object Nil extends Lst[Nothing]
 case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
@@ -58,7 +60,8 @@ object GenTest {
       result
     }
 
-    lazy val loop: MyClass1 = rel.get() match {
+    @tailrec
+    def loop: MyClass1 = rel.get() match {
       case a @ MyClass1(
             MyClass1(MyClass1(MyClass1(MyClass1(MyClass2(_, _)))))
           ) =>
@@ -67,5 +70,8 @@ object GenTest {
     }
 
     println(loop)
+
+    val test = Gen[MyClass1].random.get()
+    println(test)
   }
 }
