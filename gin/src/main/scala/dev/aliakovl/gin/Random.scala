@@ -1,7 +1,7 @@
 package dev.aliakovl.gin
 
 import dev.aliakovl.gin.Random.random
-import dev.aliakovl.gin.internal.{ManyRandom, OneOfRandom, RandomDerivation}
+import dev.aliakovl.gin.internal._
 
 import scala.language.implicitConversions
 import scala.util.{Random => ScalaRandom}
@@ -45,7 +45,7 @@ object Random
 
   def enumeration[E <: Enumeration](
       en: E
-  ): Random[E] = Random {
+  ): Random[E#Value] = Random {
     en(ScalaRandom.nextInt(en.maxId))
   }
 }

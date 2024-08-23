@@ -1,6 +1,4 @@
-package dev.aliakovl.gin.macros
-
-import dev.aliakovl.gin.Random
+package dev.aliakovl.gin
 
 trait GenOps[A] {
   def random: Random[A]

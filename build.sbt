@@ -15,8 +15,6 @@ lazy val `scala-training` = (project in file("."))
     `shapeless-guide`,
     reflex,
     gin,
-    `gin-macros`,
-    `gin-specify`
   )
 
 lazy val core = (project in file("./core"))
@@ -138,47 +136,12 @@ lazy val gin = (project in file("./gin"))
       "org.typelevel" %% "cats-core" % "2.10.0",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scala-compiler" % scalaVersion.value
+    ),
+    scalacOptions ++= Seq(
+      "--language:experimental.macros",
+      "--language:implicitConversions",
+      "-Ymacro-debug-lite"
     )
-//    scalacOptions ++= Seq(
-//      "-Ymacro-debug-lite"
-//    )
-  )
-
-lazy val `gin-macros` = (project in file("./gin-macros"))
-  .settings(
-    name := "gin",
-    scalaVersion := "2.13.13",
-    libraryDependencies ++= Seq(
-      "com.chuusai" %% "shapeless" % "2.3.10",
-      "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.typelevel" %% "cats-core" % "2.10.0",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scala-lang" % "scala-compiler" % scalaVersion.value
-    )
-  )
-  .dependsOn(
-    gin % "test->test;compile->compile"
-  )
-
-lazy val `gin-specify` = (project in file("./gin-specify"))
-  .settings(
-    name := "gin",
-    scalaVersion := "2.13.13",
-    libraryDependencies ++= Seq(
-      "com.chuusai" %% "shapeless" % "2.3.10",
-      "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.typelevel" %% "cats-core" % "2.10.0",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-      "io.scalaland" %% "chimney" % "1.4.0",
-      "com.softwaremill.quicklens" %% "quicklens" % "1.9.7"
-    )
-  )
-  .dependsOn(
-    `gin-macros` % "compile->compile",
-    gin % "compile->compile"
   )
 
 lazy val reflex = (project in file("./reflex"))

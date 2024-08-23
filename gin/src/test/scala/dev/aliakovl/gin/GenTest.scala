@@ -12,7 +12,7 @@ case class MyClass2(int: Int, mc2field: String) extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
 
-object Main {
+object GenTest {
   def main(args: Array[String]): Unit = {
 
 //    val r =
