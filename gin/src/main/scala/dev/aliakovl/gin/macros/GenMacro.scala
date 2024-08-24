@@ -24,6 +24,8 @@ class GenMacro(val c: whitebox.Context) {
 
 //    mkGenOps[A](c.Expr[A](t), )
 
+    c.info(c.enclosingPosition, "\n" ++ showRaw(tr), force = true)
+
     c.Expr[GenOps[A]](
       q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
         override def random = {
@@ -31,9 +33,17 @@ class GenMacro(val c: whitebox.Context) {
           _root_.dev.aliakovl.gin.Random(${c1}(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-          showRaw(tr) +: subclassesOf(tr).toList.map{cl => showRaw(cl) + {
-            if (!cl.isModuleClass) publicConstructors(cl.asClass).map(_.map(showRaw(_))).map(_.mkString("(", ",", ")")).mkString("(", ",", ")") else ""
-          } } ++: other._1
+          showRaw(tr) +: subclassesOf(tr).toList.map { cl =>
+            showRaw(cl) + {
+              if (!cl.isModuleClass)
+                publicConstructors(cl.asClass)
+                  .map(_.map(_.info))
+                  .map(_.map(showRaw(_)))
+                  .map(_.mkString("(", ",", ")"))
+                  .mkString("(", ",", ")")
+              else ""
+            }
+          } ++: other._1
             .map(
               showRaw(_)
             ): _*
@@ -71,29 +81,26 @@ class GenMacro(val c: whitebox.Context) {
       }
     }
 
-    concreteChildren.union {
-      abstractChildren.flatMap { child =>
-        val childClass = child.asClass
-        if (childClass.isSealed) {
-          subclassesOf(childClass)
-        } else {
-          c.abort(c.enclosingPosition, s"child $child of $parent is not sealed")
-        }
+    concreteChildren ++ abstractChildren.flatMap { child =>
+      val childClass = child.asClass
+      if (childClass.isSealed) {
+        subclassesOf(childClass)
+      } else {
+        c.abort(c.enclosingPosition, s"child $child of $parent is not sealed")
       }
-
     }
   }
 
-  def publicConstructors(parent: ClassSymbol): List[List[Symbol]] = {
+  private def publicConstructors(parent: ClassSymbol): List[List[Symbol]] = {
     val members = parent.info.members
-    val c = members
+    members
       .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
       .orElse(
         members.find(m => m.isMethod && m.asMethod.isConstructor && m.isPublic)
       )
       .get
-
-    c.asMethod.paramLists
+      .asMethod
+      .paramLists
   }
 
 }
