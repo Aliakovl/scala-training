@@ -15,7 +15,7 @@ case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
 
 sealed trait KJH extends MyClass
-case class K() extends KJH
+final class K() extends KJH
 case object H extends KJH
 
 object GenTest {
@@ -23,7 +23,7 @@ object GenTest {
 
     val r =
       Gen[MyClass]
-        .specify(x => x.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
+        .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
         .specify(_.when[MyClass1].m.when[MyClass2].lst, const(Cons(3, Nil)))
         .specify(_.when[MyClass2].lst, const(Cons(4, Nil)))
         .random
@@ -31,7 +31,18 @@ object GenTest {
     val rel = {
       val random$Int = implicitly[Random[Int]]
       val random$String = implicitly[Random[String]]
-      implicit def random$lst[A: Random]: Random[Lst[A]] = implicitly[Random[Lst[A]]]
+      val random$MyClass3 = Random(MyClass3())
+      val random$MyClass4 = Random(MyClass4)
+      def random$lst[A: Random]: Random[Lst[A]] = {
+        val MyClass$size = 2
+        def MyClass$Trait = scala.util.Random.nextInt(MyClass$size)
+        Random(
+          MyClass$Trait match {
+            case 0 => Nil
+            case 1 => Cons(implicitly[Random[A]].get(), random$lst.get())
+          }
+        )
+      }
 
       val MyClass$size = 4
       def MyClass$Trait = scala.util.Random.nextInt(MyClass$size)
@@ -48,18 +59,24 @@ object GenTest {
                       lst = const(Cons(4, Nil)).get(),
                       mc2field = uglyString(100).get()
                     )
-                  case 2 => MyClass3()
-                  case 3 => MyClass4
+                  case 2 => random$MyClass3.get()
+                  case 3 => random$MyClass4.get()
                 })
               case 1 =>
-                MyClass2(lst = random$lst[Int].get(), mc2field = random$String.get())
-              case 2 => MyClass3()
-              case 3 => MyClass4
+                MyClass2(
+                  lst = random$lst[Int].get(),
+                  mc2field = random$String.get()
+                )
+              case 2 => random$MyClass3.get()
+              case 3 => random$MyClass4.get()
             })
           case 1 =>
-            MyClass2(lst = const(Cons(4, Nil)).get(), mc2field = random$String.get())
-          case 2 => MyClass3()
-          case 3 => MyClass4
+            MyClass2(
+              lst = const(Cons(4, Nil)).get(),
+              mc2field = random$String.get()
+            )
+          case 2 => random$MyClass3.get()
+          case 3 => random$MyClass4.get()
         }
       )
       result
@@ -75,6 +92,8 @@ object GenTest {
     }
 
 //    println(loop)
+
+//    def wefwef[A] = Gen[Lst[A]].random
 
 //    val test = Gen[MyClass]
 //      .specify(_.when[MyClass1].m, const[MyClass](MyClass1(MyClass2(Nil, "wef"))))

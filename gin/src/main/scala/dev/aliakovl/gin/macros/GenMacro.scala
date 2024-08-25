@@ -116,4 +116,8 @@ class GenMacro(val c: blackbox.Context) {
       case _ => None
     }
   }
+
+  sealed trait OpticsMerge
+//  case class CoproductMerge(map: Map[]) extends OpticsMerge
+//  case class ProductMerge(fields: Map[]) extends OpticsMerge
 }
