@@ -1,10 +1,12 @@
 package dev.aliakovl.gin.macros
 
-import dev.aliakovl.gin.{Gen, GenOps}
+import dev.aliakovl.gin.{Gen, GenOps, GenWhen}
 
-import scala.reflect.macros.whitebox
+import scala.collection.Factory
+import scala.jdk.Accumulator
+import scala.reflect.macros.blackbox
 
-class GenMacro(val c: whitebox.Context) {
+class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
@@ -33,7 +35,7 @@ class GenMacro(val c: whitebox.Context) {
           _root_.dev.aliakovl.gin.Random(${c1}(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-          showRaw(tr) +: subclassesOf(tr).toList.map { cl =>
+        f(other._1.head.head) +: showRaw(tr) +: subclassesOf(tr).toList.map { cl =>
             showRaw(cl) + {
               if (!cl.isModuleClass)
                 publicConstructors(cl.asClass)
@@ -64,7 +66,7 @@ class GenMacro(val c: whitebox.Context) {
   private def go(gen: Tree, acc: List[List[Tree]]): (List[List[Tree]], Tree) = {
     gen match {
       case q"$other.specify[..$_](..$exprss)" => go(other, exprss +: acc)
-      case q"$expr[..$tpts]"                  => (acc, tpts.head)
+      case q"$expr[$tpts]"                  => (acc, tpts)
     }
   }
 
@@ -103,4 +105,16 @@ class GenMacro(val c: whitebox.Context) {
       .paramLists
   }
 
+  private def f(selector: Tree): String = {
+    val q"(..$_) => $expr" = selector
+    Accumulator.unfold(expr) {
+      case q"$other.${field: TermName}" => Some(Lens(field), other)
+      case q"""$module[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
+      case _ => None
+    }.map(showRaw(_)).mkString(",")
+  }
+
+  trait Optic
+  case class Lens(tn: TermName) extends Optic
+  case class Prism(from: Symbol, to: Symbol) extends Optic
 }

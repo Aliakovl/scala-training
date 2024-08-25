@@ -23,7 +23,7 @@ object GenTest {
 
     val r =
       Gen[MyClass]
-        .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
+        .specify(x => x.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
         .specify(_.when[MyClass1].m.when[MyClass2].lst, const(Cons(3, Nil)))
         .specify(_.when[MyClass2].lst, const(Cons(4, Nil)))
         .random
@@ -31,7 +31,7 @@ object GenTest {
     val rel = {
       val random$Int = implicitly[Random[Int]]
       val random$String = implicitly[Random[String]]
-      def random$lst[A: Random]: Random[Lst[A]] = implicitly[Random[Lst[A]]]
+      implicit def random$lst[A: Random]: Random[Lst[A]] = implicitly[Random[Lst[A]]]
 
       val MyClass$size = 4
       def MyClass$Trait = scala.util.Random.nextInt(MyClass$size)
@@ -74,12 +74,12 @@ object GenTest {
       case _ => loop
     }
 
-    println(loop)
+//    println(loop)
 
-    val test = Gen[MyClass]
-      .specify(_.when[MyClass1].m, const[MyClass](MyClass1(MyClass2(Nil, "wef"))))
-      .random
-      .get()
-    println(test)
+//    val test = Gen[MyClass]
+//      .specify(_.when[MyClass1].m, const[MyClass](MyClass1(MyClass2(Nil, "wef"))))
+//      .random
+//      .get()
+//    println(test)
   }
 }
