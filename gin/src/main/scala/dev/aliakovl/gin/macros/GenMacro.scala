@@ -1,8 +1,7 @@
 package dev.aliakovl.gin.macros
 
-import dev.aliakovl.gin.{Gen, GenOps, GenWhen}
+import dev.aliakovl.gin.{Gen, GenOps}
 
-import scala.collection.Factory
 import scala.jdk.Accumulator
 import scala.reflect.macros.blackbox
 
@@ -10,11 +9,7 @@ class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
-
     val other = go(gen.tree, List.empty)
-
-//    val t = other._2.symbol.asClass.primaryConstructor.asMethod.paramLists
-//    val ttype = other._2.symbol.asClass.primaryConstructor.asMethod
 
     val tr = other._2.symbol.asClass
     val sub = subclassesOf(tr)
@@ -24,9 +19,11 @@ class GenMacro(val c: blackbox.Context) {
       termNames.CONSTRUCTOR
     )
 
-//    mkGenOps[A](c.Expr[A](t), )
 
-    c.info(c.enclosingPosition, "\n" ++ showRaw(tr), force = true)
+
+
+
+
 
     c.Expr[GenOps[A]](
       q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
@@ -65,7 +62,7 @@ class GenMacro(val c: blackbox.Context) {
 
   private def go(gen: Tree, acc: List[List[Tree]]): (List[List[Tree]], Tree) = {
     gen match {
-      case q"$other.specify[..$_](..$exprss)" => go(other, exprss +: acc)
+      case q"$other.specify[..$_](($_) => $selector, $random)" => go(other, List(selector, random) +: acc)
       case q"$expr[$tpts]"                  => (acc, tpts)
     }
   }
@@ -106,8 +103,7 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   private def f(selector: Tree): String = {
-    val q"(..$_) => $expr" = selector
-    Accumulator.unfold(expr) {
+    Accumulator.unfold(selector) {
       case q"$other.${field: TermName}" => Some(Lens(field), other)
       case q"""$module[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
       case _ => None
@@ -117,4 +113,6 @@ class GenMacro(val c: blackbox.Context) {
   trait Optic
   case class Lens(tn: TermName) extends Optic
   case class Prism(from: Symbol, to: Symbol) extends Optic
+
+  case class GenTree(genClass: ClassSymbol, specs: List[(Optic, Tree)])
 }
