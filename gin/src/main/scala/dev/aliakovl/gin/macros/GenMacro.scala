@@ -27,7 +27,7 @@ class GenMacro(val c: blackbox.Context) {
           genTree.toString +: sub.toList.map { cl =>
             showRaw(cl) + {
               if (!cl.isModuleClass)
-                publicConstructors(cl.asClass)
+                publicConstructor(cl.asClass).paramLists
                   .map(_.map(_.info))
                   .map(_.map(showRaw(_)))
                   .map(_.mkString("(", ",", ")"))
@@ -72,7 +72,7 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def publicConstructors(parent: ClassSymbol): List[List[Symbol]] = {
+  def publicConstructor(parent: ClassSymbol): MethodSymbol = {
     val members = parent.info.members
     members
       .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
@@ -81,7 +81,6 @@ class GenMacro(val c: blackbox.Context) {
       )
       .get
       .asMethod
-      .paramLists
   }
 
   sealed trait Optic
@@ -118,6 +117,35 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait OpticsMerge
-//  case class CoproductMerge(map: Map[]) extends OpticsMerge
-//  case class ProductMerge(fields: Map[]) extends OpticsMerge
+  case class ProductMerge(fields: Map[c.Symbol, OpticsMerge]) extends OpticsMerge
+  case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge]) extends OpticsMerge
+  case class ApplyOptic(tree: c.Tree) extends OpticsMerge
+  case object ONil extends OpticsMerge
+
+  def mergeOptics(genTree: GenTree): OpticsMerge = {
+    val GenTree(genClass, specs) = genTree
+
+    def help(classSymbol: ClassSymbol, selector: List[Optic], tree: c.Tree): OpticsMerge = {
+      selector match {
+        case Prism(_, to) :: tail => CoproductMerge(subclassesOf(classSymbol).map { subclass =>
+            if (subclass == to) {
+              subclass -> help(to.asClass, tail, tree)
+            } else {
+              subclass -> ONil
+            }
+          }.toMap
+        )
+        case Lens(tn) :: tail => ProductMerge(publicConstructor(classSymbol).paramLists.flatten.map { param =>
+          if (param == tn) {
+            param -> help(param.typeSignature.baseClasses.head.asClass, tail, tree)
+          } else {
+            param -> ONil
+          }
+        }.toMap)
+        case Nil => ApplyOptic(tree)
+      }
+    }
+
+    help(genClass, ???, ???) // for all specs
+  }
 }
