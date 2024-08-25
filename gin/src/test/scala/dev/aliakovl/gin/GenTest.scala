@@ -33,15 +33,14 @@ object GenTest {
       val random$String = implicitly[Random[String]]
       val random$MyClass3 = Random(MyClass3())
       val random$MyClass4 = Random(MyClass4)
-      def random$lst[A: Random]: Random[Lst[A]] = {
+      @tailrec
+      def random$lst[A: Random](acc: Lst[A]): Random[Lst[A]] = {
         val MyClass$size = 2
         def MyClass$Trait = scala.util.Random.nextInt(MyClass$size)
-        Random(
-          MyClass$Trait match {
-            case 0 => Nil
-            case 1 => Cons(implicitly[Random[A]].get(), random$lst.get())
-          }
-        )
+        MyClass$Trait match {
+          case 0 => Random(acc)
+          case 1 => random$lst(Cons(implicitly[Random[A]].get(), acc))
+        }
       }
 
       val MyClass$size = 4
@@ -64,7 +63,7 @@ object GenTest {
                 })
               case 1 =>
                 MyClass2(
-                  lst = random$lst[Int].get(),
+                  lst = random$lst[Int](Nil).get(),
                   mc2field = random$String.get()
                 )
               case 2 => random$MyClass3.get()
