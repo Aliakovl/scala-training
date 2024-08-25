@@ -2,37 +2,29 @@ package dev.aliakovl.gin.macros
 
 import dev.aliakovl.gin.{Gen, GenOps}
 
-import scala.jdk.Accumulator
 import scala.reflect.macros.blackbox
 
 class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
-    val other = go(gen.tree, List.empty)
+    val genTree = disassembleTree(gen)
 
-    val tr = other._2.symbol.asClass
-    val sub = subclassesOf(tr)
+    val sub = subclassesOf(genTree.genClass)
 
     val c1 = Select(
       New(Ident(sub.find(_.fullName == "dev.aliakovl.gin.MyClass1").get)),
       termNames.CONSTRUCTOR
     )
 
-
-
-
-
-
-
     c.Expr[GenOps[A]](
       q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
         override def random = {
           println(debug)
-          _root_.dev.aliakovl.gin.Random(${c1}(implicitly[Random[MyClass2]].get()))
+          _root_.dev.aliakovl.gin.Random($c1(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-        f(other._1.head.head) +: showRaw(tr) +: subclassesOf(tr).toList.map { cl =>
+          genTree.toString +: sub.toList.map { cl =>
             showRaw(cl) + {
               if (!cl.isModuleClass)
                 publicConstructors(cl.asClass)
@@ -42,10 +34,7 @@ class GenMacro(val c: blackbox.Context) {
                   .mkString("(", ",", ")")
               else ""
             }
-          } ++: other._1
-            .map(
-              showRaw(_)
-            ): _*
+          }: _*
         )}
       }"""
     )
@@ -58,16 +47,9 @@ class GenMacro(val c: blackbox.Context) {
 //                          }""")
 //  }
 
-  private def mkStr(str: String*): String = str.mkString("\n")
+  def mkStr(str: String*): String = str.mkString("\n")
 
-  private def go(gen: Tree, acc: List[List[Tree]]): (List[List[Tree]], Tree) = {
-    gen match {
-      case q"$other.specify[..$_](($_) => $selector, $random)" => go(other, List(selector, random) +: acc)
-      case q"$expr[$tpts]"                  => (acc, tpts)
-    }
-  }
-
-  private def subclassesOf(parent: ClassSymbol): Set[Symbol] = {
+  def subclassesOf(parent: ClassSymbol): Set[Symbol] = {
     val (abstractChildren, concreteChildren) =
       parent.knownDirectSubclasses.partition(_.isAbstract)
 
@@ -90,7 +72,7 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  private def publicConstructors(parent: ClassSymbol): List[List[Symbol]] = {
+  def publicConstructors(parent: ClassSymbol): List[List[Symbol]] = {
     val members = parent.info.members
     members
       .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
@@ -102,17 +84,36 @@ class GenMacro(val c: blackbox.Context) {
       .paramLists
   }
 
-  private def f(selector: Tree): String = {
-    Accumulator.unfold(selector) {
-      case q"$other.${field: TermName}" => Some(Lens(field), other)
-      case q"""$module[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
-      case _ => None
-    }.map(showRaw(_)).mkString(",")
+  sealed trait Optic
+  case class Lens(tn: c.TermName) extends Optic
+  case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
+
+  case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Tree)]) {
+    override def toString: String =
+      s"""GenTree(
+        |  genClass = ${showRaw(genClass)},
+        |  specs = ${specs.map(_._1).mkString("(\n    ", ",\n    ", "\n  )")}
+        |)""".stripMargin
   }
 
-  trait Optic
-  case class Lens(tn: TermName) extends Optic
-  case class Prism(from: Symbol, to: Symbol) extends Optic
+  def disassembleTree[A: WeakTypeTag](tree: c.Expr[Gen[A]]): GenTree = {
+    val genClass = symbolOf[A].asClass
+    val specs: List[(List[Optic], c.Tree)] = List
+      .unfold(tree.tree) {
+        case q"$other.specify[..$_](($_) => $selector, $random)" =>
+          Some((disassembleSelector(selector).reverse, random), other)
+        case q"$_[$_]" => None
+      }
+      .reverse
+    GenTree(genClass, specs)
+  }
 
-  case class GenTree(genClass: ClassSymbol, specs: List[(Optic, Tree)])
+  def disassembleSelector(selector: c.Tree): List[Optic] = {
+    List.unfold(selector) {
+      case q"$other.${field: TermName}" => Some(Lens(field), other)
+      case q"""$module[$from]($other).when[$to]""" =>
+        Some(Prism(from.symbol, to.symbol), other)
+      case _ => None
+    }
+  }
 }
