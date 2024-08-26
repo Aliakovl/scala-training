@@ -14,18 +14,23 @@ case class MyClass2(lst: Lst[Int], mc2field: String) extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
 
-sealed trait KJH extends MyClass
-final class K() extends KJH
-case object H extends KJH
+sealed abstract class KJH(val message: String) extends MyClass
+case class K(override val message: String) extends KJH(message)
+final class J(message: String) extends KJH(message)
+case object H extends KJH("twert")
 
 object GenTest {
   def main(args: Array[String]): Unit = {
 
     val r =
       Gen[MyClass]
-        .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
+        .specify(
+          _.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field,
+          uglyString(100)
+        )
         .specify(_.when[MyClass1].m.when[MyClass2].lst, const(Cons(3, Nil)))
         .specify(_.when[MyClass2].lst, const(Cons(4, Nil)))
+        .specify(_.when[KJH].message, uglyString(100))
         .random
 
     val rel = {

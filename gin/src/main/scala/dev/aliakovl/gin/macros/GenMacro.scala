@@ -10,6 +10,8 @@ class GenMacro(val c: blackbox.Context) {
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
     val genTree = disassembleTree(gen)
 
+    val mo = mergeOptics(genTree)
+
     val sub = subclassesOf(genTree.genClass)
 
     val c1 = Select(
@@ -24,17 +26,18 @@ class GenMacro(val c: blackbox.Context) {
           _root_.dev.aliakovl.gin.Random($c1(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-          genTree.toString +: sub.toList.map { cl =>
-            showRaw(cl) + {
-              if (!cl.isModuleClass)
-                publicConstructor(cl.asClass).paramLists
-                  .map(_.map(_.info))
-                  .map(_.map(showRaw(_)))
-                  .map(_.mkString("(", ",", ")"))
-                  .mkString("(", ",", ")")
-              else ""
-            }
-          }: _*
+          mo.toString +:
+            genTree.toString +: sub.toList.map { cl =>
+              showRaw(cl) + {
+                if (!cl.isModuleClass)
+                  publicConstructor(cl.asClass).paramLists
+                    .map(_.map(_.info))
+                    .map(_.map(showRaw(_)))
+                    .map(_.mkString("(", ",", ")"))
+                    .mkString("(", ",", ")")
+                else ""
+              }
+            }: _*
         )}
       }"""
     )
@@ -117,35 +120,85 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait OpticsMerge
-  case class ProductMerge(fields: Map[c.Symbol, OpticsMerge]) extends OpticsMerge
-  case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge]) extends OpticsMerge
+  case class ProductMerge(fields: Map[c.Symbol, OpticsMerge])
+      extends OpticsMerge
+  case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge])
+      extends OpticsMerge
   case class ApplyOptic(tree: c.Tree) extends OpticsMerge
   case object ONil extends OpticsMerge
 
   def mergeOptics(genTree: GenTree): OpticsMerge = {
     val GenTree(genClass, specs) = genTree
 
-    def help(classSymbol: ClassSymbol, selector: List[Optic], tree: c.Tree): OpticsMerge = {
+    def help(
+        classSymbol: ClassSymbol,
+        selector: List[Optic],
+        tree: c.Tree
+    ): OpticsMerge = {
       selector match {
-        case Prism(_, to) :: tail => CoproductMerge(subclassesOf(classSymbol).map { subclass =>
-            if (subclass == to) {
-              subclass -> help(to.asClass, tail, tree)
-            } else {
-              subclass -> ONil
-            }
-          }.toMap
-        )
-        case Lens(tn) :: tail => ProductMerge(publicConstructor(classSymbol).paramLists.flatten.map { param =>
-          if (param == tn) {
-            param -> help(param.typeSignature.baseClasses.head.asClass, tail, tree)
-          } else {
-            param -> ONil
-          }
-        }.toMap)
+        case Prism(_, to) :: tail =>
+          val subs = subclassesOf(to.asClass) + to
+          CoproductMerge(subclasses = subclassesOf(classSymbol).map {
+            subclass =>
+              if (subs.contains(subclass)) {
+                subclass -> help(to.asClass, tail, tree)
+              } else {
+                subclass -> ONil
+              }
+          }.toMap)
+        case Lens(tn) :: tail =>
+          ProductMerge(fields =
+            publicConstructor(classSymbol).paramLists.flatten.map { param =>
+              if (param.asTerm.name == tn) {
+                param -> help(
+                  param.typeSignature.baseClasses.head.asClass,
+                  tail,
+                  tree
+                )
+              } else {
+                param -> ONil
+              }
+            }.toMap
+          )
         case Nil => ApplyOptic(tree)
       }
     }
 
-    help(genClass, ???, ???) // for all specs
+    specs
+      .map { case (optics, tree) => help(genClass, optics, tree) }
+      .reduceLeft(mergeOptics)
+  }
+
+  def mergeOptics(left: OpticsMerge, right: OpticsMerge): OpticsMerge = {
+    (left, right) match {
+      case (ProductMerge(l), ProductMerge(r)) =>
+        ProductMerge(l.map { case (k, v) =>
+          k -> mergeOptics(v, r.getOrElse(k, ONil))
+        })
+      case (CoproductMerge(l), CoproductMerge(r)) =>
+        CoproductMerge(l.map { case (k, v) =>
+          k -> mergeOptics(v, r.getOrElse(k, ONil))
+        })
+      case (CoproductMerge(l), pm: ProductMerge) =>
+        CoproductMerge(subclasses = l.map { case (subclass, ls) =>
+          subclass -> mergeOptics(ls, pm)
+        })
+      case (lm: ProductMerge, CoproductMerge(r)) =>
+        CoproductMerge(subclasses = r.map { case (subclass, rs) =>
+          subclass -> mergeOptics(lm, rs)
+        })
+      case (m @ ProductMerge(fields), ONil) => if (fields.nonEmpty) m else ONil
+      case (m @ CoproductMerge(subclasses), ONil) =>
+        if (subclasses.nonEmpty) m else ONil
+      case (ONil, m @ ProductMerge(fields)) => if (fields.nonEmpty) m else ONil
+      case (ONil, m @ CoproductMerge(subclasses)) =>
+        if (subclasses.nonEmpty) m else ONil
+      case (ONil, m) => m
+      case (_, _: ApplyOptic) | (_: ApplyOptic, _) =>
+        c.abort(
+          c.enclosingPosition,
+          s"double application leads to erasure"
+        )
+    }
   }
 }
