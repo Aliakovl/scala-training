@@ -10,9 +10,15 @@ class GenMacro(val c: blackbox.Context) {
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
     val genTree = disassembleTree(gen)
 
-    val mo = mergeOptics(genTree)
+    val mo: OpticsMerge = mergeOptics(genTree)
 
     val sub = subclassesOf(genTree.genClass)
+
+    val t = findUnique(mo)
+      .map(s => {
+        (s, s.isJava, s.typeParams)
+      })
+      .mkString("\n")
 
     val c1 = Select(
       New(Ident(sub.find(_.fullName == "dev.aliakovl.gin.MyClass1").get)),
@@ -26,7 +32,8 @@ class GenMacro(val c: blackbox.Context) {
           _root_.dev.aliakovl.gin.Random($c1(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-          mo.toString +:
+          t +:
+            mo.toString +:
             genTree.toString +: sub.toList.map { cl =>
               showRaw(cl) + {
                 if (!cl.isModuleClass)
@@ -151,7 +158,7 @@ class GenMacro(val c: blackbox.Context) {
             publicConstructor(classSymbol).paramLists.flatten.map { param =>
               if (param.asTerm.name == tn) {
                 param -> help(
-                  param.typeSignature.baseClasses.head.asClass,
+                  param.info.baseClasses.head.asClass,
                   tail,
                   tree
                 )
@@ -193,12 +200,29 @@ class GenMacro(val c: blackbox.Context) {
       case (ONil, m @ ProductMerge(fields)) => if (fields.nonEmpty) m else ONil
       case (ONil, m @ CoproductMerge(subclasses)) =>
         if (subclasses.nonEmpty) m else ONil
-      case (ONil, m) => m
+      case (ONil, ONil) => ONil
       case (_, _: ApplyOptic) | (_: ApplyOptic, _) =>
         c.abort(
           c.enclosingPosition,
           s"double application leads to erasure"
         )
+    }
+  }
+
+  def findUnique(opticsMerge: OpticsMerge): Set[ClassSymbol] = {
+    opticsMerge match {
+      case ProductMerge(fields) =>
+        val (leaves, branches) = fields.partition(_._2 == ONil)
+        leaves.keys
+          .map(_.info.baseClasses.head.asClass)
+          .toSet union branches.values
+          .flatMap(findUnique)
+          .toSet
+      case CoproductMerge(subclasses) =>
+        val (leaves, branches) = subclasses.partition(_._2 == ONil)
+        leaves.keySet
+          .map(_.asClass) union branches.values.flatMap(findUnique).toSet
+      case _ => Set.empty
     }
   }
 }
