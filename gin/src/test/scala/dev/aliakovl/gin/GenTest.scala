@@ -20,8 +20,11 @@ final class J(message: String) extends KJH(message)
 case object H extends KJH("twert")
 
 object GenTest {
-  def main(args: Array[String]): Unit = {
 
+  implicit val blahblah: Random[Int] = Random.oneOf(1, 2, 3)
+  implicit val wef: Random[MyClass2] = Random(MyClass2(Nil, "e"))
+
+  def main(args: Array[String]): Unit = {
     val r =
       Gen[MyClass]
         .specify(
@@ -47,12 +50,13 @@ object GenTest {
 //          case 1 => random$lst(Cons(implicitly[Random[A]].get(), acc))
 //        }
 //      }
-      def random$lst[A: Random]: Random[Lst[A]] = {
+      def random$lst[A](implicit ev: Random[A]): Random[Lst[A]] = {
         val MyClass$size = 2
         def MyClass$Trait = scala.util.Random.nextInt(MyClass$size)
         MyClass$Trait match {
           case 0 => Random(Nil)
-          case 1 => Random(Cons(implicitly[Random[A]].get(), random$lst.get()))
+          case 1 =>
+            Random(Cons(implicitly[Random[A]].get(), random$lst(ev).get()))
         }
       }
 
@@ -113,4 +117,5 @@ object GenTest {
 //      .get()
 //    println(test)
   }
+
 }

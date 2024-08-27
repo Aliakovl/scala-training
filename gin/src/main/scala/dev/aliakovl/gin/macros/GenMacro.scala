@@ -1,6 +1,6 @@
 package dev.aliakovl.gin.macros
 
-import dev.aliakovl.gin.{Gen, GenOps}
+import dev.aliakovl.gin.{Gen, GenOps, Random}
 
 import scala.reflect.macros.blackbox
 
@@ -14,9 +14,13 @@ class GenMacro(val c: blackbox.Context) {
 
     val sub = subclassesOf(genTree.genClass)
 
+    val f = q"${c.inferImplicitValue(typeOf[Random[Int]])}.get()"
+
     val t = findUnique(mo)
       .map(s => {
-        (s, s.isJava, s.typeParams)
+        val ss = s.info.baseType(s.info.typeSymbol)
+        val t = appliedType(typeOf[Random[_]].typeConstructor, ss)
+        (s, ss, s.info.typeArgs, s.isJava, t, c.inferImplicitValue(t))
       })
       .mkString("\n")
 
@@ -29,10 +33,13 @@ class GenMacro(val c: blackbox.Context) {
       q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
         override def random = {
           println(debug)
+          def f = ${f}
+          println(f)
+          println(f)
           _root_.dev.aliakovl.gin.Random($c1(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-          t +:
+          showRaw(f) +: t +:
             mo.toString +:
             genTree.toString +: sub.toList.map { cl =>
               showRaw(cl) + {
@@ -209,19 +216,16 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def findUnique(opticsMerge: OpticsMerge): Set[ClassSymbol] = {
+  def findUnique(opticsMerge: OpticsMerge): Set[c.Symbol] = {
     opticsMerge match {
       case ProductMerge(fields) =>
         val (leaves, branches) = fields.partition(_._2 == ONil)
-        leaves.keys
-          .map(_.info.baseClasses.head.asClass)
-          .toSet union branches.values
+        leaves.keys.toSet union branches.values
           .flatMap(findUnique)
           .toSet
       case CoproductMerge(subclasses) =>
         val (leaves, branches) = subclasses.partition(_._2 == ONil)
-        leaves.keySet
-          .map(_.asClass) union branches.values.flatMap(findUnique).toSet
+        leaves.keySet union branches.values.flatMap(findUnique).toSet
       case _ => Set.empty
     }
   }
