@@ -135,7 +135,7 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait OpticsMerge
-  case class ProductMerge(fields: Map[c.Symbol, OpticsMerge])
+  case class ProductMerge(classSymbol: ClassSymbol, fields: Map[c.Symbol, OpticsMerge])
       extends OpticsMerge
   case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge])
       extends OpticsMerge
@@ -162,7 +162,7 @@ class GenMacro(val c: blackbox.Context) {
               }
           }.toMap)
         case Lens(tn) :: tail =>
-          ProductMerge(fields =
+          ProductMerge(classSymbol, fields =
             publicConstructor(classSymbol).paramLists.flatten.map { param =>
               if (param.asTerm.name == tn) {
                 param -> help(
@@ -186,8 +186,8 @@ class GenMacro(val c: blackbox.Context) {
 
   def mergeOptics(left: OpticsMerge, right: OpticsMerge): OpticsMerge = {
     (left, right) match {
-      case (ProductMerge(l), ProductMerge(r)) =>
-        ProductMerge(l.map { case (k, v) =>
+      case (ProductMerge(cl, l), ProductMerge(cr, r)) =>
+        ProductMerge(cr, l.map { case (k, v) =>
           k -> mergeOptics(v, r.getOrElse(k, ONil))
         })
       case (CoproductMerge(l), CoproductMerge(r)) =>
@@ -202,10 +202,10 @@ class GenMacro(val c: blackbox.Context) {
         CoproductMerge(subclasses = r.map { case (subclass, rs) =>
           subclass -> mergeOptics(lm, rs)
         })
-      case (m @ ProductMerge(fields), ONil) => if (fields.nonEmpty) m else ONil
+      case (m @ ProductMerge(_, fields), ONil) => if (fields.nonEmpty) m else ONil
       case (m @ CoproductMerge(subclasses), ONil) =>
         if (subclasses.nonEmpty) m else ONil
-      case (ONil, m @ ProductMerge(fields)) => if (fields.nonEmpty) m else ONil
+      case (ONil, m @ ProductMerge(_, fields)) => if (fields.nonEmpty) m else ONil
       case (ONil, m @ CoproductMerge(subclasses)) =>
         if (subclasses.nonEmpty) m else ONil
       case (ONil, ONil) => ONil
@@ -219,7 +219,7 @@ class GenMacro(val c: blackbox.Context) {
 
   def findUnique(opticsMerge: OpticsMerge): Set[c.Symbol] = {
     opticsMerge match {
-      case ProductMerge(fields) =>
+      case ProductMerge(_, fields) =>
         val (leaves, branches) = fields.partition(_._2 == ONil)
         leaves.keys.toSet union branches.values
           .flatMap(findUnique)
@@ -233,7 +233,9 @@ class GenMacro(val c: blackbox.Context) {
 
   def mkTree(om: OpticsMerge): Tree = {
     om match {
-      case ProductMerge(fields) => q""
+      case ProductMerge(classSymbol, fields) => q"${constructor(classSymbol)}( ..${
+        fields.map { case field -> om => q"$field = ${mkTree(om)}" }
+      })"
       case CoproductMerge(subclasses) =>
         val size = subclasses.size
         q"scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex.map {
@@ -247,10 +249,10 @@ class GenMacro(val c: blackbox.Context) {
                 q"implicitly[${randomType(symbol)}]" // их нужно самим создать
               }
             }"
-            case (symbol -> om, index) => cq"$index => ???"
+            case (symbol -> om, index) => cq"$index => ${mkTree(om)}"
           }} }"
       case ApplyOptic(tree) => q"$tree.get()"
-      case ONil             => q""
+      case ONil             => q"???"
     }
   }
 
@@ -258,4 +260,12 @@ class GenMacro(val c: blackbox.Context) {
     val symbolType = symbol.info.baseType(symbol.info.typeSymbol)
     appliedType(typeOf[Random[_]].typeConstructor, symbolType)
   }
+
+  def constructor(classSymbol: ClassSymbol): c.Tree = {
+    Select(
+      New(Ident(classSymbol)),
+      termNames.CONSTRUCTOR
+    )
+  }
+
 }
