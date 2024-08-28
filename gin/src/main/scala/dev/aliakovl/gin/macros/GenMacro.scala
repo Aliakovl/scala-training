@@ -39,7 +39,8 @@ class GenMacro(val c: blackbox.Context) {
           _root_.dev.aliakovl.gin.Random($c1(implicitly[Random[MyClass2]].get()))
         }
         override def debug = ${mkStr(
-          showRaw(f) +: t +:
+          show(mkTree(mo)) +:
+            showRaw(f) +: t +:
             mo.toString +:
             genTree.toString +: sub.toList.map { cl =>
               showRaw(cl) + {
@@ -228,5 +229,33 @@ class GenMacro(val c: blackbox.Context) {
         leaves.keySet union branches.values.flatMap(findUnique).toSet
       case _ => Set.empty
     }
+  }
+
+  def mkTree(om: OpticsMerge): Tree = {
+    om match {
+      case ProductMerge(fields) => q""
+      case CoproductMerge(subclasses) =>
+        val size = subclasses.size
+        q"scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex.map {
+            case (symbol -> ApplyOptic(tree), index) =>
+              cq"$index => $tree.get()"
+            case (symbol -> ONil, index) => cq"$index => ${
+              val impl = c.inferImplicitValue(randomType(symbol))
+              if (impl.nonEmpty) {
+                q"$impl.get()"
+              } else {
+                q"implicitly[${randomType(symbol)}]" // их нужно самим создать
+              }
+            }"
+            case (symbol -> om, index) => cq"$index => ???"
+          }} }"
+      case ApplyOptic(tree) => q"$tree.get()"
+      case ONil             => q""
+    }
+  }
+
+  def randomType(symbol: c.Symbol): c.Type = {
+    val symbolType = symbol.info.baseType(symbol.info.typeSymbol)
+    appliedType(typeOf[Random[_]].typeConstructor, symbolType)
   }
 }
