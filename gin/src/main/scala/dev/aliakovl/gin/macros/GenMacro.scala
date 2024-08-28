@@ -180,7 +180,7 @@ class GenMacro(val c: blackbox.Context) {
 
     specs
       .map { case (optics, tree) => help(genClass, optics, tree) }
-      .reduceLeft(mergeOptics)
+      .foldLeft(ONil: OpticsMerge)(mergeOptics)
   }
 
   def mergeOptics(left: OpticsMerge, right: OpticsMerge): OpticsMerge = {
