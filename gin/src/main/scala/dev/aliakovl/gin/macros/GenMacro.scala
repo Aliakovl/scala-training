@@ -7,8 +7,10 @@ import scala.reflect.macros.blackbox
 class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
-  def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] =
-    mkGenOps[A](mergeOptics(disassembleTree(gen)).map(mkTree), "")
+  def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
+    val resTree = mergeOptics(disassembleTree(gen)).map(mkTree)
+    mkGenOps[A](resTree, resTree.map(show(_)).getOrElse(""))
+  }
 
   def mkGenOps[A: c.WeakTypeTag](
       random: Option[c.Tree],

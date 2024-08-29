@@ -10,7 +10,7 @@ case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
 
 sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
-case class MyClass2(lst: Lst[Int], mc2field: String) extends MyClass
+case class MyClass2(lst: Lst[Int], mc2field: String = "lol") extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
 
@@ -23,7 +23,7 @@ object GenTest {
 
   def main(args: Array[String]): Unit = {
 
-    implicit lazy val mc1: Random[MyClass1] = Random(MyClass1(mc.get()))
+    implicit lazy val mc1: Random[MyClass1] = Random(MyClass1(mc1.get()))
     implicit lazy val mc2: Random[MyClass2] = Random(MyClass2(Nil, implicitly[Random[String]].get()))
     implicit lazy val mc3: Random[MyClass3] = Random(MyClass3())
     implicit lazy val mc4: Random[MyClass4.type] = Random(MyClass4)
@@ -35,18 +35,16 @@ object GenTest {
       case 1 => Cons(implicitly[Random[A]].get(), lst[A].get())
     })
 
-    lazy val mc =
+    lazy implicit val mc: String =
       Gen[MyClass]
-        .specify(
-          _.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field,
-          uglyString(100)
-        )
+        .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
         .specify(_.when[MyClass1].m.when[MyClass2].lst, const(Cons(3, Nil)))
         .specify(_.when[MyClass2].lst, const(Cons(4, Nil)))
-//        .specify(_.when[KJH].message, uglyString(100)) // исправить конструктор
-        .random
+        .debug
 
-    Random.many[List](100)(mc).get().foreach(println)
+    println(mc)
+
+//    Random.many[List](100).make[MyClass].get().foreach(println)
 
     val rel = {
       val random$Int = implicitly[Random[Int]]
