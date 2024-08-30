@@ -8,20 +8,34 @@ class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
-    val resTree = mergeOptics(disassembleTree(gen)).map(mkTree)
-    mkGenOps[A](resTree, resTree.map(show(_)).getOrElse(""))
+    val mo = mergeOptics(disassembleTree(gen))
+    val resTree = mo.map(mkTree).map(toRandom) // mkTree нужно делать уже имея в контекте часть необходимых переменные, а не втавлять implicitly[...]
+    val r = mo
+      .map(findUnique)
+      .map { types =>
+        resTree.foreach(resultTree =>
+          createDefs(types, resultTree, weakTypeOf[A])
+        )
+      }
+
+    mkGenOps[A](Some(q"null").map(toRandom), r.map(show(_)).getOrElse(""))
   }
 
   def mkGenOps[A: c.WeakTypeTag](
       random: Option[c.Tree],
       debug: String
   ): c.Expr[GenOps[A]] = {
-    c.Expr[GenOps[A]](q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
-                            override val random = ${random.map { t =>
-      q"new _root_.dev.aliakovl.gin.Random(() => $t)"
-    }.getOrElse(q"implicitly[${c.weakTypeOf[A].typeSymbol}]")}
-                            override val debug = $debug
-                          }""")
+    c.Expr[GenOps[A]](
+      q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
+            override val random = ${random
+          .getOrElse(q"implicitly[${randomType(c.weakTypeOf[A])}]")}
+            override val debug = $debug
+          }"""
+    )
+  }
+
+  def toRandom(tree: c.Tree): c.Tree = {
+    q"new _root_.dev.aliakovl.gin.Random(() => $tree)"
   }
 
   def mkStr(str: String*): String = str.mkString("\n")
@@ -64,13 +78,7 @@ class GenMacro(val c: blackbox.Context) {
   case class Lens(tn: c.TermName) extends Optic
   case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
 
-  case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Tree)]) {
-    override def toString: String =
-      s"""GenTree(
-        |  genClass = ${showRaw(genClass)},
-        |  specs = ${specs.map(_._1).mkString("(\n    ", ",\n    ", "\n  )")}
-        |)""".stripMargin
-  }
+  case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Tree)])
 
   def disassembleTree[A: WeakTypeTag](tree: c.Expr[Gen[A]]): GenTree = {
     val genClass = symbolOf[A].asClass
@@ -102,6 +110,25 @@ class GenMacro(val c: blackbox.Context) {
       extends OpticsMerge
   case class ApplyOptic(tree: c.Tree) extends OpticsMerge
   case class ONil(typeSymbol: c.Type) extends OpticsMerge
+
+//  sealed trait RandomTree
+//  case class Implicitly(tp: c.Type) extends RandomTree
+//  case class Made(typ: c.Type) extends RandomTree
+
+  def createDefs(
+      types: Set[c.Type],
+      resultTree: c.Tree,
+      resultType: c.Type
+  ): Unit = {
+    val resultName = c.freshName("result")
+    val blockTree: Map[String, c.Tree] = Map(resultName -> resultTree)
+    val createdDefs: Map[c.Type, String] = Map(resultType -> resultName)
+    c.info(
+      c.enclosingPosition,
+      mkStr(blockTree.mkString("\n"), createdDefs.mkString("\n")),
+      force = true
+    )
+  }
 
   def mergeOptics(genTree: GenTree): Option[OpticsMerge] = {
     val GenTree(genClass, specs) = genTree
@@ -190,16 +217,20 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def findUnique(opticsMerge: OpticsMerge): Set[c.Symbol] = {
+  def findUnique(opticsMerge: OpticsMerge): Set[c.Type] = {
     opticsMerge match {
       case ProductMerge(_, fields) =>
         val (leaves, branches) = fields.partition(_._2.isInstanceOf[ONil])
-        leaves.keys.toSet union branches.values
+        leaves.keySet.map { param =>
+          param.info.baseType(param.info.typeSymbol)
+        } union branches.values
           .flatMap(findUnique)
           .toSet
       case CoproductMerge(subclasses) =>
         val (leaves, branches) = subclasses.partition(_._2.isInstanceOf[ONil])
-        leaves.keySet union branches.values.flatMap(findUnique).toSet
+        leaves.keySet.map { subclass =>
+          subclass.info.baseType(subclass.info.typeSymbol)
+        } union branches.values.flatMap(findUnique).toSet
       case _ => Set.empty
     }
   }
@@ -236,15 +267,9 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def randomType(symbolType: c.Type): c.Type = {
+  def randomType(symbolType: c.Type): c.Type =
     appliedType(typeOf[Random[_]].typeConstructor, symbolType)
-  }
 
-  def constructor(classSymbol: ClassSymbol): c.Tree = {
-    Select(
-      New(Ident(classSymbol)),
-      termNames.CONSTRUCTOR
-    )
-  }
-
+  def constructor(classSymbol: ClassSymbol): c.Tree =
+    Select(New(Ident(classSymbol)), termNames.CONSTRUCTOR)
 }
