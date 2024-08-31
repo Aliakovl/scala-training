@@ -9,23 +9,33 @@ class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
-    val mo = mergeOptics(disassembleTree(gen), weakTypeOf[A])
-    c.info(c.enclosingPosition, mo._2.mkString("\n", "\n", "\n"), force = true)
+    val (mo, variables) = mergeOptics(disassembleTree(gen), weakTypeOf[A])
+    c.info(c.enclosingPosition, variables.mkString("\n", "\n", "\n"), force = true)
 
-    val resTree = mo._1
+    val resTree: Option[c.Tree] = mo
       .map(mkTree)
-      .map(
-        toRandom
-      ) // mkTree нужно делать уже имея в контекте часть необходимых переменные, а не втавлять implicitly[...]
-    val r = mo._1
-      .map(findUnique)
-      .map { types =>
-        resTree.foreach(resultTree =>
-          createDefs(types, resultTree, weakTypeOf[A])
-        )
-      }
+      .map(toRandom)
 
-    mkGenOps[A](Some(q"null").map(toRandom), r.map(show(_)).getOrElse(""))
+    val a: Option[c.Tree] = resTree.map(mkBlock(_, variables))
+
+    a.foreach(t => c.info(c.enclosingPosition, show(t), force = true))
+
+    mkGenOps[A](a, a.map(show(_)).getOrElse(""))
+  }
+
+  def mkBlock[A: c.WeakTypeTag](tree: c.Tree, variables: Map[c.Type, c.TermName]): c.Tree = {
+    val res = variables.map {
+      case (tp, tn) if tp == weakTypeOf[A] => q"lazy val $tn: _root_.dev.aliakovl.gin.Random[$tp] = $tree"
+      case (tp, tn) =>
+        val rt = randomType(tp)
+        if (c.inferImplicitValue(rt).nonEmpty) {
+          q"lazy val $tn: _root_.dev.aliakovl.gin.Random[$tp] = ${c.inferImplicitValue(rt)}"
+        } else {
+          q"lazy val $tn: _root_.dev.aliakovl.gin.Random[$tp] = implicitly[$rt]"
+        }
+    }
+
+    q"{..$res; ${variables(weakTypeOf[A])}}"
   }
 
   def mkGenOps[A: c.WeakTypeTag](
@@ -116,26 +126,8 @@ class GenMacro(val c: blackbox.Context) {
   case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge])
       extends OpticsMerge
   case class ApplyOptic(tree: c.Tree) extends OpticsMerge
-  case class ONil(tree: c.Tree) extends OpticsMerge
+  case class ONil(tree: c.TermName) extends OpticsMerge
 
-//  sealed trait RandomTree
-//  case class Implicitly(tp: c.Type) extends RandomTree
-//  case class Made(typ: c.Type) extends RandomTree
-
-  def createDefs(
-      types: Set[c.Type],
-      resultTree: c.Tree,
-      resultType: c.Type
-  ): Unit = {
-    val resultName = c.freshName("result")
-    val blockTree: Map[String, c.Tree] = Map(resultName -> resultTree)
-    val createdDefs: Map[c.Type, String] = Map(resultType -> resultName)
-    c.info(
-      c.enclosingPosition,
-      mkStr(blockTree.mkString("\n"), createdDefs.mkString("\n")),
-      force = true
-    )
-  }
 
   def mergeOptics(genTree: GenTree, resultType: c.Type): (Option[OpticsMerge], Map[c.Type, c.TermName]) = {
     val GenTree(genClass, specs) = genTree
@@ -155,14 +147,8 @@ class GenMacro(val c: blackbox.Context) {
                 subclass -> help(to.asClass, tail, tree)
               } else {
                 val t = subclass.info.baseType(subclass.info.typeSymbol)
-                val name = variables.getOrElseUpdate(t, c.freshName(subclass.info.resultType.typeSymbol.name).toTermName)
-                subclass -> ONil(
-                  if (subclass.info.typeArgs.nonEmpty) {
-                    q"$name[..${t.typeArgs}]"
-                  } else {
-                    q"$name"
-                  }
-                )
+                val name = variables.getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
+                subclass -> ONil(name)
               }
           }.toMap)
         case Lens(tn) :: tail =>
@@ -178,14 +164,8 @@ class GenMacro(val c: blackbox.Context) {
                   )
                 } else {
                   val t = param.info.baseType(param.info.typeSymbol)
-                  val name = variables.getOrElseUpdate(t, c.freshName(param.info.resultType.typeSymbol.name).toTermName)
-                  param -> ONil(
-                    if (param.info.typeArgs.nonEmpty) {
-                      q"$name[..${t.typeArgs}]"
-                    } else {
-                      q"$name"
-                    }
-                  )
+                  val name = variables.getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
+                  param -> ONil(name)
                 }
               }.toMap
           )
@@ -265,7 +245,7 @@ class GenMacro(val c: blackbox.Context) {
           }})"
       case CoproductMerge(subclasses) =>
         val size = subclasses.size
-        q"scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex.map {
+        q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex.map {
             case (symbol -> ApplyOptic(tree), index) => cq"$index => $tree.get()"
             case (symbol -> ONil(tree), index) => cq"$index => $tree.get()"
             case (symbol -> om, index) => cq"$index => ${mkTree(om)}"
