@@ -8,22 +8,24 @@ import scala.reflect.macros.blackbox
 class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
+  private val variables: mutable.Map[c.Type, c.TermName] = mutable.Map()
+
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
-    val (mo, variables) = mergeOptics(disassembleTree(gen), weakTypeOf[A])
+    val mo = mergeOptics[A](disassembleTree(gen))
     c.info(c.enclosingPosition, variables.mkString("\n", "\n", "\n"), force = true)
 
     val resTree: Option[c.Tree] = mo
       .map(mkTree)
       .map(toRandom)
 
-    val a: Option[c.Tree] = resTree.map(mkBlock(_, variables))
+    val a: Option[c.Tree] = resTree.map(mkBlock(_))
 
     a.foreach(t => c.info(c.enclosingPosition, show(t), force = true))
 
     mkGenOps[A](a, a.map(show(_)).getOrElse(""))
   }
 
-  def mkBlock[A: c.WeakTypeTag](tree: c.Tree, variables: Map[c.Type, c.TermName]): c.Tree = {
+  def mkBlock[A: c.WeakTypeTag](tree: c.Tree): c.Tree = {
     val res = variables.map {
       case (tp, tn) if tp == weakTypeOf[A] => q"lazy val $tn: _root_.dev.aliakovl.gin.Random[$tp] = $tree"
       case (tp, tn) =>
@@ -129,9 +131,10 @@ class GenMacro(val c: blackbox.Context) {
   case class ONil(tree: c.TermName) extends OpticsMerge
 
 
-  def mergeOptics(genTree: GenTree, resultType: c.Type): (Option[OpticsMerge], Map[c.Type, c.TermName]) = {
+  def mergeOptics[A: c.WeakTypeTag](genTree: GenTree): Option[OpticsMerge] = {
     val GenTree(genClass, specs) = genTree
-    val variables: mutable.Map[c.Type, c.TermName] = mutable.Map(resultType -> c.freshName(resultType.typeSymbol.name).toTermName)
+
+    variables.addOne(weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName)
 
     def help(
         classSymbol: ClassSymbol,
@@ -178,7 +181,7 @@ class GenMacro(val c: blackbox.Context) {
       .foldLeft(None: Option[OpticsMerge]) {
         case (None, om)       => Some(om)
         case (Some(lom), rom) => Some(mergeOptics(lom, rom))
-      } -> variables.toMap
+      }
   }
 
   def mergeOptics(left: OpticsMerge, right: OpticsMerge): OpticsMerge = {
