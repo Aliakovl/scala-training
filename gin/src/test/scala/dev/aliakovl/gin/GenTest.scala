@@ -10,7 +10,7 @@ case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
 
 sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
-case class MyClass2(lst: Lst[Int], mc2field: String = "lol") extends MyClass
+case class MyClass2(lst: Lst[Int], mc2field: String = "lol", other: Lst[Long] = Nil) extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
 
@@ -122,7 +122,7 @@ object GenTest {
     @tailrec
     def loop: MyClass1 = rel.get() match {
       case a @ MyClass1(
-            MyClass1(MyClass1(MyClass1(MyClass1(MyClass2(_, _)))))
+            MyClass1(MyClass1(MyClass1(MyClass1(MyClass2(_, _, _)))))
           ) =>
         a
       case _ => loop
