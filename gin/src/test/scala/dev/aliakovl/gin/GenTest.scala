@@ -47,6 +47,8 @@ object GenTest {
 
     println(mc.get())
 
+    println(Gen[String].random.get())
+
   }
 
 }
