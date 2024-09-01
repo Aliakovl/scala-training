@@ -20,15 +20,7 @@ class GenMacro(val c: blackbox.Context) {
       )
     )
 
-    c.info(c.enclosingPosition, subclassesOf(weakTypeOf[A].typeSymbol.asClass).map(_.info.typeSymbol).map(show(_)).mkString("\n"), true)
-
-//    a.foreach(t => c.info(c.enclosingPosition, show(t), force = true))
-
-    c.info(
-      c.enclosingPosition,
-      variables.mkString("\n", "\n", "\n"),
-      force = true
-    )
+    c.info(c.enclosingPosition, show(a), force = true)
 
     mkGenOps[A](a, show(a))
   }
@@ -82,7 +74,7 @@ class GenMacro(val c: blackbox.Context) {
       ) {
         val subclasses = subclassesOf(tp.typeSymbol.asClass)
         SealedTrait(subclasses = subclasses.map { subclass =>
-          val t = subclass.info.baseType(subclass.info.typeSymbol)
+          val t = subclassType(subclass, tp)
           val name = variables.get(t) match {
             case Some(value) => value
             case None =>
@@ -98,9 +90,10 @@ class GenMacro(val c: blackbox.Context) {
       } else if (
         tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
       ) {
-        val params = publicConstructor(tp.typeSymbol.asClass).paramLists.flatten
+        val params =
+          paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass)).flatten
         CaseClass(fields = params.map { param =>
-          val t = param.info.baseType(param.info.typeSymbol)
+          val t = param.typeSignatureIn(tp)
           val name = variables.get(t) match {
             case Some(value) => value
             case None =>
@@ -172,6 +165,23 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
+  def subclassType(subclass: c.Symbol, parent: c.Type): c.Type = {
+    val sEta = subclass.asType.toType.etaExpand
+    sEta.finalResultType.substituteTypes(
+      from = sEta
+        .baseType(parent.typeSymbol)
+        .typeArgs
+        .map(_.typeSymbol),
+      to = parent.typeArgs
+    )
+  }
+
+  def paramListsOf(
+      tpe: c.Type,
+      method: c.Symbol
+  ): List[List[c.universe.Symbol]] =
+    method.asMethod.typeSignatureIn(tpe).paramLists
+
   def publicConstructor(parent: ClassSymbol): MethodSymbol = {
     val members = parent.info.members
     members
@@ -242,7 +252,7 @@ class GenMacro(val c: blackbox.Context) {
               if (subs.contains(subclass)) {
                 subclass -> help(to.asClass, tail, tree)
               } else {
-                val t = subclass.info.baseType(subclass.info.typeSymbol)
+                val t = subclassType(subclass, classSymbol.toType)
                 val name = variables.getOrElseUpdate(
                   t,
                   c.freshName(t.typeSymbol.name).toTermName
@@ -253,23 +263,25 @@ class GenMacro(val c: blackbox.Context) {
         case Lens(tn) :: tail =>
           ProductMerge(
             classSymbol,
-            fields =
-              publicConstructor(classSymbol).paramLists.flatten.map { param =>
-                if (param.asTerm.name == tn) {
-                  param -> help(
-                    param.info.typeSymbol.asClass,
-                    tail,
-                    tree
-                  )
-                } else {
-                  val t = param.info.baseType(param.info.typeSymbol)
-                  val name = variables.getOrElseUpdate(
-                    t,
-                    c.freshName(t.typeSymbol.name).toTermName
-                  )
-                  param -> ONil(name)
-                }
-              }.toMap
+            fields = paramListsOf(
+              classSymbol.asType.toType,
+              publicConstructor(classSymbol)
+            ).flatten.map { param =>
+              if (param.asTerm.name == tn) {
+                param -> help(
+                  param.info.typeSymbol.asClass,
+                  tail,
+                  tree
+                )
+              } else {
+                val t = param.typeSignatureIn(classSymbol.toType)
+                val name = variables.getOrElseUpdate(
+                  t,
+                  c.freshName(t.typeSymbol.name).toTermName
+                )
+                param -> ONil(name)
+              }
+            }.toMap
           )
         case Nil => ApplyOptic(tree)
       }

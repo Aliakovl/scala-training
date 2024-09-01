@@ -20,11 +20,6 @@ case object H extends KJH("twert")
 object GenTest {
 
   def main(args: Array[String]): Unit = {
-    implicit def lst[A: Random]: Random[Lst[A]] = Random(scala.util.Random.nextInt(2) match {
-      case 0 => Nil
-      case 1 => Cons(implicitly[Random[A]].get(), lst[A].get())
-    })
-
     val mc: Random[MyClass] =
       Gen[MyClass]
         .specify(
@@ -37,7 +32,7 @@ object GenTest {
 
     println(mc.get())
 
-    println(Gen[Lst[Int]].random.get())
+    Random.many[List](10)(Gen[Lst[Int]].random).get().foreach(println)
 
   }
 
