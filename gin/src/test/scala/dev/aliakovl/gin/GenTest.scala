@@ -2,11 +2,9 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.Random.{const, uglyString}
 
-import scala.annotation.tailrec
-
 sealed trait Lst[+A]
 case object Nil extends Lst[Nothing]
-case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
+case class Cons[B](head: B, tail: Lst[B]) extends Lst[B]
 
 sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
@@ -39,7 +37,7 @@ object GenTest {
 
     println(mc.get())
 
-    println(Gen[String].random.get())
+    println(Gen[Lst[Int]].random.get())
 
   }
 

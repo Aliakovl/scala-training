@@ -11,14 +11,18 @@ class GenMacro(val c: blackbox.Context) {
   private val variables: mutable.Map[c.Type, c.TermName] = mutable.Map()
 
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
-    val a: Option[c.Tree] = disassembleTree(gen)
-      .flatMap(mergeOptics[A])
-      .map(mkTree)
-      .map(toRandom)
-      .map(initValues[A])
-      .map(mkBlock[A])
+    val a: c.Tree = mkBlock[A](
+      initValues[A](
+        disassembleTree(gen)
+          .flatMap(mergeOptics[A])
+          .map(mkTree)
+          .map(toRandom)
+      )
+    )
 
-    a.foreach(t => c.info(c.enclosingPosition, show(t), force = true))
+    c.info(c.enclosingPosition, subclassesOf(weakTypeOf[A].typeSymbol.asClass).map(_.info.typeSymbol).map(show(_)).mkString("\n"), true)
+
+//    a.foreach(t => c.info(c.enclosingPosition, show(t), force = true))
 
     c.info(
       c.enclosingPosition,
@@ -26,7 +30,7 @@ class GenMacro(val c: blackbox.Context) {
       force = true
     )
 
-    mkGenOps[A](a, a.map(show(_)).getOrElse(""))
+    mkGenOps[A](a, show(a))
   }
 
   sealed trait Value
@@ -65,59 +69,50 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$res; ${variables(weakTypeOf[A])}}"
   }
 
-  def initValues[A: c.WeakTypeTag](tree: c.Tree): Map[c.Type, Value] = {
+  def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): Map[c.Type, Value] = {
     val values: mutable.Map[c.Type, Value] = mutable.Map.empty
 
     def default(tp: c.Type): Value = {
-      if (tp == weakTypeOf[A]) {
-        variables.keys.filter(_ != tp).foreach { t =>
-          help(t)
-        }
-        Refer(tree)
+      val rt = randomType(tp)
+      val implicitValue = c.inferImplicitValue(rt)
+      if (implicitValue.nonEmpty) {
+        Refer(implicitValue)
+      } else if (
+        tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
+      ) {
+        val subclasses = subclassesOf(tp.typeSymbol.asClass)
+        SealedTrait(subclasses = subclasses.map { subclass =>
+          val t = subclass.info.baseType(subclass.info.typeSymbol)
+          val name = variables.get(t) match {
+            case Some(value) => value
+            case None =>
+              val value = c.freshName(t.typeSymbol.name).toTermName
+              variables.addOne(t -> value)
+              help(t)
+              value
+          }
+          subclass -> name
+        }.toMap)
+      } else if (tp.typeSymbol.isModuleClass) {
+        CaseObject
+      } else if (
+        tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
+      ) {
+        val params = publicConstructor(tp.typeSymbol.asClass).paramLists.flatten
+        CaseClass(fields = params.map { param =>
+          val t = param.info.baseType(param.info.typeSymbol)
+          val name = variables.get(t) match {
+            case Some(value) => value
+            case None =>
+              val value = c.freshName(t.typeSymbol.name).toTermName
+              variables.addOne(t -> value)
+              help(t)
+              value
+          }
+          param -> name
+        }.toMap)
       } else {
-        val rt = randomType(tp)
-        val implicitValue = c.inferImplicitValue(rt)
-        if (implicitValue.nonEmpty) {
-          Refer(implicitValue)
-        } else if (
-          tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
-        ) {
-          val subclasses = subclassesOf(tp.typeSymbol.asClass)
-          SealedTrait(subclasses = subclasses.map { subclass =>
-            val t = subclass.info.baseType(subclass.info.typeSymbol)
-            val name = variables.get(t) match {
-              case Some(value) => value
-              case None =>
-                val value = c.freshName(t.typeSymbol.name).toTermName
-                variables.addOne(t -> value)
-                help(t)
-                value
-            }
-            subclass -> name
-          }.toMap)
-        } else if (tp.typeSymbol.isModuleClass) {
-          CaseObject
-        } else if (
-          tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
-        ) {
-          val params = publicConstructor(
-            tp.typeSymbol.asClass
-          ).paramLists.flatten
-          CaseClass(fields = params.map { param =>
-            val t = param.info.baseType(param.info.typeSymbol)
-            val name = variables.get(t) match {
-              case Some(value) => value
-              case None =>
-                val value = c.freshName(t.typeSymbol.name).toTermName
-                variables.addOne(t -> value)
-                help(t)
-                value
-            }
-            param -> name
-          }.toMap)
-        } else {
-          Implicitly(tp)
-        }
+        Implicitly(tp)
       }
     }
 
@@ -125,18 +120,24 @@ class GenMacro(val c: blackbox.Context) {
       values.getOrElseUpdate(tp, default(tp))
     }
 
-    values.addOne(weakTypeOf[A] -> help(weakTypeOf[A]))
+    tree match {
+      case Some(value) =>
+        values.addOne(weakTypeOf[A] -> Refer(value))
+        variables.keys.filter(_ != weakTypeOf[A]).foreach { t =>
+          help(t)
+        }
+      case None => values.addOne(weakTypeOf[A] -> help(weakTypeOf[A]))
+    }
     values.toMap
   }
 
   def mkGenOps[A: c.WeakTypeTag](
-      random: Option[c.Tree],
+      random: c.Tree,
       debug: String
   ): c.Expr[GenOps[A]] = {
     c.Expr[GenOps[A]](
       q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
-            override val random = ${random
-          .getOrElse(q"implicitly[${randomType(c.weakTypeOf[A])}]")}
+            override val random = $random
             override val debug = $debug
           }"""
     )
@@ -256,7 +257,7 @@ class GenMacro(val c: blackbox.Context) {
               publicConstructor(classSymbol).paramLists.flatten.map { param =>
                 if (param.asTerm.name == tn) {
                   param -> help(
-                    param.info.baseClasses.head.asClass,
+                    param.info.typeSymbol.asClass,
                     tail,
                     tree
                   )
