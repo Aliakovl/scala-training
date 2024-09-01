@@ -2,76 +2,38 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.Random.{const, uglyString}
 
-import scala.annotation.tailrec
-
 sealed trait Lst[+A]
 case object Nil extends Lst[Nothing]
-case class Cons[A](head: A, tail: Lst[A]) extends Lst[A]
+case class Cons[B](head: B, tail: Lst[B]) extends Lst[B]
 
-sealed trait MyClass extends Product with Serializable
+sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
-case class MyClass2(int: Int, mc2field: String) extends MyClass
+case class MyClass2(lst: Lst[Int], mc2field: String = "lol", other: Lst[Long] = Nil) extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
 
+sealed abstract class KJH(val message: String) extends MyClass
+case class K(override val message: String) extends KJH(message)
+final class J(message: String) extends KJH(message)
+case object H extends KJH("twert")
+
 object GenTest {
+
   def main(args: Array[String]): Unit = {
+    val mc: Random[MyClass] =
+      Gen[MyClass]
+        .specify(
+          _.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field,
+          uglyString(100)
+        )
+        .specify(_.when[MyClass1].m.when[MyClass2].lst, const(Cons(3, Nil)))
+        .specify(_.when[MyClass2].lst, const(Cons(4, Nil)))
+        .random
 
-//    val r =
-//      Gen[MyClass]
-//        .specify[String](_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field, uglyString(100))
-//        .specify[Int](_.when[MyClass1].m.when[MyClass2].int, const(4))
-//        .specify[Int](_.when[MyClass2].int, const(4))
-//        .random
+    println(mc.get())
 
-    val rel = {
-      val random$Int = implicitly[Random[Int]]
-      val random$String = implicitly[Random[String]]
+    Random.many[List](10)(Gen[Lst[Int]].random).get().foreach(println)
 
-      val MyClass$size = 4
-      def MyClass$Trait = scala.util.Random.nextInt(MyClass$size)
-
-      lazy val result: Random[MyClass] = Random(
-        MyClass$Trait match {
-          case 0 =>
-            MyClass1(m = MyClass$Trait match {
-              case 0 =>
-                MyClass1(m = MyClass$Trait match {
-                  case 0 => MyClass1(m = result.get())
-                  case 1 =>
-                    MyClass2(
-                      int = random$Int.get(),
-                      mc2field = uglyString(100).get()
-                    )
-                  case 2 => MyClass3()
-                  case 3 => MyClass4
-                })
-              case 1 =>
-                MyClass2(int = random$Int.get(), mc2field = random$String.get())
-              case 2 => MyClass3()
-              case 3 => MyClass4
-            })
-          case 1 =>
-            MyClass2(int = const(4).get(), mc2field = random$String.get())
-          case 2 => MyClass3()
-          case 3 => MyClass4
-        }
-      )
-      result
-    }
-
-    @tailrec
-    def loop: MyClass1 = rel.get() match {
-      case a @ MyClass1(
-            MyClass1(MyClass1(MyClass1(MyClass1(MyClass2(_, _)))))
-          ) =>
-        a
-      case _ => loop
-    }
-
-    println(loop)
-
-    val test = Gen[MyClass1].random.get()
-    println(test)
   }
+
 }
