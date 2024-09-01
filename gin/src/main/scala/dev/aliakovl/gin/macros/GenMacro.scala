@@ -15,6 +15,7 @@ class GenMacro(val c: blackbox.Context) {
       .flatMap(mergeOptics[A])
       .map(mkTree)
       .map(toRandom)
+      .map(initValues[A])
       .map(mkBlock[A])
 
     a.foreach(t => c.info(c.enclosingPosition, show(t), force = true))
@@ -28,21 +29,104 @@ class GenMacro(val c: blackbox.Context) {
     mkGenOps[A](a, a.map(show(_)).getOrElse(""))
   }
 
-  def mkBlock[A: c.WeakTypeTag](tree: c.Tree): c.Tree = {
-    val res = variables.map {
-      case (tp, tn) if tp == weakTypeOf[A] =>
-        q"lazy val $tn: _root_.dev.aliakovl.gin.Random[$tp] = $tree"
-      case (tp, tn) =>
-        val rt = randomType(tp)
-        val implicitValue = c.inferImplicitValue(rt)
-        if (implicitValue.nonEmpty) {
-          q"lazy val $tn: _root_.dev.aliakovl.gin.Random[$tp] = $implicitValue"
-        } else {
-          q"lazy val $tn: _root_.dev.aliakovl.gin.Random[$tp] = implicitly[$rt]"
+  sealed trait Value
+  case class Implicitly(rType: c.Type) extends Value
+  case class Refer(value: c.Tree) extends Value
+  case class CaseClass(fields: Map[c.Symbol, c.TermName]) extends Value
+  case object CaseObject extends Value
+  case class SealedTrait(subclasses: Map[c.Symbol, c.TermName]) extends Value
+
+  def mkBlock[A: c.WeakTypeTag](values: Map[c.Type, Value]): c.Tree = {
+    val res = values.map {
+      case tp -> Implicitly(rType) =>
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = implicitly[$rType]"
+      case tp -> Refer(value) =>
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
+      case tp -> CaseObject =>
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${toRandom(q"valueOf[$tp]")}"
+      case tp -> CaseClass(fields) =>
+        val value = toRandom {
+          q"${constructor(tp.typeSymbol.asClass)}( ..${fields.map { case field -> name =>
+              q"$field = $name.get()"
+            }})"
         }
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
+      case tp -> SealedTrait(subclasses) =>
+        val size = subclasses.size
+        val value = toRandom {
+          q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex
+              .map { case (symbol -> name, index) =>
+                cq"$index => $name.get()"
+              }} }"
+        }
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
     }
 
     q"{..$res; ${variables(weakTypeOf[A])}}"
+  }
+
+  def initValues[A: c.WeakTypeTag](tree: c.Tree): Map[c.Type, Value] = {
+    val values: mutable.Map[c.Type, Value] = mutable.Map.empty
+
+    def default(tp: c.Type): Value = {
+      if (tp == weakTypeOf[A]) {
+        variables.keys.filter(_ != tp).foreach { t =>
+          help(t)
+        }
+        Refer(tree)
+      } else {
+        val rt = randomType(tp)
+        val implicitValue = c.inferImplicitValue(rt)
+        if (implicitValue.nonEmpty) {
+          Refer(implicitValue)
+        } else if (
+          tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
+        ) {
+          val subclasses = subclassesOf(tp.typeSymbol.asClass)
+          SealedTrait(subclasses = subclasses.map { subclass =>
+            val t = subclass.info.baseType(subclass.info.typeSymbol)
+            val name = variables.get(t) match {
+              case Some(value) => value
+              case None =>
+                val value = c.freshName(t.typeSymbol.name).toTermName
+                variables.addOne(t -> value)
+                help(t)
+                value
+            }
+            subclass -> name
+          }.toMap)
+        } else if (tp.typeSymbol.isModuleClass) {
+          CaseObject
+        } else if (
+          tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
+        ) {
+          val params = publicConstructor(
+            tp.typeSymbol.asClass
+          ).paramLists.flatten
+          CaseClass(fields = params.map { param =>
+            val t = param.info.baseType(param.info.typeSymbol)
+            val name = variables.get(t) match {
+              case Some(value) => value
+              case None =>
+                val value = c.freshName(t.typeSymbol.name).toTermName
+                variables.addOne(t -> value)
+                help(t)
+                value
+            }
+            param -> name
+          }.toMap)
+        } else {
+          Implicitly(tp)
+        }
+      }
+    }
+
+    def help(tp: c.Type): Value = {
+      values.getOrElseUpdate(tp, default(tp))
+    }
+
+    values.addOne(weakTypeOf[A] -> help(weakTypeOf[A]))
+    values.toMap
   }
 
   def mkGenOps[A: c.WeakTypeTag](
@@ -233,24 +317,6 @@ class GenMacro(val c: blackbox.Context) {
           c.enclosingPosition,
           s"double application leads to erasure"
         )
-    }
-  }
-
-  def findUnique(opticsMerge: OpticsMerge): Set[c.Type] = {
-    opticsMerge match {
-      case ProductMerge(_, fields) =>
-        val (leaves, branches) = fields.partition(_._2.isInstanceOf[ONil])
-        leaves.keySet.map { param =>
-          param.info.baseType(param.info.typeSymbol)
-        } union branches.values
-          .flatMap(findUnique)
-          .toSet
-      case CoproductMerge(subclasses) =>
-        val (leaves, branches) = subclasses.partition(_._2.isInstanceOf[ONil])
-        leaves.keySet.map { subclass =>
-          subclass.info.baseType(subclass.info.typeSymbol)
-        } union branches.values.flatMap(findUnique).toSet
-      case _ => Set.empty
     }
   }
 

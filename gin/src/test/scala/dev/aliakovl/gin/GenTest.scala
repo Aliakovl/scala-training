@@ -22,20 +22,12 @@ case object H extends KJH("twert")
 object GenTest {
 
   def main(args: Array[String]): Unit = {
-
-    implicit lazy val mc1: Random[MyClass1] = Random(MyClass1(mc.get()))
-    implicit lazy val mc2: Random[MyClass2] = Random(MyClass2(Nil, implicitly[Random[String]].get()))
-    implicit lazy val mc3: Random[MyClass3] = Random(MyClass3())
-    implicit lazy val mc4: Random[MyClass4.type] = Random(MyClass4)
-    implicit lazy val k: Random[K] = Random(K(implicitly[Random[String]].get()))
-    implicit lazy val j: Random[J] = Random(new J(implicitly[Random[String]].get()))
-    implicit lazy val h: Random[H.type] = Random(H)
     implicit def lst[A: Random]: Random[Lst[A]] = Random(scala.util.Random.nextInt(2) match {
       case 0 => Nil
       case 1 => Cons(implicitly[Random[A]].get(), lst[A].get())
     })
 
-    lazy implicit val mc: Random[MyClass] =
+    val mc: Random[MyClass] =
       Gen[MyClass]
         .specify(
           _.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field,
