@@ -40,7 +40,9 @@ object GenTest {
 
     println(Gen[G].specify(_.int, oneOf(1, 5)).random.get().int)
 
-//    println(Gen[List[String]].specify(_.when[::[String]].head, const("wefwefef")).random.get())
+    println(Gen[List[String]].specify(_.when[::[String]].head, const("wefwefef")).random.get())
+
+    println(Gen[Lst[String]].specify(_.when[Cons[String]].tail.when[Cons[String]].head, uglyString(10)).random.get())
 
   }
 

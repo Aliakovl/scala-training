@@ -97,7 +97,7 @@ class GenMacro(val c: blackbox.Context) {
         tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
       ) {
         val params =
-          paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass)).flatten
+          paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass, tp)).flatten
         CaseClass(fields = params.map { param =>
           val t = param.typeSignatureIn(tp)
           val name = variables.get(t) match {
@@ -188,8 +188,8 @@ class GenMacro(val c: blackbox.Context) {
   ): List[List[c.universe.Symbol]] =
     method.asMethod.typeSignatureIn(tpe).paramLists
 
-  def publicConstructor(parent: ClassSymbol): MethodSymbol = {
-    val members = parent.info.members
+  def publicConstructor(parent: ClassSymbol, tpe: c.Type): MethodSymbol = {
+    val members = parent.infoIn(tpe).members
     members
       .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
       .orElse(
@@ -202,7 +202,7 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait Optic
-  case class Lens(tn: c.TermName) extends Optic
+  case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
   case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
 
   case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Tree)])
@@ -223,7 +223,9 @@ class GenMacro(val c: blackbox.Context) {
 
   def disassembleSelector(selector: c.Tree): List[Optic] = {
     List.unfold(selector) {
-      case q"$other.${field: TermName}" => Some(Lens(field), other)
+      case a @ q"$other.${field: TermName}" =>
+        val t = a.tpe.substituteTypes(List(a.symbol), List(selector.tpe))
+        Some(Lens(other.tpe, field, t), other)
       case q"""$module[$from]($other).when[$to]""" => // проверить module
         Some(Prism(from.symbol, to.symbol), other)
       case _ => None
@@ -264,21 +266,21 @@ class GenMacro(val c: blackbox.Context) {
                 subclass -> ONil(name)
               }
           }.toMap)
-        case Lens(tn) :: tail =>
+        case Lens(from, to, tpe) :: tail =>
           ProductMerge(
             classSymbol,
             fields = paramListsOf(
-              classSymbol.asType.toType,
-              publicConstructor(classSymbol)
+              from,
+              publicConstructor(classSymbol, from)
             ).flatten.map { param =>
-              if (param.asTerm.name == tn) {
+              if (param.asTerm.name == to) {
                 param -> help(
-                  param.info.typeSymbol.asClass,
+                  tpe.typeSymbol.asClass,
                   tail,
                   tree
                 )
               } else {
-                val t = param.typeSignatureIn(classSymbol.toType)
+                val t = param.typeSignatureIn(from)
                 val name = variables.getOrElseUpdate(
                   t,
                   c.freshName(t.typeSymbol.name).toTermName
