@@ -10,7 +10,15 @@ class GenMacro(val c: blackbox.Context) {
 
   private val variables: mutable.Map[c.Type, c.TermName] = mutable.Map()
 
+  private var resultType: c.Type = null
+
   def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
+    resultType = subclassType(weakTypeOf[A].typeSymbol, weakTypeOf[A])
+
+    variables.getOrElseUpdate(
+      resultType, c.freshName(resultType.typeSymbol.name).toTermName
+    )
+
     val a: c.Tree = mkBlock[A](
       initValues[A](
         disassembleTree(gen)
@@ -19,8 +27,6 @@ class GenMacro(val c: blackbox.Context) {
           .map(toRandom)
       )
     )
-
-    c.info(c.enclosingPosition, show(a), force = true)
 
     mkGenOps[A](a, show(a))
   }
@@ -58,7 +64,7 @@ class GenMacro(val c: blackbox.Context) {
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
     }
 
-    q"{..$res; ${variables(weakTypeOf[A])}}"
+    q"{..$res; ${variables(resultType)}}"
   }
 
   def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): Map[c.Type, Value] = {
@@ -91,7 +97,7 @@ class GenMacro(val c: blackbox.Context) {
         tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
       ) {
         val params =
-          paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass)).flatten
+          paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass, tp)).flatten
         CaseClass(fields = params.map { param =>
           val t = param.typeSignatureIn(tp)
           val name = variables.get(t) match {
@@ -115,11 +121,11 @@ class GenMacro(val c: blackbox.Context) {
 
     tree match {
       case Some(value) =>
-        values.addOne(weakTypeOf[A] -> Refer(value))
-        variables.keys.filter(_ != weakTypeOf[A]).foreach { t =>
+        values.addOne(resultType -> Refer(value))
+        variables.keys.filter(_ != resultType).foreach { t =>
           help(t)
         }
-      case None => values.addOne(weakTypeOf[A] -> help(weakTypeOf[A]))
+      case None => values.addOne(resultType -> help(resultType))
     }
     values.toMap
   }
@@ -129,7 +135,7 @@ class GenMacro(val c: blackbox.Context) {
       debug: String
   ): c.Expr[GenOps[A]] = {
     c.Expr[GenOps[A]](
-      q"""new _root_.dev.aliakovl.gin.GenOps[${c.weakTypeOf[A]}] {
+      q"""new _root_.dev.aliakovl.gin.GenOps[$resultType] {
             override val random = $random
             override val debug = $debug
           }"""
@@ -147,7 +153,7 @@ class GenMacro(val c: blackbox.Context) {
       parent.knownDirectSubclasses.partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
-      if (!child.isFinal && !child.asClass.isCaseClass) {
+      if (!child.info.typeSymbol.asClass.isFinal && !child.info.typeSymbol.asClass.isCaseClass) {
         c.abort(
           c.enclosingPosition,
           s"child $child of $parent is neither final nor a case class"
@@ -182,26 +188,28 @@ class GenMacro(val c: blackbox.Context) {
   ): List[List[c.universe.Symbol]] =
     method.asMethod.typeSignatureIn(tpe).paramLists
 
-  def publicConstructor(parent: ClassSymbol): MethodSymbol = {
-    val members = parent.info.members
+  def publicConstructor(parent: ClassSymbol, tpe: c.Type): MethodSymbol = {
+    val members = parent.infoIn(tpe).members
     members
       .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
       .orElse(
         members.find(m => m.isMethod && m.asMethod.isConstructor && m.isPublic)
       )
-      .get
-      .asMethod
+      .map(_.asMethod)
+      .getOrElse {
+        c.abort(c.enclosingPosition, s"class $parent has no public constructors")
+      }
   }
 
   sealed trait Optic
-  case class Lens(tn: c.TermName) extends Optic
+  case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
   case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
 
   case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Tree)])
 
   def disassembleTree[A: WeakTypeTag](tree: c.Expr[Gen[A]]): Option[GenTree] = {
-    Option.when(symbolOf[A].isClass) {
-      val genClass = symbolOf[A].asClass
+    Option.when(resultType.typeSymbol.isClass) {
+      val genClass = resultType.typeSymbol.asClass
       val specs: List[(List[Optic], c.Tree)] = List
         .unfold(tree.tree) {
           case q"$other.specify[..$_](($_) => $selector, $random)" =>
@@ -215,7 +223,9 @@ class GenMacro(val c: blackbox.Context) {
 
   def disassembleSelector(selector: c.Tree): List[Optic] = {
     List.unfold(selector) {
-      case q"$other.${field: TermName}" => Some(Lens(field), other)
+      case a @ q"$other.${field: TermName}" =>
+        val t = a.tpe.substituteTypes(List(a.symbol), List(selector.tpe))
+        Some(Lens(other.tpe, field, t), other)
       case q"""$module[$from]($other).when[$to]""" => // проверить module
         Some(Prism(from.symbol, to.symbol), other)
       case _ => None
@@ -234,10 +244,6 @@ class GenMacro(val c: blackbox.Context) {
 
   def mergeOptics[A: c.WeakTypeTag](genTree: GenTree): Option[OpticsMerge] = {
     val GenTree(genClass, specs) = genTree
-
-    variables.addOne(
-      weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
-    )
 
     def help(
         classSymbol: ClassSymbol,
@@ -260,21 +266,21 @@ class GenMacro(val c: blackbox.Context) {
                 subclass -> ONil(name)
               }
           }.toMap)
-        case Lens(tn) :: tail =>
+        case Lens(from, to, tpe) :: tail =>
           ProductMerge(
             classSymbol,
             fields = paramListsOf(
-              classSymbol.asType.toType,
-              publicConstructor(classSymbol)
+              from,
+              publicConstructor(classSymbol, from)
             ).flatten.map { param =>
-              if (param.asTerm.name == tn) {
+              if (param.asTerm.name == to) {
                 param -> help(
-                  param.info.typeSymbol.asClass,
+                  tpe.typeSymbol.asClass,
                   tail,
                   tree
                 )
               } else {
-                val t = param.typeSignatureIn(classSymbol.toType)
+                val t = param.typeSignatureIn(from)
                 val name = variables.getOrElseUpdate(
                   t,
                   c.freshName(t.typeSymbol.name).toTermName

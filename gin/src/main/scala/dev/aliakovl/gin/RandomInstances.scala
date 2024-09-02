@@ -1,6 +1,6 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.Random.{alphanumeric, random}
+import dev.aliakovl.gin.Random.{alphanumeric, const}
 
 import java.time.{Instant, LocalDate, LocalDateTime, YearMonth}
 import java.time.temporal.ChronoUnit
@@ -9,6 +9,7 @@ import scala.collection.{Factory, Iterable}
 import scala.util.{Random => ScalaRandom}
 
 trait RandomInstances {
+  implicit val unitRandom: Random[Unit] = const(())
   implicit val uuidRandom: Random[UUID] = Random(UUID.randomUUID())
   implicit val stringRandom: Random[String] = alphanumeric(10)
   implicit val charRandom: Random[Char] = Random(ScalaRandom.nextPrintableChar())
@@ -23,9 +24,6 @@ trait RandomInstances {
   implicit val localDateRandom: Random[LocalDate] = Random(LocalDate.now())
   implicit val localDateTimeRandom: Random[LocalDateTime] = Random(LocalDateTime.now())
   implicit val yearMonthRandom: Random[YearMonth] = Random(YearMonth.now())
-  implicit def defaultIterableRandom[A: Random, C[E] <: IterableOnce[E]](
-      implicit f: Factory[A, C[A]]
-  ): Random[C[A]] = Random.many[C](5).make[A]
   implicit def defaultIterableRandom2d[
       A: Random,
       B: Random,
