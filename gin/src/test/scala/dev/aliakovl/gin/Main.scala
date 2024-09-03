@@ -1,9 +1,8 @@
 package dev.aliakovl.gin
 
 import Random._
-import dev.aliakovl.gin.internal.RandomDerivation
 
-object Main  extends RandomDerivation {
+object Main {
   sealed trait MyClass extends Product with Serializable
   case class MyClass1(m: MyClass) extends MyClass
   case class MyClass2(int: Int, mc2field: String) extends MyClass

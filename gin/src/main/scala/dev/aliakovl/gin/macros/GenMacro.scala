@@ -12,6 +12,21 @@ class GenMacro(val c: blackbox.Context) {
 
   private var resultType: c.Type = null
 
+  def materializeRandom[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
+    resultType = subclassType(weakTypeOf[A].typeSymbol, weakTypeOf[A])
+
+    variables.getOrElseUpdate(
+      resultType,
+      c.freshName(resultType.typeSymbol.name).toTermName
+    )
+
+    c.Expr[Random[A]] {
+      mkBlock[A](
+        initValues[A](None)
+      )
+    }
+  }
+
   def randomImpl[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
     resultType = subclassType(weakTypeOf[A].typeSymbol, weakTypeOf[A])
 
@@ -73,7 +88,7 @@ class GenMacro(val c: blackbox.Context) {
 
     def default(tp: c.Type): Value = {
       val rt = randomType(tp)
-      val implicitValue = c.inferImplicitValue(rt)
+      val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
       if (implicitValue.nonEmpty) {
         Refer(implicitValue)
       } else if (
@@ -188,7 +203,10 @@ class GenMacro(val c: blackbox.Context) {
       )
       .map(_.asMethod)
       .getOrElse {
-        c.abort(c.enclosingPosition, s"class $parent has no public constructors")
+        c.abort(
+          c.enclosingPosition,
+          s"class ${parent.name.decodedName} has no public constructors"
+        )
       }
   }
 
@@ -321,7 +339,7 @@ class GenMacro(val c: blackbox.Context) {
         if (fields.nonEmpty) m else o
       case (o: ONil, m @ CoproductMerge(subclasses)) =>
         if (subclasses.nonEmpty) m else o
-      case (_: ONil, or: ONil) => or
+      case (_: ONil, or: ONil)      => or
       case (_: ONil, a: ApplyOptic) => a
       case (a: ApplyOptic, _: ONil) => a
       case _ =>
