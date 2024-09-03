@@ -18,7 +18,8 @@ final class Random[A](val get: () => A) extends AnyVal {
 object Random
     extends RandomInstances
     with OneOfRandom
-    with ManyRandom {
+    with ManyRandom
+    with RandomDerivation {
 
   def apply[A](eval: => A): Random[A] = new Random[A](() => eval)
 

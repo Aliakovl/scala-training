@@ -130,19 +130,11 @@ lazy val gin = (project in file("./gin"))
     name := "gin",
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
-      "com.chuusai" %% "shapeless" % "2.3.10",
-      "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
-      "com.softwaremill.macwire" %% "macros" % "2.5.9" % "provided",
-      "io.scalaland" %% "chimney" % "1.4.0",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.typelevel" %% "cats-core" % "2.10.0",
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scala-lang" % "scala-compiler" % scalaVersion.value
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value
     ),
     scalacOptions ++= Seq(
       "--language:experimental.macros",
-      "--language:implicitConversions",
-//      "-Ymacro-debug-lite"
+      "--language:implicitConversions"
     )
   )
 
@@ -151,6 +143,12 @@ lazy val reflex = (project in file("./reflex"))
     name := "reflex",
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
+      "com.chuusai" %% "shapeless" % "2.3.10",
+      "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
+      "com.softwaremill.macwire" %% "macros" % "2.5.9" % "provided",
+      "io.scalaland" %% "chimney" % "1.4.0",
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.typelevel" %% "cats-core" % "2.10.0",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scala-compiler" % scalaVersion.value
     )
