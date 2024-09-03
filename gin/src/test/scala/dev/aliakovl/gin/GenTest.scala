@@ -44,6 +44,13 @@ object GenTest {
 
     println(Gen[Lst[String]].specify(_.when[Cons[String]].tail.when[Cons[String]].head, uglyString(10)).random.get())
 
+    val keklol = Gen[Lst[String]]
+      .specify(_.when[Cons[String]].head, const("kek"))
+      .specify(_.when[Cons[String]].tail.when[Cons[String]].head, const("lol"))
+      .random
+
+    println(Random.many[List](10)(keklol).get())
+
   }
 
 }
