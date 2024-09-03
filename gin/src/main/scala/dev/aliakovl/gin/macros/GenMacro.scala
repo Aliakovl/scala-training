@@ -226,7 +226,7 @@ class GenMacro(val c: blackbox.Context) {
   sealed trait OpticsMerge
   case class ProductMerge(
       classSymbol: ClassSymbol,
-      fields: Map[c.Symbol, OpticsMerge]
+      fields: Map[c.TermName, OpticsMerge]
   ) extends OpticsMerge
   case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge])
       extends OpticsMerge
@@ -265,7 +265,7 @@ class GenMacro(val c: blackbox.Context) {
               publicConstructor(classSymbol, from)
             ).flatten.map { param =>
               if (param.asTerm.name == to) {
-                param -> help(
+                param.name.toTermName -> help(
                   tpe.typeSymbol.asClass,
                   tail,
                   tree
@@ -276,7 +276,7 @@ class GenMacro(val c: blackbox.Context) {
                   t,
                   c.freshName(t.typeSymbol.name).toTermName
                 )
-                param -> ONil(name)
+                param.name.toTermName -> ONil(name)
               }
             }.toMap
           )
@@ -322,7 +322,9 @@ class GenMacro(val c: blackbox.Context) {
       case (o: ONil, m @ CoproductMerge(subclasses)) =>
         if (subclasses.nonEmpty) m else o
       case (_: ONil, or: ONil) => or
-      case (_, _: ApplyOptic) | (_: ApplyOptic, _) =>
+      case (_: ONil, a: ApplyOptic) => a
+      case (a: ApplyOptic, _: ONil) => a
+      case _ =>
         c.abort(
           c.enclosingPosition,
           s"double application leads to erasure"
