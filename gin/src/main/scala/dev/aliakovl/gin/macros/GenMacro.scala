@@ -1,6 +1,6 @@
 package dev.aliakovl.gin.macros
 
-import dev.aliakovl.gin.{Gen, GenOps, Random}
+import dev.aliakovl.gin.Random
 
 import scala.collection.mutable
 import scala.reflect.macros.blackbox
@@ -12,23 +12,24 @@ class GenMacro(val c: blackbox.Context) {
 
   private var resultType: c.Type = null
 
-  def randomImpl[A: c.WeakTypeTag](gen: c.Expr[Gen[A]]): c.Expr[GenOps[A]] = {
+  def randomImpl[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
     resultType = subclassType(weakTypeOf[A].typeSymbol, weakTypeOf[A])
 
     variables.getOrElseUpdate(
-      resultType, c.freshName(resultType.typeSymbol.name).toTermName
+      resultType,
+      c.freshName(resultType.typeSymbol.name).toTermName
     )
 
-    val a: c.Tree = mkBlock[A](
-      initValues[A](
-        disassembleTree(gen)
-          .flatMap(mergeOptics[A])
-          .map(mkTree)
-          .map(toRandom)
+    c.Expr[Random[A]] {
+      mkBlock[A](
+        initValues[A](
+          disassembleTree(c.prefix.tree)
+            .flatMap(mergeOptics[A])
+            .map(mkTree)
+            .map(toRandom)
+        )
       )
-    )
-
-    mkGenOps[A](a, show(a))
+    }
   }
 
   sealed trait Value
@@ -130,18 +131,6 @@ class GenMacro(val c: blackbox.Context) {
     values.toMap
   }
 
-  def mkGenOps[A: c.WeakTypeTag](
-      random: c.Tree,
-      debug: String
-  ): c.Expr[GenOps[A]] = {
-    c.Expr[GenOps[A]](
-      q"""new _root_.dev.aliakovl.gin.GenOps[$resultType] {
-            override val random = $random
-            override val debug = $debug
-          }"""
-    )
-  }
-
   def toRandom(tree: c.Tree): c.Tree = {
     q"new _root_.dev.aliakovl.gin.Random(() => $tree)"
   }
@@ -153,7 +142,9 @@ class GenMacro(val c: blackbox.Context) {
       parent.knownDirectSubclasses.partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
-      if (!child.info.typeSymbol.asClass.isFinal && !child.info.typeSymbol.asClass.isCaseClass) {
+      if (
+        !child.info.typeSymbol.asClass.isFinal && !child.info.typeSymbol.asClass.isCaseClass
+      ) {
         c.abort(
           c.enclosingPosition,
           s"child $child of $parent is neither final nor a case class"
@@ -207,11 +198,11 @@ class GenMacro(val c: blackbox.Context) {
 
   case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Tree)])
 
-  def disassembleTree[A: WeakTypeTag](tree: c.Expr[Gen[A]]): Option[GenTree] = {
+  def disassembleTree(tree: c.Tree): Option[GenTree] = {
     Option.when(resultType.typeSymbol.isClass) {
       val genClass = resultType.typeSymbol.asClass
       val specs: List[(List[Optic], c.Tree)] = List
-        .unfold(tree.tree) {
+        .unfold(tree) {
           case q"$other.specify[..$_](($_) => $selector, $random)" =>
             Some((disassembleSelector(selector).reverse, random), other)
           case q"$_[$_]" => None
