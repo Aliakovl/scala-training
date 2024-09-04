@@ -1,6 +1,6 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.Random.{const, oneOf, uglyString}
+import dev.aliakovl.gin.Random.{const, oneOf, random, uglyString}
 
 sealed trait Lst[+A]
 case object LNil extends Lst[Nothing]
@@ -50,6 +50,13 @@ object GenTest {
       .random
 
     println(Random.many[List](10)(keklol).get())
+
+    val f: Random[Lst[String]] = Gen[Lst[String]]
+      .specify(_.when[Cons[String]].head, Gen[String].random.map(_.toUpperCase))
+      .specify(_.when[Cons[String]].tail, random[Lst[String]])
+      .random
+
+    println(Random.many[List](10)(f).get().mkString(", "))
 
   }
 

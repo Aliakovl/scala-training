@@ -59,7 +59,7 @@ class GenMacro(val c: blackbox.Context) {
       case tp -> Implicitly(rType) =>
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = implicitly[$rType]"
       case tp -> Refer(value) =>
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${c.untypecheck(value.duplicate)}"
       case tp -> CaseObject =>
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${toRandom(q"valueOf[$tp]")}"
       case tp -> CaseClass(fields) =>
