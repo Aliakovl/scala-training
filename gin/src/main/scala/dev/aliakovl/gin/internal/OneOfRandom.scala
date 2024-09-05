@@ -89,7 +89,7 @@ trait OneOfRandom {
 object OneOfRandom {
   private def oneOfRandomImpl[A](values: Random[A]*): Random[A] = Random {
     val index = ScalaRandom.nextInt(values.size)
-    values(index).get()
+    values(index).apply()
   }
 
   final class ApplyOneOf2[A, B](private val dummy: Boolean = true)

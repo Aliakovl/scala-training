@@ -32,31 +32,38 @@ object GenTest {
         .specify(_.when[MyClass2].lst, const(Cons(4, LNil)))
         .random
 
-    println(mc.get())
+    println(mc())
 
-    Random.many[List](10)(Gen[Lst[Int]].random).get().foreach(println)
+    Random.many[List](10)(Gen[Lst[Int]].random).apply().foreach(println)
 
-    Gen[Unit].random.get()
+    Gen[Unit].random()
 
-    println(Gen[G].specify(_.int, oneOf(1, 5)).random.get().int)
+    println(Gen[G].specify(_.int, oneOf(1, 5)).random().int)
 
-    println(Gen[List[String]].specify(_.when[::[String]].head, const("wefwefef")).random.get())
+    println(Gen[List[String]].specify(_.when[::[String]].head, const("wefwefef")).random())
 
-    println(Gen[Lst[String]].specify(_.when[Cons[String]].tail.when[Cons[String]].head, uglyString(10)).random.get())
+    println(Gen[Lst[String]].specify(_.when[Cons[String]].tail.when[Cons[String]].head, uglyString(10)).random())
 
     val keklol = Gen[Lst[String]]
       .specify(_.when[Cons[String]].head, const("kek"))
       .specify(_.when[Cons[String]].tail.when[Cons[String]].head, const("lol"))
       .random
 
-    println(Random.many[List](10)(keklol).get())
+    println(Random.many[List](10)(keklol).apply())
 
     val f: Random[Lst[String]] = Gen[Lst[String]]
       .specify(_.when[Cons[String]].head, Gen[String].random.map(_.toUpperCase))
       .specify(_.when[Cons[String]].tail, random[Lst[String]])
       .random
 
-    println(Random.many[List](10)(f).get().mkString(", "))
+    println(Random.many[List](10)(f).apply().mkString(", "))
+
+    println {
+      (for {
+        a <- Random.oneOf(1, 2)
+        if a == 1
+      } yield a).apply()
+    }
 
   }
 

@@ -65,7 +65,7 @@ class GenMacro(val c: blackbox.Context) {
       case tp -> CaseClass(fields) =>
         val value = toRandom {
           q"${constructor(tp.typeSymbol.asClass)}( ..${fields.map { case field -> name =>
-              q"$field = $name.get()"
+              q"$field = ${callApply(q"$name")}"
             }})"
         }
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
@@ -74,7 +74,7 @@ class GenMacro(val c: blackbox.Context) {
         val value = toRandom {
           q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex
               .map { case (symbol -> name, index) =>
-                cq"$index => $name.get()"
+                cq"$index => ${callApply(q"$name")}"
               }} }"
         }
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
@@ -147,12 +147,12 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   def toRandom(tree: c.Tree): c.Tree = {
-    q"new _root_.dev.aliakovl.gin.Random(() => $tree)"
+    q"_root_.dev.aliakovl.gin.Random($tree)"
   }
 
   def mkStr(str: String*): String = str.mkString("\n")
 
-  def subclassesOf(parent: ClassSymbol): Set[Symbol] = {
+  def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
     val (abstractChildren, concreteChildren) =
       parent.knownDirectSubclasses.partition(_.isAbstract)
 
@@ -350,7 +350,7 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def mkTree(om: OpticsMerge): Tree = {
+  def mkTree(om: OpticsMerge): c.Tree = {
     om match {
       case ProductMerge(classSymbol, fields) =>
         q"${constructor(classSymbol)}( ..${fields.map { case field -> om =>
@@ -360,14 +360,17 @@ class GenMacro(val c: blackbox.Context) {
         val size = subclasses.size
         q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex.map {
             case (symbol -> ApplyOptic(tree), index) =>
-              cq"$index => $tree.get()"
-            case (symbol -> ONil(tree), index) => cq"$index => $tree.get()"
-            case (symbol -> om, index)         => cq"$index => ${mkTree(om)}"
+              cq"$index => ${callApply(tree)}"
+            case (symbol -> ONil(tree), index) =>
+              cq"$index => ${callApply(q"$tree")}"
+            case (symbol -> om, index) => cq"$index => ${mkTree(om)}"
           }} }"
-      case ApplyOptic(tree) => q"$tree.get()"
-      case ONil(tree)       => q"$tree.get()"
+      case ApplyOptic(tree) => callApply(tree)
+      case ONil(tree)       => callApply(q"$tree")
     }
   }
+
+  def callApply(tree: c.Tree): c.Tree = q"$tree.apply()"
 
   def randomType(symbolType: c.Type): c.Type =
     appliedType(typeOf[Random[_]].typeConstructor, symbolType)
