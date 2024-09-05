@@ -66,6 +66,7 @@ object GenTest {
         if a == 1
       } yield a).apply()
     }
+    println(Random.many[List](10)(f).apply().mkString(", "))
 
   }
 
