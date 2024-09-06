@@ -24,12 +24,11 @@ object GenTest {
   def main(args: Array[String]): Unit = {
     val mc: Random[MyClass] =
       Gen[MyClass]
-        .specify(
-          _.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field,
+        .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field)(
           uglyString(100)
         )
-        .specify(_.when[MyClass1].m.when[MyClass2].lst, const(Cons(3, LNil)))
-        .specify(_.when[MyClass2].lst, const(Cons(4, LNil)))
+        .specify(_.when[MyClass1].m.when[MyClass2].lst)(const(Cons(3, LNil)))
+        .specify(_.when[MyClass2].lst)(const(Cons(4, LNil)))
         .random
 
     println(mc())
@@ -38,22 +37,32 @@ object GenTest {
 
     Gen[Unit].random()
 
-    println(Gen[G].specify(_.int, oneOf(1, 5)).random().int)
+    println(Gen[G].specify(_.int)(oneOf(1, 5)).random().int)
 
-    println(Gen[List[String]].specify(_.when[::[String]].head, const("wefwefef")).random())
+    println(
+      Gen[List[String]]
+        .specify(_.when[::[String]].head)(const("wefwefef"))
+        .random()
+    )
 
-    println(Gen[Lst[String]].specify(_.when[Cons[String]].tail.when[Cons[String]].head, uglyString(10)).random())
+    println(
+      Gen[Lst[String]]
+        .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(
+          uglyString(10)
+        )
+        .random()
+    )
 
     val keklol = Gen[Lst[String]]
-      .specify(_.when[Cons[String]].head, const("kek"))
-      .specify(_.when[Cons[String]].tail.when[Cons[String]].head, const("lol"))
+      .specify(_.when[Cons[String]].head)(const("kek"))
+      .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(const("lol"))
       .random
 
     println(Random.many[List](10)(keklol).apply())
 
     val f: Random[Lst[String]] = Gen[Lst[String]]
-      .specify(_.when[Cons[String]].head, Gen[String].random.map(_.toUpperCase))
-      .specify(_.when[Cons[String]].tail, random[Lst[String]])
+      .specify(_.when[Cons[String]].head)(Gen[String].random.map(_.toUpperCase))
+      .specify(_.when[Cons[String]].tail)(random[Lst[String]])
       .random
 
     println(Random.many[List](10)(f).apply().mkString(", "))

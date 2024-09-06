@@ -219,7 +219,7 @@ class GenMacro(val c: blackbox.Context) {
       val genClass = resultType.typeSymbol.asClass
       val specs: List[(List[Optic], c.Tree)] = List
         .unfold(tree) {
-          case q"$other.specify[..$_](($_) => $selector, $random)" =>
+          case q"$other.specify[..$_](($_) => $selector)($random)" =>
             Some((disassembleSelector(selector).reverse, random), other)
           case q"${Ident(TermName("Gen"))}.apply[$_]" => None
         }
