@@ -58,6 +58,8 @@ object GenTest {
 
     println(Random.many[List](10)(f).apply().mkString(", "))
 
+    println(Random.many[List](10).make[Lst[String]].apply())
+
     println {
       (for {
         a <- Random.oneOf(1, 2)

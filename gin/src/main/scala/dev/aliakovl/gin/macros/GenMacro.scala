@@ -150,8 +150,6 @@ class GenMacro(val c: blackbox.Context) {
     q"_root_.dev.aliakovl.gin.Random($tree)"
   }
 
-  def mkStr(str: String*): String = str.mkString("\n")
-
   def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
     val (abstractChildren, concreteChildren) =
       parent.knownDirectSubclasses.partition(_.isAbstract)
@@ -223,7 +221,7 @@ class GenMacro(val c: blackbox.Context) {
         .unfold(tree) {
           case q"$other.specify[..$_](($_) => $selector, $random)" =>
             Some((disassembleSelector(selector).reverse, random), other)
-          case q"$_[$_]" => None
+          case q"${Ident(TermName("Gen"))}.apply[$_]" => None
         }
         .reverse
       GenTree(genClass, specs)
@@ -235,8 +233,7 @@ class GenMacro(val c: blackbox.Context) {
       case a @ q"$other.${field: TermName}" =>
         val t = a.tpe.substituteTypes(List(a.symbol), List(selector.tpe))
         Some(Lens(other.tpe, field, t), other)
-      case q"""$module[$from]($other).when[$to]""" => // проверить module
-        Some(Prism(from.symbol, to.symbol), other)
+      case q"""${Select(Select(This(TypeName("gin")), termNames.PACKAGE), TermName("GenWhen"))}[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
       case _ => None
     }
   }
@@ -358,12 +355,10 @@ class GenMacro(val c: blackbox.Context) {
           }})"
       case CoproductMerge(subclasses) =>
         val size = subclasses.size
-        q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.zipWithIndex.map {
-            case (symbol -> ApplyOptic(tree), index) =>
-              cq"$index => ${callApply(tree)}"
-            case (symbol -> ONil(tree), index) =>
-              cq"$index => ${callApply(q"$tree")}"
-            case (symbol -> om, index) => cq"$index => ${mkTree(om)}"
+        q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.values.zipWithIndex.map {
+            case ApplyOptic(tree) -> index => cq"$index => ${callApply(tree)}"
+            case ONil(tree) -> index => cq"$index => ${callApply(q"$tree")}"
+            case om -> index         => cq"$index => ${mkTree(om)}"
           }} }"
       case ApplyOptic(tree) => callApply(tree)
       case ONil(tree)       => callApply(q"$tree")
