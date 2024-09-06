@@ -1,6 +1,6 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.Random.{const, oneOf, random, uglyString}
+import dev.aliakovl.gin.Random.{oneOf, random, uglyString}
 
 sealed trait Lst[+A]
 case object LNil extends Lst[Nothing]
@@ -8,7 +8,11 @@ case class Cons[B](head: B, tail: Lst[B]) extends Lst[B]
 
 sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
-case class MyClass2(lst: Lst[Int], mc2field: String = "lol", other: Lst[Long] = LNil) extends MyClass
+case class MyClass2(
+    lst: Lst[Int],
+    mc2field: String = "lol",
+    other: Lst[Long] = LNil
+) extends MyClass
 case class MyClass3() extends MyClass
 case object MyClass4 extends MyClass
 
@@ -27,8 +31,8 @@ object GenTest {
         .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field)(
           uglyString(100)
         )
-        .specify(_.when[MyClass1].m.when[MyClass2].lst)(const(Cons(3, LNil)))
-        .specify(_.when[MyClass2].lst)(const(Cons(4, LNil)))
+        .specify(_.when[MyClass1].m.when[MyClass2].lst)(Cons(3, LNil))
+        .specify(_.when[MyClass2].lst)(Cons(4, LNil))
         .random
 
     println(mc())
@@ -41,7 +45,7 @@ object GenTest {
 
     println(
       Gen[List[String]]
-        .specify(_.when[::[String]].head)(const("wefwefef"))
+        .specify(_.when[::[String]].head)("wefwefef")
         .random()
     )
 
@@ -54,8 +58,8 @@ object GenTest {
     )
 
     val keklol = Gen[Lst[String]]
-      .specify(_.when[Cons[String]].head)(const("kek"))
-      .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(const("lol"))
+      .specify(_.when[Cons[String]].head)("kek")
+      .specify(_.when[Cons[String]].tail.when[Cons[String]].head)("lol")
       .random
 
     println(Random.many[List](10)(keklol).apply())
@@ -76,6 +80,15 @@ object GenTest {
       } yield a).apply()
     }
     println(Random.many[List](10)(f).apply().mkString(", "))
+
+    val t: Random[List[MyClass]] = Random.many[List](100) {
+      Random.oneOf2(
+        Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random,
+        Gen[MyClass3].random
+      )
+    }
+
+    println(t())
 
   }
 

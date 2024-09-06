@@ -8,9 +8,6 @@ final class Gen[A] private {
   @compileTimeOnly("Illegal reference to dev.aliakovl.gin.Gen.specify")
   def specify[P, P1 <: P](selector: A => P)(random: Random[P1]): Gen[A] = ???
 
-  @compileTimeOnly("Illegal reference to dev.aliakovl.gin.Gen.specify")
-  def oneOf[B, C]: Gen[A] = ???
-
   def random: Random[A] = macro GenMacro.randomImpl[A]
 }
 
