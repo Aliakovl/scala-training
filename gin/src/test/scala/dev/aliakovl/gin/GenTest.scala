@@ -65,7 +65,7 @@ object GenTest {
     println(Random.many[List](10)(keklol).apply())
 
     val f: Random[Lst[String]] = Gen[Lst[String]]
-      .specify(_.when[Cons[String]].head)(Gen[String].random.map(_.toUpperCase))
+      .specify(_.when[Cons[String]].head)(random[String].map(_.toUpperCase))
       .specify(_.when[Cons[String]].tail)(random[Lst[String]])
       .random
 

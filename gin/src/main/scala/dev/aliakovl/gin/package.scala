@@ -9,5 +9,5 @@ package object gin {
     def when[B <: A]: B = ???
   }
 
-  implicit def constRandom[A](value: => A): Random[A] = Random.const(value)
+  implicit def constRandom[A](value: A): Random[A] = Random.const(value)
 }
