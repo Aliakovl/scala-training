@@ -9,7 +9,7 @@ final class Gen[A] private {
   def specify[P](selector: A => P)(random: Random[P]): Gen[A] = ???
 
   @compileTimeOnly("Illegal reference to dev.aliakovl.gin.Gen.specifyConst")
-  def specifyConst[P](selector: A => P)(random: P): Gen[A] = ???
+  def specifyConst[P](selector: A => P)(const: P): Gen[A] = ???
 
   def random: Random[A] = macro GenMacro.randomImpl[A]
 }
