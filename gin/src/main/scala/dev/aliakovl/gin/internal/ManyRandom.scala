@@ -19,7 +19,7 @@ object ManyRandom {
     def apply[A](ra: Random[A])(implicit
         f: Factory[A, C[A]]
     ): Random[C[A]] = Random {
-      f.fromSpecific(Iterable.fill(size)(ra.get()))
+      f.fromSpecific(Iterable.fill(size)(ra.apply()))
     }
 
     def make[A](implicit
@@ -33,7 +33,7 @@ object ManyRandom {
     def apply[A](ra: Random[A])(implicit
         f: Factory[A, C[A]]
     ): Random[C[A]] = Random {
-      f.fromSpecific(Iterable.fill(size)(ra.get()))
+      f.fromSpecific(Iterable.fill(size)(ra.apply()))
     }
 
     def make[A](implicit
@@ -49,8 +49,8 @@ object ManyRandom {
     ): Random[M[K, V]] = Random {
       f.fromSpecific(
         Iterable
-          .fill(size)(rk.get())
-          .zip(Iterable.fill(size)(rv.get()))
+          .fill(size)(rk.apply())
+          .zip(Iterable.fill(size)(rv.apply()))
       )
     }
 

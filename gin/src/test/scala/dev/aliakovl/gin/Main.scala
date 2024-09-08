@@ -13,25 +13,25 @@ object Main {
   case class One() extends SubClass
 
   def main(args: Array[String]): Unit = {
-    println(random[Map[String, List[Option[MyClass]]]].get())
-    println(many[List](3)(random[String]).get())
-    println(many2[Map](3)(random[String], random[Int]).get())
-    println(many2[Map](3).make[String, Int].get())
-    println(random[Either[String, Int]].get())
+    println(random[Map[String, List[Option[MyClass]]]].apply())
+    println(many[List](3)(random[String]).apply())
+    println(many2[Map](3)(random[String], random[Int]).apply())
+    println(many2[Map](3).make[String, Int].apply())
+    println(random[Either[String, Int]].apply())
     val a: Random[MyClass] = oneOf2[MyClass2, MyClass1].make
-    println(many[List](10)(a).get())
+    println(many[List](10)(a).apply())
     val b: List[MyClass] = many[List](4000)(
       oneOf4[MyClass1, MyClass2, MyClass3, SubClass].make
-    ).get()
+    ).apply()
     println(b.count(_.isInstanceOf[MyClass1]))
     println(b.count(_.isInstanceOf[MyClass2]))
     println(b.count(_.isInstanceOf[MyClass3]))
     println(b.count(_.isInstanceOf[One]))
-    println(many[List](10).make[Int].get())
+    println(many[List](10).make[Int].apply())
 
-    println(uglyString(10).get())
-    println(string(10).get())
-    println(alphanumeric(10).get())
-    println(many[List](10)(oneOf(3, 4, 5, 7)).get())
+    println(uglyString(10)())
+    println(string(10).apply())
+    println(alphanumeric(10).apply())
+    println(many[List](10)(oneOf(3, 4, 5, 7)).apply())
   }
 }

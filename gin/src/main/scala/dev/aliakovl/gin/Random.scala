@@ -5,12 +5,19 @@ import dev.aliakovl.gin.internal._
 import scala.language.implicitConversions
 import scala.util.{Random => ScalaRandom}
 
-final class Random[A](val get: () => A) extends AnyVal {
-  def map[B](f: A => B): Random[B] = Random(f(get()))
+trait Random[A] extends (() => A) {
+  override def apply(): A
 
-  def flatMap[B](f: A => Random[B]): Random[B] = Random(f(get()).get())
+  def map[B](f: A => B): Random[B] = Random(f(apply()))
 
-  def product[B](fb: Random[B]): Random[(A, B)] = Random((get(), fb.get()))
+  def flatMap[B](f: A => Random[B]): Random[B] = Random(f(apply()).apply())
+
+  def product[B](fb: Random[B]): Random[(A, B)] = Random((apply(), fb.apply()))
+
+  def withFilter(p: A => Boolean): Random[Option[A]] = {
+    val t = apply()
+    Random(Option.when(p(t))(t))
+  }
 
   def widen[T >: A]: Random[T] = this.asInstanceOf[Random[T]]
 }
@@ -21,7 +28,7 @@ object Random
     with ManyRandom
     with RandomDerivation {
 
-  def apply[A](eval: => A): Random[A] = new Random[A](() => eval)
+  def apply[A](eval: => A): Random[A] = () => eval
 
   def random[A](implicit inst: Random[A]): Random[A] = inst
 
@@ -43,4 +50,6 @@ object Random
   ): Random[E#Value] = Random {
     en(ScalaRandom.nextInt(en.maxId))
   }
+
+  implicit def widen[A, B >: A](ra: Random[A]): Random[B] = ra.widen[B]
 }
