@@ -90,10 +90,10 @@ object GenTest {
 
     println(t())
 
-    val tt: Random[MyClass] = Gen.oneOf[MyClass](
-      Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random.widen[MyClass],
-      Gen[MyClass3].random.widen[MyClass]
-    )
+    val t1: Random[MyClass1] =
+      Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random
+    val t2: Random[MyClass3] = Gen[MyClass3].random
+    val tt: Random[MyClass] = Gen.oneOf[MyClass](t1, t2)
 
     println(tt.apply())
 

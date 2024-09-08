@@ -12,17 +12,15 @@ class GenMacro(val c: blackbox.Context) {
 
   private var resultType: c.Type = null
 
-  def oneOfImpl[A: c.WeakTypeTag](values: c.Expr[Random[A]]*): c.Expr[Random[A]] = {
+  def oneOfImpl[A: c.WeakTypeTag](values: c.Expr[Random[_]]*): c.Expr[Random[A]] = {
     val size = values.size
 
-    val r = q"_root_.scala.util.Random.nextInt($size) match { case ..${values.zipWithIndex.map {
-      case expr -> index         => cq"$index => ${callApply(c.untypecheck(expr.tree.duplicate))}"
-    }} }"
-
-    c.info(c.enclosingPosition, show(r), true)
-
     c.Expr[Random[A]] {
-      toRandom(r)
+      toRandom {
+        q"_root_.scala.util.Random.nextInt($size) match { case ..${values.zipWithIndex.map { case expr -> index =>
+            cq"$index => ${callApply(q"${c.untypecheck(expr.tree.duplicate)}.widen[${weakTypeOf[A]}]")}"
+          }} }"
+      }
     }
   }
 
@@ -95,14 +93,6 @@ class GenMacro(val c: blackbox.Context) {
     }
 
     q"{..$res; ${variables(resultType)}}"
-  }
-
-  def isConstantType(tpe: c.Type): Boolean = {
-    tpe match {
-      case ConstantType(_) => true
-      case SingleType(_, _) => true
-      case _ => false
-    }
   }
 
   def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): Map[c.Type, Value] = {
