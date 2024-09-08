@@ -216,15 +216,22 @@ class GenMacro(val c: blackbox.Context) {
   case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
   case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
 
-  case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Tree)])
+  case class GenTree(genClass: ClassSymbol, specs: List[(List[Optic], Spec)])
+
+
+  sealed trait Spec
+  case class RandomSpec(tree: c.Tree) extends Spec
+  case class ConstSpec(tree: c.Tree) extends Spec
 
   def disassembleTree(tree: c.Tree): Option[GenTree] = {
     Option.when(resultType.typeSymbol.isClass) {
       val genClass = resultType.typeSymbol.asClass
-      val specs: List[(List[Optic], c.Tree)] = List
+      val specs: List[(List[Optic], Spec)] = List
         .unfold(tree) {
           case q"$other.specify[..$_](($_) => $selector)($random)" =>
-            Some((disassembleSelector(selector).reverse, random), other)
+            Some((disassembleSelector(selector).reverse, RandomSpec(random)), other)
+          case q"$other.specifyConst[..$_](($_) => $selector)($const)" =>
+            Some((disassembleSelector(selector).reverse, ConstSpec(const)), other)
           case q"${Ident(TermName("Gen"))}.apply[$_]" => None
         }
         .reverse
@@ -249,7 +256,7 @@ class GenMacro(val c: blackbox.Context) {
   ) extends OpticsMerge
   case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge])
       extends OpticsMerge
-  case class ApplyOptic(tree: c.Tree) extends OpticsMerge
+  case class ApplyOptic(tree: Spec) extends OpticsMerge
   case class ONil(tree: c.TermName) extends OpticsMerge
 
   def mergeOptics[A: c.WeakTypeTag](genTree: GenTree): Option[OpticsMerge] = {
@@ -258,7 +265,7 @@ class GenMacro(val c: blackbox.Context) {
     def help(
         classSymbol: ClassSymbol,
         selector: List[Optic],
-        tree: c.Tree
+        tree: Spec
     ): OpticsMerge = {
       selector match {
         case Prism(_, to) :: tail =>
@@ -360,11 +367,13 @@ class GenMacro(val c: blackbox.Context) {
       case CoproductMerge(subclasses) =>
         val size = subclasses.size
         q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.values.zipWithIndex.map {
-            case ApplyOptic(tree) -> index => cq"$index => ${callApply(tree)}"
+            case ApplyOptic(RandomSpec(tree)) -> index => cq"$index => ${callApply(tree)}"
+            case ApplyOptic(ConstSpec(tree)) -> index => cq"$index => $tree"
             case ONil(tree) -> index => cq"$index => ${callApply(q"$tree")}"
             case om -> index         => cq"$index => ${mkTree(om)}"
           }} }"
-      case ApplyOptic(tree) => callApply(tree)
+      case ApplyOptic(RandomSpec(tree)) => callApply(tree)
+      case ApplyOptic(ConstSpec(tree)) => tree
       case ONil(tree)       => callApply(q"$tree")
     }
   }

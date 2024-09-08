@@ -8,6 +8,4 @@ package object gin {
     @compileTimeOnly("when can only be used inside specify")
     def when[B <: A]: B = ???
   }
-
-  implicit def constRandom[A](value: A): Random[A] = Random.const(value)
 }

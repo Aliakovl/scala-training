@@ -27,8 +27,8 @@ object GenTest {
         .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field)(
           uglyString(100)
         )
-        .specify(_.when[MyClass1].m.when[MyClass2].lst)(Cons(3, LNil))
-        .specify(_.when[MyClass2].lst)(Cons(4, LNil))
+        .specifyConst(_.when[MyClass1].m.when[MyClass2].lst)(Cons(3, LNil))
+        .specifyConst(_.when[MyClass2].lst)(Cons(4, LNil))
         .random
 
     println(mc())
@@ -41,7 +41,7 @@ object GenTest {
 
     println(
       Gen[List[String]]
-        .specify(_.when[::[String]].head)("wefwefef")
+        .specifyConst(_.when[::[String]].head)("wefwefef")
         .random()
     )
 
@@ -54,8 +54,8 @@ object GenTest {
     )
 
     val keklol = Gen[Lst[String]]
-      .specify(_.when[Cons[String]].head)("kek")
-      .specify(_.when[Cons[String]].tail.when[Cons[String]].head)("lol")
+      .specifyConst(_.when[Cons[String]].head)("kek")
+      .specifyConst(_.when[Cons[String]].tail.when[Cons[String]].head)("lol")
       .random
 
     println(Random.many[List](10)(keklol).apply())
@@ -78,7 +78,7 @@ object GenTest {
     println(Random.many[List](10)(f).apply().mkString(", "))
 
     val tt: Random[MyClass] = Random.oneOfRandom(
-      Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random,
+      Gen[MyClass1].specifyConst(_.m.when[MyClass2].mc2field)("wef").random,
       Gen[MyClass3].random
     )
 
@@ -96,6 +96,8 @@ object GenTest {
     val cr: Random[MyClass] = Random.oneOf[MyClass1, MyClass2, MyClass3].make
 
     println(cr())
+
+    println(Random.many[List](10)(Random.oneOf[String, Int].make).apply())
 
   }
 
