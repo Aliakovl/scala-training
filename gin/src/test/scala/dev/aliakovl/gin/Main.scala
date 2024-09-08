@@ -18,10 +18,10 @@ object Main {
     println(many2[Map](3)(random[String], random[Int]).apply())
     println(many2[Map](3).make[String, Int].apply())
     println(random[Either[String, Int]].apply())
-    val a: Random[MyClass] = oneOf2[MyClass2, MyClass1].make
+    val a: Random[MyClass] = Random.oneOf[MyClass2, MyClass1].make
     println(many[List](10)(a).apply())
     val b: List[MyClass] = many[List](4000)(
-      oneOf4[MyClass1, MyClass2, MyClass3, SubClass].make
+      Random.oneOf[MyClass1, MyClass2, MyClass3, SubClass].make
     ).apply()
     println(b.count(_.isInstanceOf[MyClass1]))
     println(b.count(_.isInstanceOf[MyClass2]))

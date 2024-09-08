@@ -8,11 +8,7 @@ case class Cons[B](head: B, tail: Lst[B]) extends Lst[B]
 
 sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
-case class MyClass2(
-    lst: Lst[Int],
-    mc2field: String = "lol",
-    other: Lst[Long] = LNil
-) extends MyClass
+case class MyClass2(lst: Lst[Int], mc2field: String = "lol", other: Lst[Long] = LNil) extends MyClass
 case class MyClass3(t: 2) extends MyClass
 case object MyClass4 extends MyClass
 
@@ -104,9 +100,9 @@ object GenTest {
 
     println(random[y.type].apply())
 
-    println(Random.many[List](10)(Random.oneOf2[2, 3].make).apply())
+    println(Random.many[List](10)(Random.oneOf[2, 3].make).apply())
 
-    val cr: Random[MyClass] = Random.oneOf3[MyClass1, MyClass2, MyClass3].make
+    val cr: Random[MyClass] = Random.oneOf[MyClass1, MyClass2, MyClass3].make
 
     println(cr())
 
