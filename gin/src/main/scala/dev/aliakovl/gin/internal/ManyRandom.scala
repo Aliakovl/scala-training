@@ -28,20 +28,6 @@ object ManyRandom {
     ): Random[C[A]] = apply(ra)
   }
 
-  final class ApplyManyArray[C[E] <: Array[E]](private val size: Int)
-      extends AnyVal {
-    def apply[A](ra: Random[A])(implicit
-        f: Factory[A, C[A]]
-    ): Random[C[A]] = Random {
-      f.fromSpecific(Iterable.fill(size)(ra.apply()))
-    }
-
-    def make[A](implicit
-        ra: Random[A],
-        f: Factory[A, C[A]]
-    ): Random[C[A]] = apply(ra)
-  }
-
   final class ApplyMany2[M[K, V] <: Iterable[(K, V)]](private val size: Int)
       extends AnyVal {
     def apply[K, V](rk: Random[K], rv: Random[V])(implicit
