@@ -9,7 +9,6 @@ import scala.collection.{Factory, Iterable}
 import scala.util.{Random => ScalaRandom}
 
 trait RandomInstances {
-  implicit val unitRandom: Random[Unit] = const(())
   implicit val uuidRandom: Random[UUID] = Random(UUID.randomUUID())
   implicit val stringRandom: Random[String] = alphanumeric(10)
   implicit val charRandom: Random[Char] = Random(ScalaRandom.nextPrintableChar())

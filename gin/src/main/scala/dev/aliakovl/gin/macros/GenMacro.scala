@@ -19,8 +19,6 @@ class GenMacro(val c: blackbox.Context) {
   def materializeRandom[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
     resultType = weakTypeOf[A]
 
-    c.info(c.enclosingPosition, show(resultType), force = true)
-
     variables.getOrElseUpdate(
       resultType,
       c.freshName(resultType.typeSymbol.name).toTermName
@@ -63,11 +61,11 @@ class GenMacro(val c: blackbox.Context) {
   def mkBlock[A: c.WeakTypeTag](values: Map[c.Type, Value]): c.Tree = {
     val res = values.map {
       case tp -> Implicitly(rType) =>
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = implicitly[$rType]"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = _root_.scala.Predef.implicitly[$rType]"
       case tp -> Refer(value) =>
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${c.untypecheck(value.duplicate)}"
       case tp -> CaseObject =>
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${toRandom(q"valueOf[$tp]")}"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${toConst(q"_root_.scala.Predef.valueOf[$tp]")}"
       case tp -> CaseClass(fields) =>
         val value = toRandom {
           q"${constructor(tp.typeSymbol.asClass)}( ..${fields.map { case field -> name =>
@@ -121,7 +119,7 @@ class GenMacro(val c: blackbox.Context) {
           }
           subclass -> name
         }.toMap)
-      } else if (tp.typeSymbol.isModuleClass || isConstantType(tp)) {
+      } else if (c.inferImplicitValue(valueOfType(tp), withMacrosDisabled = true).nonEmpty) {
         CaseObject
       } else if (
         tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
@@ -162,6 +160,10 @@ class GenMacro(val c: blackbox.Context) {
 
   def toRandom(tree: c.Tree): c.Tree = {
     q"_root_.dev.aliakovl.gin.Random($tree)"
+  }
+
+  def toConst(tree: c.Tree): c.Tree = {
+    q"_root_.dev.aliakovl.gin.Random.const($tree)"
   }
 
   def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
@@ -383,6 +385,9 @@ class GenMacro(val c: blackbox.Context) {
 
   def randomType(symbolType: c.Type): c.Type =
     appliedType(typeOf[Random[_]].typeConstructor, symbolType)
+
+  def valueOfType(symbolType: c.Type): c.Type =
+    appliedType(typeOf[ValueOf[_]].typeConstructor, symbolType)
 
   def constructor(classSymbol: ClassSymbol): c.Tree =
     Select(New(Ident(classSymbol)), termNames.CONSTRUCTOR)
