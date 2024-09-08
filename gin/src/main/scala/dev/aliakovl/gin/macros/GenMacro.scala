@@ -12,13 +12,13 @@ class GenMacro(val c: blackbox.Context) {
 
   private var resultType: c.Type = null
 
-  def oneOfImpl[A: c.WeakTypeTag](values: c.Expr[Random[_]]*): c.Expr[Random[A]] = {
+  def oneOfImpl[A: c.WeakTypeTag](values: c.Expr[Random[A]]*): c.Expr[Random[A]] = {
     val size = values.size
 
     c.Expr[Random[A]] {
       toRandom {
         q"_root_.scala.util.Random.nextInt($size) match { case ..${values.zipWithIndex.map { case expr -> index =>
-            cq"$index => ${callApply(q"${c.untypecheck(expr.tree.duplicate)}.widen[${weakTypeOf[A]}]")}"
+            cq"$index => ${callApply(q"${c.untypecheck(expr.tree.duplicate)}")}"
           }} }"
       }
     }

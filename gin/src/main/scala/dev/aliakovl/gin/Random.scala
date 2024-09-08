@@ -50,4 +50,6 @@ object Random
   ): Random[E#Value] = Random {
     en(ScalaRandom.nextInt(en.maxId))
   }
+
+  implicit def widen[A, B >: A](ra: Random[A]): Random[B] = ra.widen[B]
 }

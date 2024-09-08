@@ -95,11 +95,6 @@ object OneOfRandom {
   final class ApplyOneOf2[A, B](private val dummy: Boolean = true)
       extends AnyVal {
 
-    def apply[W, AA >: A <: W, BB >: B <: W](
-        ra: Random[AA],
-        rb: Random[BB]
-    ): Random[W] = oneOfRandomImpl(ra.widen[W], rb.widen[W])
-
     def make[W, AA >: A <: W, BB >: B <: W](implicit
         ra: Random[AA],
         rb: Random[BB]
