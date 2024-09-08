@@ -77,15 +77,6 @@ object GenTest {
     }
     println(Random.many[List](10)(f).apply().mkString(", "))
 
-    val t: Random[List[MyClass]] = Random.many[List](100) {
-      Gen.oneOf(
-        Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random.widen[MyClass],
-        Gen[MyClass3].random.widen[MyClass]
-      )
-    }
-
-    println(t())
-
     val tt: Random[MyClass] = Random.oneOfRandom(
       Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random,
       Gen[MyClass3].random
