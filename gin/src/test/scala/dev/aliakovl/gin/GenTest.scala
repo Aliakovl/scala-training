@@ -90,10 +90,12 @@ object GenTest {
 
     println(t())
 
-//    val tt = Gen.oneOf(
-//      Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random,
-//      Gen[MyClass3].random
-//    )
+    val tt: Random[MyClass] = Gen.oneOf[MyClass](
+      Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random.widen[MyClass],
+      Gen[MyClass3].random.widen[MyClass]
+    )
+
+    println(tt.apply())
 
     val y: (Int, MyClass4.type) = (4, MyClass4)
 
@@ -101,6 +103,8 @@ object GenTest {
     println(Random.many[List](10)(r).apply())
 
     println(random[y.type].apply())
+
+    println(Random.many[List](10)(Random.oneOf2[2, 3].make).apply())
 
   }
 

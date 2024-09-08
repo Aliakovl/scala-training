@@ -12,8 +12,18 @@ class GenMacro(val c: blackbox.Context) {
 
   private var resultType: c.Type = null
 
-  def oneOfImpl[A: c.WeakTypeTag](values: c.Expr[Random[Any]]*): c.Expr[Random[A]] = {
-    c.abort(c.enclosingPosition, show(values))
+  def oneOfImpl[A: c.WeakTypeTag](values: c.Expr[Random[A]]*): c.Expr[Random[A]] = {
+    val size = values.size
+
+    val r = q"_root_.scala.util.Random.nextInt($size) match { case ..${values.zipWithIndex.map {
+      case expr -> index         => cq"$index => ${callApply(c.untypecheck(expr.tree.duplicate))}"
+    }} }"
+
+    c.info(c.enclosingPosition, show(r), true)
+
+    c.Expr[Random[A]] {
+      toRandom(r)
+    }
   }
 
   def materializeRandom[A: c.WeakTypeTag]: c.Expr[Random[A]] = {

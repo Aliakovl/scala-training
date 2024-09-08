@@ -14,5 +14,5 @@ final class Gen[A] private {
 object Gen {
   def apply[A]: Gen[A] = new Gen[A]
 
-  def oneOf[A](values: Random[Any]*): Random[A] = macro GenMacro.oneOfImpl[A]
+  def oneOf[A](values: Random[A]*): Random[A] = macro GenMacro.oneOfImpl[A]
 }
