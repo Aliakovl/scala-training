@@ -1,6 +1,6 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.Random.{oneOf, random, uglyString}
+import dev.aliakovl.gin.Random._
 
 sealed trait Lst[+A]
 case object LNil extends Lst[Nothing]
@@ -13,7 +13,7 @@ case class MyClass2(
     mc2field: String = "lol",
     other: Lst[Long] = LNil
 ) extends MyClass
-case class MyClass3() extends MyClass
+case class MyClass3(t: 2) extends MyClass
 case object MyClass4 extends MyClass
 
 sealed abstract class KJH(val message: String) extends MyClass
@@ -89,6 +89,18 @@ object GenTest {
     }
 
     println(t())
+
+//    val tt = Gen.oneOf(
+//      Gen[MyClass1].specify(_.m.when[MyClass2].mc2field)("wef").random,
+//      Gen[MyClass3].random
+//    )
+
+    val y: (Int, MyClass4.type) = (4, MyClass4)
+
+    val r = random[MyClass3]
+    println(Random.many[List](10)(r).apply())
+
+    println(random[y.type].apply())
 
   }
 

@@ -12,8 +12,14 @@ class GenMacro(val c: blackbox.Context) {
 
   private var resultType: c.Type = null
 
+  def oneOfImpl[A: c.WeakTypeTag](values: c.Expr[Random[Any]]*): c.Expr[Random[A]] = {
+    c.abort(c.enclosingPosition, show(values))
+  }
+
   def materializeRandom[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
-    resultType = subclassType(weakTypeOf[A].typeSymbol, weakTypeOf[A])
+    resultType = weakTypeOf[A]
+
+    c.info(c.enclosingPosition, show(resultType), force = true)
 
     variables.getOrElseUpdate(
       resultType,
@@ -28,7 +34,7 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   def randomImpl[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
-    resultType = subclassType(weakTypeOf[A].typeSymbol, weakTypeOf[A])
+    resultType = weakTypeOf[A]
 
     variables.getOrElseUpdate(
       resultType,
@@ -83,6 +89,14 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$res; ${variables(resultType)}}"
   }
 
+  def isConstantType(tpe: c.Type): Boolean = {
+    tpe match {
+      case ConstantType(_) => true
+      case SingleType(_, _) => true
+      case _ => false
+    }
+  }
+
   def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): Map[c.Type, Value] = {
     val values: mutable.Map[c.Type, Value] = mutable.Map.empty
 
@@ -107,7 +121,7 @@ class GenMacro(val c: blackbox.Context) {
           }
           subclass -> name
         }.toMap)
-      } else if (tp.typeSymbol.isModuleClass) {
+      } else if (tp.typeSymbol.isModuleClass || isConstantType(tp)) {
         CaseObject
       } else if (
         tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
