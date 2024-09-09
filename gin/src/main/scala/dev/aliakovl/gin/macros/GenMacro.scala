@@ -93,7 +93,7 @@ class GenMacro(val c: blackbox.Context) {
               .get(t)
               .fold {
                 val value = c.freshName(t.typeSymbol.name).toTermName
-                State.modify_2[Vals, Vars](_.updated(t, value))
+                State.modifySecond[Vals, Vars](_.updated(t, value))
                   .zip(help(t))
                   .as(value)
               }(value => State.pure[VState, c.TermName](value))
@@ -119,7 +119,7 @@ class GenMacro(val c: blackbox.Context) {
               .get(t)
               .fold {
                 val value = c.freshName(t.typeSymbol.name).toTermName
-                State.modify_2[Vals, Vars](_.updated(t, value))
+                State.modifySecond[Vals, Vars](_.updated(t, value))
                   .zip(help(t))
                   .as(value)
               }(value => State.pure[VState, c.TermName](value))
@@ -140,28 +140,26 @@ class GenMacro(val c: blackbox.Context) {
         case None =>
           for {
             value <- default(tp)
-            _ <- State.modify_1[Vals, Vars](_.updated(tp, value))
+            _ <- State.modifyFirst[Vals, Vars](_.updated(tp, value))
           } yield value
       }
     }
   }
 
   def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): VarsState[Vals] = {
-    val initVals: Map[c.Type, Value] = Map.empty[c.Type, Value]
-
     tree.fold {
       help(weakTypeOf[A]).flatMap { value =>
-        State.modify_1[Vals, Vars](_.updated(weakTypeOf[A], value))
+        State.modifyFirst[Vals, Vars](_.updated(weakTypeOf[A], value))
       }
     } { value =>
       for {
-        _ <- State.modify_1[Vals, Vars](_.updated(weakTypeOf[A], Refer(value)))
+        _ <- State.modifyFirst[Vals, Vars](_.updated(weakTypeOf[A], Refer(value)))
         vars <- State.get[VState].map(_._2)
-        _ <- State.traverse(vars.keySet.filter(_ != weakTypeOf[A]))(help)
+        _ <- State.traverse(vars.keySet - weakTypeOf[A])(help)
       } yield ()
     }
       .flatMap(_ => State.get[VState].map(_._1))
-      .modifyState(_._2)(vars => (initVals, vars))
+      .modifyState(_._2)((Map.empty, _))
   }
 
   def toRandom(tree: c.Tree): c.Tree = {
