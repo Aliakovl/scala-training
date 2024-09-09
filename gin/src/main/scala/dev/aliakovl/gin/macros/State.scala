@@ -2,7 +2,7 @@ package dev.aliakovl.gin.macros
 
 import scala.collection.BuildFrom
 
-private[macros] final class State[S, +A](val run: S => (S, A)) {
+private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
   def map[B](f: A => B): State[S, B] = State { s =>
     val (newS, a) = run(s)
     (newS, f(a))
@@ -24,24 +24,9 @@ private[macros] final class State[S, +A](val run: S => (S, A)) {
     (s2, (a, b))
   }
 
-  def *>[B](right: State[S, B]): State[S, B] = flatMap(_ => right)
-
-  def <*[B](right: State[S, B]): State[S, A] = flatMap(a => right.as(a))
-
   def modifyState[T](to: S => T)(from: T => S): State[T, A] = State { t =>
     val (s, a) = run(from(t))
     (to(s), a)
-  }
-
-  def widen[T]: State[(T, S), A] = State { case (t, s) =>
-    val (s1, a) = run(s)
-    ((t, s1), a)
-  }
-
-  def runPartially[T, S1](t: T)(implicit ev: S =:= (T, S1)): State[S1, A] = State.apply[S1, A] { s1 =>
-    val s: S = ev.flip((t, s1))
-    val (newS, a) = run(s)
-    (ev.apply(newS)._2, a)
   }
 }
 
@@ -50,11 +35,10 @@ private[macros] object State {
   def pure[S, A](a: A): State[S, A] = State(s => (s, a))
   def get[S]: State[S, S] = State(s => (s, s))
   def modify[S](f: S => S): State[S, Unit] = State(s => (f(s), ()))
-  def modify_1[S, T](f: S => S): State[(S, T), Unit] =
+  def modifyFirst[S, T](f: S => S): State[(S, T), Unit] =
     State(p => ((f(p._1), p._2), ()))
-  def modify_2[S, T](f: T => T): State[(S, T), Unit] =
+  def modifySecond[S, T](f: T => T): State[(S, T), Unit] =
     State(p => ((p._1, f(p._2)), ()))
-  def set[S](s: S): State[S, Unit] = State(_ => (s, ()))
   def traverse[S, C[+E] <: Iterable[E], A, B](ta: C[A])(
       f: A => State[S, B]
   )(implicit bf: BuildFrom[C[A], B, C[B]]): State[S, C[B]] = {
@@ -82,17 +66,6 @@ private[macros] object State {
         set <- acc
         b <- f(value)
       } yield set + b
-    }
-  }
-
-  def traverse[S, K, KK, V, VV](ta: Map[K, V])(
-      f: (K, V) => State[S, (KK, VV)]
-  ): State[S, Map[KK, VV]] = {
-    ta.foldLeft(State.pure[S, Map[KK, VV]](Map.empty)) { case (acc, value) =>
-      for {
-        map <- acc
-        b <- f.tupled(value)
-      } yield map + b
     }
   }
 }
