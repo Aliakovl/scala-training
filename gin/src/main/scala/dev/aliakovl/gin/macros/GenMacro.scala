@@ -13,13 +13,9 @@ class GenMacro(val c: blackbox.Context) {
   type VState = (Vals, Vars)
   type FullState[A] = State[VState, A]
 
-  private var resultType: c.Type = null
-
   def materializeRandom[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
-    resultType = weakTypeOf[A]
-
     val initVars: Map[c.Type, TermName] = Map(
-      resultType -> c.freshName(resultType.typeSymbol.name).toTermName
+      weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
     )
 
     c.Expr[Random[A]] {
@@ -28,10 +24,8 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   def randomImpl[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
-    resultType = weakTypeOf[A]
-
     val initVars: Map[c.Type, TermName] = Map(
-      resultType -> c.freshName(resultType.typeSymbol.name).toTermName
+      weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
     )
 
     c.Expr[Random[A]] {
@@ -78,7 +72,7 @@ class GenMacro(val c: blackbox.Context) {
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
     }
 
-    q"{..$res; ${variables(resultType)}}"
+    q"{..$res; ${variables(weakTypeOf[A])}}"
   }
 
   def default(tp: c.Type): FullState[Value] = {
@@ -156,14 +150,14 @@ class GenMacro(val c: blackbox.Context) {
     val initVals: Map[c.Type, Value] = Map.empty[c.Type, Value]
 
     tree.fold {
-      help(resultType).flatMap { value =>
-        State.modify_1[Vals, Vars](_.updated(resultType, value))
+      help(weakTypeOf[A]).flatMap { value =>
+        State.modify_1[Vals, Vars](_.updated(weakTypeOf[A], value))
       }
     } { value =>
       for {
-        _ <- State.modify_1[Vals, Vars](_.updated(resultType, Refer(value)))
+        _ <- State.modify_1[Vals, Vars](_.updated(weakTypeOf[A], Refer(value)))
         vars <- State.get[VState].map(_._2)
-        _ <- State.traverse(vars.keySet.filter(_ != resultType))(help)
+        _ <- State.traverse(vars.keySet.filter(_ != weakTypeOf[A]))(help)
       } yield ()
     }
       .flatMap(_ => State.get[VState].map(_._1))
@@ -247,9 +241,9 @@ class GenMacro(val c: blackbox.Context) {
   case class RandomSpec(tree: c.Tree) extends Spec
   case class ConstSpec(tree: c.Tree) extends Spec
 
-  def disassembleTree(tree: c.Tree): Option[GenTree] = {
-    Option.when(resultType.typeSymbol.isClass) {
-      val genClass = resultType.typeSymbol.asClass
+  def disassembleTree[A: c.WeakTypeTag](tree: c.Tree): Option[GenTree] = {
+    Option.when(weakTypeOf[A].typeSymbol.isClass) {
+      val genClass = weakTypeOf[A].typeSymbol.asClass
       val specs: List[(List[Optic], Spec)] = List
         .unfold(tree) {
           case q"$other.specify[$_](($_) => $selector)($random)" =>
