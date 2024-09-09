@@ -49,9 +49,9 @@ private[macros] object State {
       var state = initState
       while (iterator.hasNext) {
         val v = iterator.next()
-        val res: (S, B) = f(v).run(state)
-        state = res._1
-        builder += res._2
+        val (s, b) = f(v).run(state)
+        state = s
+        builder += b
       }
 
       (state, builder.result())
