@@ -147,8 +147,6 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): VarsState[Vals] = {
-    val initVals: Map[c.Type, Value] = Map.empty[c.Type, Value]
-
     tree.fold {
       help(weakTypeOf[A]).flatMap { value =>
         State.modifyFirst[Vals, Vars](_.updated(weakTypeOf[A], value))
@@ -161,7 +159,7 @@ class GenMacro(val c: blackbox.Context) {
       } yield ()
     }
       .flatMap(_ => State.get[VState].map(_._1))
-      .modifyState(_._2)(vars => (initVals, vars))
+      .modifyState(_._2)((Map.empty, _))
   }
 
   def toRandom(tree: c.Tree): c.Tree = {
