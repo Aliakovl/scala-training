@@ -2,48 +2,46 @@ package dev.aliakovl.gin.macros
 
 import dev.aliakovl.gin.Random
 
-import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 class GenMacro(val c: blackbox.Context) {
   import c.universe._
 
-  private val variables: mutable.Map[c.Type, c.TermName] = mutable.Map()
+  type Vars = Map[c.Type, c.TermName]
+  type Vals = Map[c.Type, Value]
+  type VarsState[A] = State[Vars, A]
+  type VState = (Vals, Vars)
+  type FullState[A] = State[VState, A]
 
   private var resultType: c.Type = null
 
   def materializeRandom[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
     resultType = weakTypeOf[A]
 
-    variables.getOrElseUpdate(
-      resultType,
-      c.freshName(resultType.typeSymbol.name).toTermName
+    val initVars: Map[c.Type, TermName] = Map(
+      resultType -> c.freshName(resultType.typeSymbol.name).toTermName
     )
 
     c.Expr[Random[A]] {
-      mkBlock[A](
-        initValues[A](None)
-      )
+      (mkBlock[A] _).tupled(initValues[A](None).run(initVars))
     }
   }
 
   def randomImpl[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
     resultType = weakTypeOf[A]
 
-    variables.getOrElseUpdate(
-      resultType,
-      c.freshName(resultType.typeSymbol.name).toTermName
+    val initVars: Map[c.Type, TermName] = Map(
+      resultType -> c.freshName(resultType.typeSymbol.name).toTermName
     )
 
     c.Expr[Random[A]] {
-      mkBlock[A](
-        initValues[A](
-          disassembleTree(c.prefix.tree)
-            .flatMap(mergeOptics[A])
-            .map(mkTree)
-            .map(toRandom)
-        )
-      )
+      (mkBlock[A] _).tupled {
+        disassembleTree(c.prefix.tree).fold(State.pure[Vars, Option[c.Tree]](None)) { genTree =>
+          mergeOptics(genTree).map { om =>
+            om.map(mkTree).map(toRandom)
+          }
+        }.flatMap(initValues[A]).run(initVars)
+      }
     }
   }
 
@@ -54,7 +52,7 @@ class GenMacro(val c: blackbox.Context) {
   case object CaseObject extends Value
   case class SealedTrait(subclasses: Map[c.Symbol, c.TermName]) extends Value
 
-  def mkBlock[A: c.WeakTypeTag](values: Map[c.Type, Value]): c.Tree = {
+  def mkBlock[A: c.WeakTypeTag](variables: Vars, values: Vals): c.Tree = {
     val res = values.map {
       case tp -> Implicitly(rType) =>
         q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = _root_.scala.Predef.implicitly[$rType]"
@@ -83,67 +81,93 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$res; ${variables(resultType)}}"
   }
 
-  def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): Map[c.Type, Value] = {
-    val values: mutable.Map[c.Type, Value] = mutable.Map.empty
+  def default(tp: c.Type): FullState[Value] = {
+    val rt = randomType(tp)
+    val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
+    if (implicitValue.nonEmpty) {
+      State.pure(Refer(implicitValue))
+    } else if (
+      tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
+    ) {
+      val subclasses = subclassesOf(tp.typeSymbol.asClass)
+      State
+        .traverse(subclasses) { subclass =>
+          for {
+            vars <- State.get[VState].map(_._2)
+            t = subclassType(subclass, tp)
+            name <- vars
+              .get(t)
+              .fold {
+                val value = c.freshName(t.typeSymbol.name).toTermName
+                State.modify_2[Vals, Vars](_.updated(t, value))
+                  .zip(help(t))
+                  .as(value)
+              }(value => State.pure[VState, c.TermName](value))
+          } yield subclass -> name
+        }
+        .map(_.toMap)
+        .map(SealedTrait)
+    } else if (
+      c.inferImplicitValue(valueOfType(tp), withMacrosDisabled = true).nonEmpty
+    ) {
+      State.pure(CaseObject)
+    } else if (
+      tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
+    ) {
+      val params =
+        paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass, tp)).flatten
+      State
+        .traverse(params) { param =>
+          for {
+            vars <- State.get[VState].map(_._2)
+            t = param.typeSignatureIn(tp)
+            name <- vars
+              .get(t)
+              .fold {
+                val value = c.freshName(t.typeSymbol.name).toTermName
+                State.modify_2[Vals, Vars](_.updated(t, value))
+                  .zip(help(t))
+                  .as(value)
+              }(value => State.pure[VState, c.TermName](value))
+          } yield param -> name
+        }
+        .map(_.toMap)
+        .map(CaseClass)
+    } else {
+      State.pure(Implicitly(tp))
+    }
 
-    def default(tp: c.Type): Value = {
-      val rt = randomType(tp)
-      val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
-      if (implicitValue.nonEmpty) {
-        Refer(implicitValue)
-      } else if (
-        tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
-      ) {
-        val subclasses = subclassesOf(tp.typeSymbol.asClass)
-        SealedTrait(subclasses = subclasses.map { subclass =>
-          val t = subclassType(subclass, tp)
-          val name = variables.get(t) match {
-            case Some(value) => value
-            case None =>
-              val value = c.freshName(t.typeSymbol.name).toTermName
-              variables.addOne(t -> value)
-              help(t)
-              value
-          }
-          subclass -> name
-        }.toMap)
-      } else if (c.inferImplicitValue(valueOfType(tp), withMacrosDisabled = true).nonEmpty) {
-        CaseObject
-      } else if (
-        tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
-      ) {
-        val params =
-          paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass, tp)).flatten
-        CaseClass(fields = params.map { param =>
-          val t = param.typeSignatureIn(tp)
-          val name = variables.get(t) match {
-            case Some(value) => value
-            case None =>
-              val value = c.freshName(t.typeSymbol.name).toTermName
-              variables.addOne(t -> value)
-              help(t)
-              value
-          }
-          param -> name
-        }.toMap)
-      } else {
-        Implicitly(tp)
+  }
+
+  def help(tp: c.Type): FullState[Value] = {
+    State.get[VState].map(_._1).flatMap { values =>
+      values.get(tp) match {
+        case Some(value) => State.pure(value)
+        case None =>
+          for {
+            value <- default(tp)
+            _ <- State.modify_1[Vals, Vars](_.updated(tp, value))
+          } yield value
       }
     }
+  }
 
-    def help(tp: c.Type): Value = {
-      values.getOrElseUpdate(tp, default(tp))
-    }
+  def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): VarsState[Vals] = {
+    val initVals: Map[c.Type, Value] = Map.empty[c.Type, Value]
 
-    tree match {
-      case Some(value) =>
-        values.addOne(resultType -> Refer(value))
-        variables.keys.filter(_ != resultType).foreach { t =>
-          help(t)
-        }
-      case None => values.addOne(resultType -> help(resultType))
+    tree.fold {
+      help(resultType).flatMap { value =>
+        State.modify_1[Vals, Vars](_.updated(resultType, value))
+      }
+    } { value =>
+      for {
+        _ <- State.modify_1[Vals, Vars](_.updated(resultType, Refer(value)))
+        vars <- State.get[VState].map(_._2)
+        _ <- State.traverse(vars.keySet.filter(_ != resultType))(help)
+      } yield ()
     }
-    values.toMap
+      .flatMap(_ => State.get[VState].map(_._1))
+      .modifyState(_._2)(vars => (initVals, vars))
   }
 
   def toRandom(tree: c.Tree): c.Tree = {
@@ -259,63 +283,62 @@ class GenMacro(val c: blackbox.Context) {
   case class ApplyOptic(tree: Spec) extends OpticsMerge
   case class ONil(tree: c.TermName) extends OpticsMerge
 
-  def mergeOptics[A: c.WeakTypeTag](genTree: GenTree): Option[OpticsMerge] = {
-    val GenTree(genClass, specs) = genTree
-
-    def help(
-        classSymbol: ClassSymbol,
-        selector: List[Optic],
-        tree: Spec
-    ): OpticsMerge = {
-      selector match {
-        case Prism(_, to) :: tail =>
-          val subs = subclassesOf(to.asClass) + to
-          CoproductMerge(subclasses = subclassesOf(classSymbol).map {
-            subclass =>
-              if (subs.contains(subclass)) {
-                subclass -> help(to.asClass, tail, tree)
-              } else {
-                val t = subclassType(subclass, classSymbol.toType)
-                val name = variables.getOrElseUpdate(
-                  t,
-                  c.freshName(t.typeSymbol.name).toTermName
-                )
-                subclass -> ONil(name)
-              }
-          }.toMap)
-        case Lens(from, to, tpe) :: tail =>
-          ProductMerge(
-            classSymbol,
-            fields = paramListsOf(
-              from,
-              publicConstructor(classSymbol, from)
-            ).flatten.map { param =>
-              if (param.asTerm.name == to) {
-                param.name.toTermName -> help(
-                  tpe.typeSymbol.asClass,
-                  tail,
-                  tree
-                )
-              } else {
-                val t = param.typeSignatureIn(from)
-                val name = variables.getOrElseUpdate(
-                  t,
-                  c.freshName(t.typeSymbol.name).toTermName
-                )
-                param.name.toTermName -> ONil(name)
-              }
-            }.toMap
-          )
-        case Nil => ApplyOptic(tree)
-      }
+  def helpMergeOptics(
+      classSymbol: ClassSymbol,
+      selector: List[Optic],
+      tree: Spec
+  ): VarsState[OpticsMerge] = {
+    selector match {
+      case Prism(_, to) :: tail =>
+        val subs = subclassesOf(to.asClass) + to
+        State
+          .traverse(subclassesOf(classSymbol)) { subclass =>
+            if (subs.contains(subclass)) {
+              helpMergeOptics(to.asClass, tail, tree).map(om => subclass -> om)
+            } else {
+              val t = subclassType(subclass, classSymbol.toType)
+              MState
+                .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
+                .map { name =>
+                  subclass -> ONil(name)
+                }
+            }
+          }
+          .map(_.toMap)
+          .map(CoproductMerge)
+      case Lens(from, to, tpe) :: tail =>
+        val params = paramListsOf(from, publicConstructor(classSymbol, from)).flatten
+        State
+          .traverse(params) { param =>
+            if (param.asTerm.name == to) {
+              helpMergeOptics(tpe.typeSymbol.asClass, tail, tree).map(om =>
+                param.name.toTermName -> om
+              )
+            } else {
+              val t = param.typeSignatureIn(from)
+              MState
+                .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
+                .map { name =>
+                  param.name.toTermName -> ONil(name)
+                }
+            }
+          }
+          .map(_.toMap)
+          .map(ProductMerge(classSymbol, _))
+      case Nil => State.pure(ApplyOptic(tree))
     }
+  }
 
-    specs
-      .map { case (optics, tree) => help(genClass, optics, tree) }
-      .foldLeft(None: Option[OpticsMerge]) {
+  def mergeOptics(genTree: GenTree): VarsState[Option[OpticsMerge]] = {
+    val GenTree(genClass, specs) = genTree
+    State.traverse(specs) { case (optics, tree) =>
+      helpMergeOptics(genClass, optics, tree)
+    }.map { list =>
+      list.foldLeft(None: Option[OpticsMerge]) {
         case (None, om)       => Some(om)
         case (Some(lom), rom) => Some(mergeOptics(lom, rom))
       }
+    }
   }
 
   def mergeOptics(left: OpticsMerge, right: OpticsMerge): OpticsMerge = {
