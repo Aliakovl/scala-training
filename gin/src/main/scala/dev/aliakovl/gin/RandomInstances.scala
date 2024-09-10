@@ -1,7 +1,5 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.Random.{alphanumeric, const}
-
 import java.time.{Instant, LocalDate, LocalDateTime, YearMonth}
 import java.time.temporal.ChronoUnit
 import java.util.UUID
@@ -9,7 +7,7 @@ import scala.util.{Random => ScalaRandom}
 
 trait RandomInstances {
   implicit val uuidRandom: Random[UUID] = Random(UUID.randomUUID())
-  implicit val stringRandom: Random[String] = alphanumeric(10)
+  implicit val stringRandom: Random[String] = Random.alphanumeric(10)
   implicit val charRandom: Random[Char] = Random(ScalaRandom.nextPrintableChar())
   implicit val instantRandom: Random[Instant] = Random(
     Instant.now().truncatedTo(ChronoUnit.MILLIS)

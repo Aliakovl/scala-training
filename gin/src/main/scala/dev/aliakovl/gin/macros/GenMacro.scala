@@ -75,10 +75,10 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$res; ${variables(weakTypeOf[A])}}"
   }
 
-  def default(tp: c.Type): FullState[Value] = {
+  def default[A: c.WeakTypeTag](tp: c.Type): FullState[Value] = {
     val rt = randomType(tp)
     val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
-    if (implicitValue.nonEmpty) {
+    if (implicitValue.nonEmpty && tp != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
     } else if (
       tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
@@ -106,7 +106,7 @@ class GenMacro(val c: blackbox.Context) {
     ) {
       State.pure(CaseObject)
     } else if (
-      tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
+      tp.typeSymbol.isClass && !tp.typeSymbol.isAbstract && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
     ) {
       val params =
         paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass, tp)).flatten
@@ -133,13 +133,13 @@ class GenMacro(val c: blackbox.Context) {
 
   }
 
-  def help(tp: c.Type): FullState[Value] = {
+  def help[A: WeakTypeTag](tp: c.Type): FullState[Value] = {
     State.get[VState].map(_._1).flatMap { values =>
       values.get(tp) match {
         case Some(value) => State.pure(value)
         case None =>
           for {
-            value <- default(tp)
+            value <- default[A](tp)
             _ <- State.modifyFirst[Vals, Vars](_.updated(tp, value))
           } yield value
       }
