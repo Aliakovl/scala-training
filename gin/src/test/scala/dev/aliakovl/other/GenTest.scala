@@ -1,4 +1,6 @@
-package dev.aliakovl.gin
+package dev.aliakovl.other
+
+import dev.aliakovl.gin._
 
 sealed trait Lst[+A]
 case object LNil extends Lst[Nothing]
@@ -101,13 +103,21 @@ object GenTest {
 
     println(Random.random[y.type].apply())
 
-    println(Random.many[List](10)(Random.oneOf[2, 3].make).apply())
+    val rp: Random[String] = Random.oneOfRandom[String](
+      Gen["RRRRR"].random,
+      Gen["PPPPPP"].random
+    )
 
-    val cr: Random[MyClass] = Random.oneOf[MyClass1, MyClass2, MyClass3].make
+    val rppp = Random.oneOf[String].make["RRRRR", "PPPPPP"]
+
+    println(Random.many[List](10)(rp).apply())
+    println(Random.many[List](10)(rppp).apply())
+
+    val cr: Random[MyClass] = Random.oneOf[MyClass].make[MyClass1, MyClass2, MyClass3]
 
     println(cr())
 
-    println(Random.many[List](10)(Random.oneOf[String, Int].make).apply())
+    println(Random.many[List](10)(Random.oneOf[Any].make[String, Int]).apply())
 
   }
 

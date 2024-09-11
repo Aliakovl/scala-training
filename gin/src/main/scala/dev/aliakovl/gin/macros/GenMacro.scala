@@ -114,7 +114,7 @@ class GenMacro(val c: blackbox.Context) {
         .traverse(params) { param =>
           for {
             vars <- State.get[VState].map(_._2)
-            t = param.typeSignatureIn(tp)
+            t = param.infoIn(tp)
             name <- vars
               .get(t)
               .fold {
@@ -172,7 +172,7 @@ class GenMacro(val c: blackbox.Context) {
 
   def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
     val (abstractChildren, concreteChildren) =
-      parent.knownDirectSubclasses.partition(_.isAbstract)
+      parent.knownDirectSubclasses.map{s => s.info; s}.partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
       if (
@@ -210,7 +210,7 @@ class GenMacro(val c: blackbox.Context) {
       tpe: c.Type,
       method: c.Symbol
   ): List[List[c.universe.Symbol]] =
-    method.asMethod.typeSignatureIn(tpe).paramLists
+    method.asMethod.infoIn(tpe).paramLists
 
   def publicConstructor(parent: ClassSymbol, tpe: c.Type): MethodSymbol = {
     val members = parent.infoIn(tpe).members
@@ -248,7 +248,7 @@ class GenMacro(val c: blackbox.Context) {
             Some((disassembleSelector(selector).reverse, RandomSpec(random)), other)
           case q"$other.specifyConst[$_](($_) => $selector)($const)" =>
             Some((disassembleSelector(selector).reverse, ConstSpec(const)), other)
-          case q"${Ident(TermName("Gen"))}.apply[$_]" => None
+          case q"$_.apply[$_]" => None
         }
         .reverse
       GenTree(genClass, specs)
@@ -260,7 +260,7 @@ class GenMacro(val c: blackbox.Context) {
       case a @ q"$other.${field: TermName}" =>
         val t = a.tpe.substituteTypes(List(a.symbol), List(selector.tpe))
         Some(Lens(other.tpe, field, t), other)
-      case q"""${Select(Select(This(TypeName("gin")), termNames.PACKAGE), TermName("GenWhen"))}[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
+      case q"""$_[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
       case _ => None
     }
   }
@@ -307,7 +307,7 @@ class GenMacro(val c: blackbox.Context) {
                 param.name.toTermName -> om
               )
             } else {
-              val t = param.typeSignatureIn(from)
+              val t = param.infoIn(from)
               MState
                 .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
                 .map { name =>

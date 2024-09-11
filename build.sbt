@@ -144,6 +144,7 @@ lazy val reflex = (project in file("./reflex"))
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
       "com.chuusai" %% "shapeless" % "2.3.10",
+      "com.softwaremill.quicklens" %% "quicklens" % "1.9.8",
       "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
       "com.softwaremill.macwire" %% "macros" % "2.5.9" % "provided",
       "com.softwaremill.sttp.tapir" %% "tapir-core" % "1.11.2",
