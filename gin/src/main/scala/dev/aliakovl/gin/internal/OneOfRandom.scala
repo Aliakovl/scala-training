@@ -4,17 +4,23 @@ import dev.aliakovl.gin.Random
 import dev.aliakovl.gin.internal.OneOfRandom.OneOfTypePartiallyApplied
 
 trait OneOfRandom {
-  def oneOf[A](values: A*): Random[A] = OneOfRandom.oneOfRandomImpl(values.map(a => Random.const(a)): _*)
-
-  def oneOfRandom[A](values: Random[A]*): Random[A] = OneOfRandom.oneOfRandomImpl(values: _*)
+  def oneOf[A](values: A*): Random[A] = Random {
+    OneOfRandom.oneOfImpl(values)
+  }
 
   def oneOf[W]: OneOfTypePartiallyApplied[W] = new OneOfTypePartiallyApplied[W]()
+
+  def oneOfRandom[A](values: Random[A]*): Random[A] = OneOfRandom.oneOfRandomImpl(values: _*)
 }
 
 object OneOfRandom {
-  private def oneOfRandomImpl[A](values: Random[A]*): Random[A] = Random {
+  private def oneOfImpl[A](values: Seq[A]): A = {
     val index = scala.util.Random.nextInt(values.size)
-    values(index).apply()
+    values(index)
+  }
+
+  private def oneOfRandomImpl[A](values: Random[A]*): Random[A] = Random {
+    oneOfImpl(values)()
   }
 
   final class OneOfTypePartiallyApplied[W](private val dummy: Boolean = true) extends AnyVal {
