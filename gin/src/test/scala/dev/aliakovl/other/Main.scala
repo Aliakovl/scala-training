@@ -37,5 +37,7 @@ object Main {
     println(Random.string(10).apply())
     println(Random.alphanumeric(10).apply())
     println(Random.many[List](10)(Random.oneOf(3, 4, 5, 7)).apply())
+
+    println(Random.oneOfRandom(Random.apply({print("first - "); 1}), Random.apply({print("second - "); 2})).apply())
   }
 }

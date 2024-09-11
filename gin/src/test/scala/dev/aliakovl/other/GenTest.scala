@@ -24,7 +24,8 @@ object GenTest {
   implicit val mc2: Random[MyClass2] = Gen[MyClass2].specifyConst(_.mc2field)("LLLLLLL").random
   implicit val mc1: Random[MyClass1] = Gen[MyClass1].specifyConst(_.m)(H).random
 
-  implicit val wefqwef: Random[String] = Random.const("CONST")
+  implicit val str: Random[String] = Random.const("CONST")
+  implicit val int: Random[Int] = Random.oneOf(1, 2, 3)
 
   def main(args: Array[String]): Unit = {
     val a: MyClass2 = Random.random[MyClass2].apply()
