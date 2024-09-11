@@ -75,10 +75,10 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$res; ${variables(weakTypeOf[A])}}"
   }
 
-  def default(tp: c.Type): FullState[Value] = {
+  def default[A: c.WeakTypeTag](tp: c.Type): FullState[Value] = {
     val rt = randomType(tp)
     val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
-    if (implicitValue.nonEmpty) {
+    if (implicitValue.nonEmpty && tp != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
     } else if (
       tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
@@ -106,7 +106,7 @@ class GenMacro(val c: blackbox.Context) {
     ) {
       State.pure(CaseObject)
     } else if (
-      tp.typeSymbol.isClass && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
+      tp.typeSymbol.isClass && !tp.typeSymbol.isAbstract && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
     ) {
       val params =
         paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass, tp)).flatten
@@ -114,7 +114,7 @@ class GenMacro(val c: blackbox.Context) {
         .traverse(params) { param =>
           for {
             vars <- State.get[VState].map(_._2)
-            t = param.typeSignatureIn(tp)
+            t = param.infoIn(tp)
             name <- vars
               .get(t)
               .fold {
@@ -133,13 +133,13 @@ class GenMacro(val c: blackbox.Context) {
 
   }
 
-  def help(tp: c.Type): FullState[Value] = {
+  def help[A: WeakTypeTag](tp: c.Type): FullState[Value] = {
     State.get[VState].map(_._1).flatMap { values =>
       values.get(tp) match {
         case Some(value) => State.pure(value)
         case None =>
           for {
-            value <- default(tp)
+            value <- default[A](tp)
             _ <- State.modifyFirst[Vals, Vars](_.updated(tp, value))
           } yield value
       }
@@ -172,7 +172,7 @@ class GenMacro(val c: blackbox.Context) {
 
   def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
     val (abstractChildren, concreteChildren) =
-      parent.knownDirectSubclasses.partition(_.isAbstract)
+      parent.knownDirectSubclasses.map{s => s.info; s}.partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
       if (
@@ -210,7 +210,7 @@ class GenMacro(val c: blackbox.Context) {
       tpe: c.Type,
       method: c.Symbol
   ): List[List[c.universe.Symbol]] =
-    method.asMethod.typeSignatureIn(tpe).paramLists
+    method.asMethod.infoIn(tpe).paramLists
 
   def publicConstructor(parent: ClassSymbol, tpe: c.Type): MethodSymbol = {
     val members = parent.infoIn(tpe).members
@@ -248,7 +248,7 @@ class GenMacro(val c: blackbox.Context) {
             Some((disassembleSelector(selector).reverse, RandomSpec(random)), other)
           case q"$other.specifyConst[$_](($_) => $selector)($const)" =>
             Some((disassembleSelector(selector).reverse, ConstSpec(const)), other)
-          case q"${Ident(TermName("Gen"))}.apply[$_]" => None
+          case q"$_.apply[$_]" => None
         }
         .reverse
       GenTree(genClass, specs)
@@ -260,7 +260,7 @@ class GenMacro(val c: blackbox.Context) {
       case a @ q"$other.${field: TermName}" =>
         val t = a.tpe.substituteTypes(List(a.symbol), List(selector.tpe))
         Some(Lens(other.tpe, field, t), other)
-      case q"""${Select(Select(This(TypeName("gin")), termNames.PACKAGE), TermName("GenWhen"))}[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
+      case q"""$_[$from]($other).when[$to]""" => Some(Prism(from.symbol, to.symbol), other)
       case _ => None
     }
   }
@@ -289,7 +289,7 @@ class GenMacro(val c: blackbox.Context) {
               helpMergeOptics(to.asClass, tail, tree).map(om => subclass -> om)
             } else {
               val t = subclassType(subclass, classSymbol.toType)
-              MState
+              State
                 .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
                 .map { name =>
                   subclass -> ONil(name)
@@ -307,8 +307,8 @@ class GenMacro(val c: blackbox.Context) {
                 param.name.toTermName -> om
               )
             } else {
-              val t = param.typeSignatureIn(from)
-              MState
+              val t = param.infoIn(from)
+              State
                 .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
                 .map { name =>
                   param.name.toTermName -> ONil(name)

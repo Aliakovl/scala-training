@@ -73,8 +73,8 @@ lazy val tf = (project in file("./tf"))
     name := "tf",
     scalaVersion := "3.3.3",
     libraryDependencies ++= Seq(
-      "io.circe" %% "circe-core" % "0.14.5",
-      "io.circe" %% "circe-parser" % "0.14.5"
+      "io.circe" %% "circe-core" % "0.14.9",
+      "io.circe" %% "circe-parser" % "0.14.9"
     )
   )
 
@@ -83,8 +83,8 @@ lazy val management = (project in file("./management"))
     name := "management",
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
-      "dev.zio" %% "zio" % "2.0.16",
-      "dev.zio" %% "zio-streams" % "2.0.16"
+      "dev.zio" %% "zio" % "2.1.6",
+      "dev.zio" %% "zio-streams" % "2.1.6"
     )
   )
 
@@ -118,9 +118,9 @@ lazy val `shapeless-guide` = (project in file("./shapeless-guide"))
     name := "shapeless-guide",
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
-      "com.chuusai" %% "shapeless" % "2.3.10",
+      "com.chuusai" %% "shapeless" % "2.3.12",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.typelevel" %% "cats-core" % "2.10.0"
+      "org.typelevel" %% "cats-core" % "2.12.0"
     )
   )
   .dependsOn(gin)
@@ -130,7 +130,8 @@ lazy val gin = (project in file("./gin"))
     name := "gin",
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.typelevel" %% "cats-core" % "2.12.0" % Test,
     ),
     scalacOptions ++= Seq(
       "--language:experimental.macros",
@@ -143,13 +144,14 @@ lazy val reflex = (project in file("./reflex"))
     name := "reflex",
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
-      "com.chuusai" %% "shapeless" % "2.3.10",
+      "com.chuusai" %% "shapeless" % "2.3.12",
+      "com.softwaremill.quicklens" %% "quicklens" % "1.9.8",
       "com.softwaremill.magnolia1_2" %% "magnolia" % "1.1.10",
       "com.softwaremill.macwire" %% "macros" % "2.5.9" % "provided",
       "com.softwaremill.sttp.tapir" %% "tapir-core" % "1.11.2",
       "io.scalaland" %% "chimney" % "1.4.0",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.typelevel" %% "cats-core" % "2.10.0",
+      "org.typelevel" %% "cats-core" % "2.12.0",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scala-compiler" % scalaVersion.value
     )

@@ -23,7 +23,7 @@ object Random {
     createRandom(() => ('A'.toInt + scala.util.Random.nextInt(26)).toChar)
 
   implicit val booleanRandom: Random[Boolean] =
-    createRandom(() => scala.util.Random.nextBoolean)
+    createRandom(scala.util.Random.nextBoolean)
 
   implicit def genericRandom[A, R](implicit
       gen: Generic.Aux[A, R],
@@ -49,7 +49,7 @@ object Random {
       tLengthAsInt: ToInt[L]
   ): Random[H :+: T] = createRandom { () =>
     val length = 1 + tLengthAsInt()
-    val chooseH = scala.util.Random.nextDouble < (1.0 / length)
+    val chooseH = scala.util.Random.nextDouble() < (1.0 / length)
     if (chooseH) Inl(hRandom.value.get) else Inr(tRandom.get)
   }
 

@@ -23,10 +23,10 @@ trait Random[A] extends (() => A) {
 }
 
 object Random
-    extends RandomInstances
+    extends RandomDerivation
+    with RandomInstances
     with OneOfRandom
-    with ManyRandom
-    with RandomDerivation {
+    with ManyRandom {
 
   def apply[A](eval: => A): Random[A] = () => eval
 
@@ -51,5 +51,4 @@ object Random
     en(ScalaRandom.nextInt(en.maxId))
   }
 
-  implicit def widen[A, B >: A](ra: Random[A]): Random[B] = ra.widen[B]
 }

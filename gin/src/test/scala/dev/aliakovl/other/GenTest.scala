@@ -1,6 +1,6 @@
-package dev.aliakovl.gin
+package dev.aliakovl.other
 
-import dev.aliakovl.gin.Random._
+import dev.aliakovl.gin._
 
 sealed trait Lst[+A]
 case object LNil extends Lst[Nothing]
@@ -21,11 +21,23 @@ class G(val int: Int)
 
 object GenTest {
 
+  implicit val mc2: Random[MyClass2] = Gen[MyClass2].specifyConst(_.mc2field)("LLLLLLL").random
+  implicit val mc1: Random[MyClass1] = Gen[MyClass1].specifyConst(_.m)(H).random
+
+  implicit val wefqwef: Random[String] = Random.const("CONST")
+
   def main(args: Array[String]): Unit = {
+    val a: MyClass2 = Random.random[MyClass2].apply()
+    val b: MyClass2 = Gen[MyClass2].random()
+    println(a)
+    println(b)
+
+    println(Gen[List[MyClass1]].random())
+
     val mc: Random[MyClass] =
       Gen[MyClass]
         .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field)(
-          uglyString(100)
+          Random.uglyString(100)
         )
         .specifyConst(_.when[MyClass1].m.when[MyClass2].lst)(Cons(3, LNil))
         .specifyConst(_.when[MyClass2].lst)(Cons(4, LNil))
@@ -37,7 +49,7 @@ object GenTest {
 
     Gen[Unit].random()
 
-    println(Gen[G].specify(_.int)(oneOf(1, 5)).random().int)
+    println(Gen[G].specify(_.int)(Random.oneOf(1, 5)).random().int)
 
     println(
       Gen[List[String]]
@@ -48,7 +60,7 @@ object GenTest {
     println(
       Gen[Lst[String]]
         .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(
-          uglyString(10)
+          Random.uglyString(10)
         )
         .random()
     )
@@ -61,8 +73,8 @@ object GenTest {
     println(Random.many[List](10)(keklol).apply())
 
     val f: Random[Lst[String]] = Gen[Lst[String]]
-      .specify(_.when[Cons[String]].head)(random[String].map(_.toUpperCase))
-      .specify(_.when[Cons[String]].tail)(random[Lst[String]])
+      .specify(_.when[Cons[String]].head)(Random.random[String].map(_.toUpperCase))
+      .specify(_.when[Cons[String]].tail)(Random.random[Lst[String]])
       .random
 
     println(Random.many[List](10)(f).apply().mkString(", "))
@@ -86,18 +98,26 @@ object GenTest {
 
     val y: (Int, MyClass4.type) = (4, MyClass4)
 
-    val r = random[MyClass3]
+    val r = Random.random[MyClass3]
     println(Random.many[List](10)(r).apply())
 
-    println(random[y.type].apply())
+    println(Random.random[y.type].apply())
 
-    println(Random.many[List](10)(Random.oneOf[2, 3].make).apply())
+    val rp: Random[String] = Random.oneOfRandom[String](
+      Gen["RRRRR"].random,
+      Gen["PPPPPP"].random
+    )
 
-    val cr: Random[MyClass] = Random.oneOf[MyClass1, MyClass2, MyClass3].make
+    val rppp = Random.oneOf[String].make["RRRRR", "PPPPPP"]
+
+    println(Random.many[List](10)(rp).apply())
+    println(Random.many[List](10)(rppp).apply())
+
+    val cr: Random[MyClass] = Random.oneOf[MyClass].make[MyClass1, MyClass2, MyClass3]
 
     println(cr())
 
-    println(Random.many[List](10)(Random.oneOf[String, Int].make).apply())
+    println(Random.many[List](10)(Random.oneOf[Any].make[String, Int]).apply())
 
   }
 

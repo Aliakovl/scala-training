@@ -8,4 +8,6 @@ package object gin {
     @compileTimeOnly("when can only be used inside specify")
     def when[B <: A]: B = ???
   }
+
+  implicit def widen[A, B >: A](ra: Random[A]): Random[B] = ra.widen[B]
 }
