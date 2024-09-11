@@ -289,7 +289,7 @@ class GenMacro(val c: blackbox.Context) {
               helpMergeOptics(to.asClass, tail, tree).map(om => subclass -> om)
             } else {
               val t = subclassType(subclass, classSymbol.toType)
-              MState
+              State
                 .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
                 .map { name =>
                   subclass -> ONil(name)
@@ -308,7 +308,7 @@ class GenMacro(val c: blackbox.Context) {
               )
             } else {
               val t = param.infoIn(from)
-              MState
+              State
                 .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
                 .map { name =>
                   param.name.toTermName -> ONil(name)

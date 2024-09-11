@@ -4,18 +4,18 @@ import scala.collection.BuildFrom
 
 private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
   def map[B](f: A => B): State[S, B] = State { s =>
-    val (newS, a) = run(s)
-    (newS, f(a))
+    val (s1, a) = run(s)
+    (s1, f(a))
   }
 
   def flatMap[B](f: A => State[S, B]): State[S, B] = State { s =>
-    val (newS, a) = run(s)
-    f(a).run(newS)
+    val (s1, a) = run(s)
+    f(a).run(s1)
   }
 
   def as[B](b: B): State[S, B] = State { s =>
-    val (newS, _) = run(s)
-    (newS, b)
+    val (s1, _) = run(s)
+    (s1, b)
   }
 
   def zip[B](other: State[S, B]): State[S, (A, B)] = State { s =>
@@ -68,9 +68,7 @@ private[macros] object State {
       } yield set + b
     }
   }
-}
 
-private[macros] object MState {
   def getOrElseUpdate[K, V](key: K, value: => V): State[Map[K, V], V] = {
     for {
       s <- State.get[Map[K, V]]
