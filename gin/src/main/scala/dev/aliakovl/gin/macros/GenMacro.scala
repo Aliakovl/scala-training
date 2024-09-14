@@ -88,23 +88,20 @@ class GenMacro(val c: blackbox.Context) {
       tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
     ) {
       val subclasses = subclassesOf(tp.typeSymbol.asClass)
-      State
-        .traverse(subclasses) { subclass =>
-          for {
-            vars <- State.get[VState].map(_._2)
-            t = subclassType(subclass, tp)
-            name <- vars
-              .get(t)
-              .fold {
-                val value = c.freshName(t.typeSymbol.name).toTermName
-                State.modifySecond[Vals, Vars](_.updated(t, value))
-                  .zip(help(t))
-                  .as(value)
-              }(value => State.pure[VState, c.TermName](value))
-          } yield subclass -> name
-        }
-        .map(_.toMap)
-        .map(SealedTrait)
+      State.traverse(subclasses) { subclass =>
+        for {
+          vars <- State.get[VState].map(_._2)
+          t = subclassType(subclass, tp)
+          name <- vars
+            .get(t)
+            .fold {
+              val value = c.freshName(t.typeSymbol.name).toTermName
+              State.modifySecond[Vals, Vars](_.updated(t, value))
+                .zip(help(t))
+                .as(value)
+            }(value => State.pure[VState, c.TermName](value))
+        } yield subclass -> name
+      }.map(_.toMap).map(SealedTrait)
     } else if (
       c.inferImplicitValue(constructType[ValueOf](tp), withMacrosDisabled = true).nonEmpty
     ) {
@@ -209,7 +206,7 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait SpecifiedRandom
-  case class SpecifiedCaseClass(classSymbol: ClassSymbol, fields: Map[c.TermName, SpecifiedRandom]) extends SpecifiedRandom
+  case class SpecifiedCaseClass(classSymbol: ClassSymbol, fields: List[Map[c.TermName, SpecifiedRandom]]) extends SpecifiedRandom
   case class SpecifiedSealedTrait(subclasses: Map[c.Symbol, SpecifiedRandom]) extends SpecifiedRandom
   case class Specified(tree: Apply) extends SpecifiedRandom
   case class NotSpecified(tree: c.TermName) extends SpecifiedRandom
@@ -237,25 +234,23 @@ class GenMacro(val c: blackbox.Context) {
           .map(_.toMap)
           .map(SpecifiedSealedTrait)
       case Selector(Lens(from, to, tpe), tail) =>
-        val params =
-          paramListsOf(from, publicConstructor(classSymbol, from)).flatten
-        State
-          .traverse(params) { param =>
-            if (param.asTerm.name == to) {
-              helpMergeOptics(tpe.typeSymbol.asClass, tail).map(om =>
-                param.name.toTermName -> om
-              )
-            } else {
-              val t = param.infoIn(from)
-              State
-                .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
-                .map { name =>
+        State.sequence {
+          paramListsOf(from, publicConstructor(classSymbol, from)).map { params =>
+            State.traverse(params) { param =>
+              if (param.asTerm.name == to) {
+                helpMergeOptics(tpe.typeSymbol.asClass, tail).map(om =>
+                  param.name.toTermName -> om
+                )
+              } else {
+                val t = param.infoIn(from)
+                State.getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName).map { name =>
                   param.name.toTermName -> NotSpecified(name)
                 }
-            }
+              }
+            }.map(_.toMap)
           }
-          .map(_.toMap)
-          .map(SpecifiedCaseClass(classSymbol, _))
+        }.map(SpecifiedCaseClass(classSymbol, _))
+
       case arg: Apply => State.pure(Specified(arg))
     }
   }
@@ -278,8 +273,10 @@ class GenMacro(val c: blackbox.Context) {
   ): SpecifiedRandom = (left, right) match {
     case (SpecifiedCaseClass(leftClass, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
       assert(leftClass == rightClass)
-      val fields = leftFields.map { case (k, v) =>
-        k -> mergeSpecifications(v, rightFields(k))
+      val fields = leftFields.zip(rightFields).map { case (l, r) =>
+        l.map { case (k, v) =>
+          k -> mergeSpecifications(v, r(k))
+        }
       }
       SpecifiedCaseClass(rightClass, fields)
     case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
@@ -310,10 +307,8 @@ class GenMacro(val c: blackbox.Context) {
 
   def mkTree(sr: SpecifiedRandom): c.Tree = sr match {
     case SpecifiedCaseClass(classSymbol, fields) =>
-      val args = fields.map {
-        case field -> om => q"$field = ${mkTree(om)}"
-      }
-      q"${ constructionMethodTree(classSymbol.toType.dealias) }(..$args)"
+      val args = fields.map(_.values.map(mkTree).toList)
+      construct(classSymbol.toType, args)
     case SpecifiedSealedTrait(subclasses) =>
       val size = subclasses.size
       q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.values.zipWithIndex.map {
@@ -338,15 +333,9 @@ class GenMacro(val c: blackbox.Context) {
     appliedType(weakTypeTag.tpe.typeConstructor, tpe)
   }
 
-  def constructionMethodTree(tpe: c.Type): c.Tree = {
-    Select(New(Ident(tpe.typeSymbol)), termNames.CONSTRUCTOR)
-  }
-
   def construct(tpe: c.Type, constructorArgs: List[List[c.Tree]]): c.Tree = {
     val constructionMethodTree: Tree = Select(New(Ident(tpe.dealias.typeSymbol)), termNames.CONSTRUCTOR)
-    constructorArgs.foldLeft(constructionMethodTree) { case (acc, args) =>
-      Apply(acc, args)
-    }
+    constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
   }
 
   def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
