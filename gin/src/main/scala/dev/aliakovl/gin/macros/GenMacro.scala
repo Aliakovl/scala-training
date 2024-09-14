@@ -15,6 +15,7 @@ class GenMacro(val c: blackbox.Context) {
   type FullState[A] = State[VState, A]
 
   val symbolGen = symbolOf[Gen.type].asClass.module
+  val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
   def initVars[A: c.WeakTypeTag]: Vars = Map(
     weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
@@ -47,7 +48,7 @@ class GenMacro(val c: blackbox.Context) {
   sealed trait OpticsMerge
   case class ProductMerge(classSymbol: ClassSymbol, fields: Map[c.TermName, OpticsMerge]) extends OpticsMerge
   case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge]) extends OpticsMerge
-  case class ApplyOptic(tree: Arg) extends OpticsMerge
+  case class ApplyOptic(tree: Apply) extends OpticsMerge
   case class ONil(tree: c.TermName) extends OpticsMerge
 
   sealed trait Value
@@ -175,28 +176,27 @@ class GenMacro(val c: blackbox.Context) {
       .modifyState(_._2)((Map.empty, _))
   }
 
+  type AST = List[Method]
+
   sealed trait Optic
   case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
   case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
 
-  type AST = List[Selector]
+  sealed trait Method
+  case class Selector(optics: Optic, tail: Method) extends Method
 
-  sealed trait Selector
-  case class LensSelector(lens: Lens, tail: Selector) extends Selector
-  case class PrismSelector(prism: Prism, tail: Selector) extends Selector
-
-  sealed trait Arg extends Selector
-  case class RandomArg(tree: c.Tree) extends Arg
-  case class ConstArg(tree: c.Tree) extends Arg
+  sealed trait Apply extends Method
+  case class RandomApply(tree: c.Tree) extends Apply
+  case class ConstApply(tree: c.Tree) extends Apply
 
   @tailrec
   final def disassembleTree[A: c.WeakTypeTag](tree: c.Tree, acc: AST = List.empty): AST = {
     tree match {
       case q"$other.specify[$_](($_) => $selector)($random)" =>
-        val s = disassembleSelector(selector, RandomArg(random))
+        val s = disassembleSelector(selector, RandomApply(random))
         disassembleTree(other, s +: acc)
       case q"$other.specifyConst[$_](($_) => $selector)($const)" =>
-        val s = disassembleSelector(selector, ConstArg(const))
+        val s = disassembleSelector(selector, ConstApply(const))
         disassembleTree(other, s +: acc)
       case q"$module.apply[$_]" if module.symbol == symbolGen => acc
       case _ => c.abort(c.enclosingPosition, "Shit happens...")
@@ -204,25 +204,25 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   @tailrec
-  final def disassembleSelector(selector: c.Tree, acc: Selector): Selector = {
+  final def disassembleSelector(selector: c.Tree, acc: Method): Method = {
     selector match {
       case q"$other.$field" =>
         val t = selector.tpe.substituteTypes(List(selector.symbol), List(selector.tpe))
         val lens = Lens(other.tpe, field, t)
-        disassembleSelector(other, LensSelector(lens, acc))
-      case q"$_[$from]($other).when[$to]" => // dev.aliakovl.gin.`package`.GenWhen
+        disassembleSelector(other, Selector(lens, acc))
+      case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
         val prism = Prism(from.symbol, to.symbol)
-        disassembleSelector(other, PrismSelector(prism, acc))
+        disassembleSelector(other, Selector(prism, acc))
       case _ => acc
     }
   }
 
   def helpMergeOptics(
       classSymbol: ClassSymbol,
-      selector: Selector
+      selector: Method
   ): VarsState[OpticsMerge] = {
     selector match {
-      case PrismSelector(Prism(_, to), tail) =>
+      case Selector(Prism(_, to), tail) =>
         val subs = subclassesOf(to.asClass) + to
         State
           .traverse(subclassesOf(classSymbol)) { subclass =>
@@ -239,7 +239,7 @@ class GenMacro(val c: blackbox.Context) {
           }
           .map(_.toMap)
           .map(CoproductMerge)
-      case LensSelector(Lens(from, to, tpe), tail) =>
+      case Selector(Lens(from, to, tpe), tail) =>
         val params =
           paramListsOf(from, publicConstructor(classSymbol, from)).flatten
         State
@@ -259,7 +259,7 @@ class GenMacro(val c: blackbox.Context) {
           }
           .map(_.toMap)
           .map(ProductMerge(classSymbol, _))
-      case arg: Arg => State.pure(ApplyOptic(arg))
+      case arg: Apply => State.pure(ApplyOptic(arg))
     }
   }
 
@@ -324,14 +324,14 @@ class GenMacro(val c: blackbox.Context) {
       case CoproductMerge(subclasses) =>
         val size = subclasses.size
         q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.values.zipWithIndex.map {
-            case ApplyOptic(RandomArg(tree)) -> index =>
+            case ApplyOptic(RandomApply(tree)) -> index =>
               cq"$index => ${callApply(tree)}"
-            case ApplyOptic(ConstArg(tree)) -> index => cq"$index => $tree"
+            case ApplyOptic(ConstApply(tree)) -> index => cq"$index => $tree"
             case ONil(tree) -> index => cq"$index => ${callApply(q"$tree")}"
             case om -> index         => cq"$index => ${mkTree(om)}"
           }} }"
-      case ApplyOptic(RandomArg(tree)) => callApply(tree)
-      case ApplyOptic(ConstArg(tree))  => tree
+      case ApplyOptic(RandomApply(tree)) => callApply(tree)
+      case ApplyOptic(ConstApply(tree))  => tree
       case ONil(tree)                   => callApply(q"$tree")
     }
   }
