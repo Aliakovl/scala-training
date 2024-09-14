@@ -32,10 +32,8 @@ class GenMacro(val c: blackbox.Context) {
   def randomImpl[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
     val (vars, vals) = Option.when(weakTypeOf[A].typeSymbol.isClass) {
         disassembleTree(c.prefix.tree)
-      }.fold(State.pure[Vars, Option[c.Tree]](None)) { ast =>
-        mergeOptics[A](ast).map { om =>
-          om.map(mkTree).map(toRandom)
-        }
+      }.fold(State.pure[Vars, Option[c.Tree]](None)) { methods =>
+        mergeOptics[A](methods).map(_.map(mkTree).map(toRandom))
       }
       .flatMap(initValues[A])
       .run(initVars[A])
@@ -46,7 +44,7 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait Value
-  case class Implicitly(rType: c.Type) extends Value
+  case class Implicitly(tpe: c.Type) extends Value
   case class Refer(value: c.Tree) extends Value
   case class CaseClass(fields: List[List[c.TermName]]) extends Value
   case object CaseObject extends Value
@@ -84,9 +82,7 @@ class GenMacro(val c: blackbox.Context) {
     val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
     if (implicitValue.nonEmpty && tpe != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
-    } else if (
-      tpe.typeSymbol.isAbstract && tpe.typeSymbol.isClass && tpe.typeSymbol.asClass.isSealed
-    ) {
+    } else if (tpe.typeSymbol.isAbstract && tpe.typeSymbol.isClass && tpe.typeSymbol.asClass.isSealed) {
       val subclasses = subclassesOf(tpe.typeSymbol.asClass)
       State.traverse(subclasses) { subclass =>
         for {
@@ -96,19 +92,13 @@ class GenMacro(val c: blackbox.Context) {
             .get(t)
             .fold {
               val value = c.freshName(t.typeSymbol.name).toTermName
-              State.modifySecond[Vals, Vars](_.updated(t, value))
-                .zip(help(t))
-                .as(value)
+              State.modifySecond[Vals, Vars](_.updated(t, value)).zip(help(t)).as(value)
             }(value => State.pure[VState, c.TermName](value))
         } yield subclass -> name
       }.map(_.toMap).map(SealedTrait)
-    } else if (
-      c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty
-    ) {
+    } else if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
       State.pure(CaseObject)
-    } else if (
-      tpe.typeSymbol.isClass && !tpe.typeSymbol.isAbstract && (tpe.typeSymbol.asClass.isFinal || tpe.typeSymbol.asClass.isCaseClass)
-    ) {
+    } else if (tpe.typeSymbol.isClass && !tpe.typeSymbol.isAbstract && (tpe.typeSymbol.asClass.isFinal || tpe.typeSymbol.asClass.isCaseClass)) {
       State.sequence {
         paramListsOf(tpe, publicConstructor(tpe.typeSymbol.asClass, tpe)).map { params =>
           State.traverse(params) { param =>
@@ -119,9 +109,7 @@ class GenMacro(val c: blackbox.Context) {
                 .get(t)
                 .fold {
                   val value = c.freshName(t.typeSymbol.name).toTermName
-                  State.modifySecond[Vals, Vars](_.updated(t, value))
-                    .zip(help(t))
-                    .as(value)
+                  State.modifySecond[Vals, Vars](_.updated(t, value)).zip(help(t)).as(value)
                 }(value => State.pure[VState, c.TermName](value))
             } yield name
           }
@@ -163,7 +151,7 @@ class GenMacro(val c: blackbox.Context) {
       .modifyState(_._2)((Map.empty, _))
   }
 
-  type AST = List[Method]
+  type Methods = List[Method]
 
   sealed trait Optic
   case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
@@ -177,7 +165,7 @@ class GenMacro(val c: blackbox.Context) {
   case class ConstApply(tree: c.Tree) extends Apply
 
   @tailrec
-  final def disassembleTree[A: c.WeakTypeTag](tree: c.Tree, acc: AST = List.empty): AST = {
+  final def disassembleTree[A: c.WeakTypeTag](tree: c.Tree, acc: Methods = List.empty): Methods = {
     tree match {
       case q"$other.specify[$_](($_) => $selector)($random)" =>
         val s = disassembleSelector(selector, RandomApply(random))
@@ -217,21 +205,18 @@ class GenMacro(val c: blackbox.Context) {
     selector match {
       case Selector(Prism(_, to), tail) =>
         val subs = subclassesOf(to.asClass) + to
-        State
-          .traverse(subclassesOf(classSymbol)) { subclass =>
-            if (subs.contains(subclass)) {
-              helpMergeOptics(to.asClass, tail).map(om => subclass -> om)
-            } else {
-              val t = subclassType(subclass, classSymbol.toType)
-              State
-                .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
-                .map { name =>
-                  subclass -> NotSpecified(name)
-                }
-            }
+        State.traverse(subclassesOf(classSymbol)) { subclass =>
+          if (subs.contains(subclass)) {
+            helpMergeOptics(to.asClass, tail).map(om => subclass -> om)
+          } else {
+            val t = subclassType(subclass, classSymbol.toType)
+            State
+              .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
+              .map { name =>
+                subclass -> NotSpecified(name)
+              }
           }
-          .map(_.toMap)
-          .map(SpecifiedSealedTrait)
+        }.map(_.toMap).map(SpecifiedSealedTrait)
       case Selector(Lens(from, to, tpe), tail) =>
         State.sequence {
           paramListsOf(from, publicConstructor(classSymbol, from)).map { params =>
@@ -254,7 +239,7 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def mergeOptics[A: WeakTypeTag](ast: AST): VarsState[Option[SpecifiedRandom]] = {
+  def mergeOptics[A: WeakTypeTag](ast: Methods): VarsState[Option[SpecifiedRandom]] = {
     State.traverse(ast) { selector =>
         helpMergeOptics(weakTypeOf[A].typeSymbol.asClass, selector)
       }
