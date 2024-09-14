@@ -14,7 +14,7 @@ class GenMacro(val c: blackbox.Context) {
   type VState = (Vals, Vars)
   type FullState[A] = State[VState, A]
 
-  val symbolGen = symbolOf[Gen.type].asClass.module
+  val genSymbol = symbolOf[Gen.type].asClass.module
   val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
   def initVars[A: c.WeakTypeTag]: Vars = Map(
@@ -44,12 +44,6 @@ class GenMacro(val c: blackbox.Context) {
       mkBlock[A](vars, vals)
     }
   }
-
-  sealed trait OpticsMerge
-  case class ProductMerge(classSymbol: ClassSymbol, fields: Map[c.TermName, OpticsMerge]) extends OpticsMerge
-  case class CoproductMerge(subclasses: Map[c.Symbol, OpticsMerge]) extends OpticsMerge
-  case class ApplyOptic(tree: Apply) extends OpticsMerge
-  case class ONil(tree: c.TermName) extends OpticsMerge
 
   sealed trait Value
   case class Implicitly(rType: c.Type) extends Value
@@ -198,7 +192,7 @@ class GenMacro(val c: blackbox.Context) {
       case q"$other.specifyConst[$_](($_) => $selector)($const)" =>
         val s = disassembleSelector(selector, ConstApply(const))
         disassembleTree(other, s +: acc)
-      case q"$module.apply[$_]" if module.symbol == symbolGen => acc
+      case q"$module.apply[$_]" if module.symbol == genSymbol => acc
       case _ => c.abort(c.enclosingPosition, "Shit happens...")
     }
   }
@@ -217,10 +211,16 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
+  sealed trait SpecifiedRandom
+  case class SpecifiedCaseClass(classSymbol: ClassSymbol, fields: Map[c.TermName, SpecifiedRandom]) extends SpecifiedRandom
+  case class SpecifiedSealedTrait(subclasses: Map[c.Symbol, SpecifiedRandom]) extends SpecifiedRandom
+  case class Specified(tree: Apply) extends SpecifiedRandom
+  case class NotSpecified(tree: c.TermName) extends SpecifiedRandom
+
   def helpMergeOptics(
       classSymbol: ClassSymbol,
       selector: Method
-  ): VarsState[OpticsMerge] = {
+  ): VarsState[SpecifiedRandom] = {
     selector match {
       case Selector(Prism(_, to), tail) =>
         val subs = subclassesOf(to.asClass) + to
@@ -233,12 +233,12 @@ class GenMacro(val c: blackbox.Context) {
               State
                 .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
                 .map { name =>
-                  subclass -> ONil(name)
+                  subclass -> NotSpecified(name)
                 }
             }
           }
           .map(_.toMap)
-          .map(CoproductMerge)
+          .map(SpecifiedSealedTrait)
       case Selector(Lens(from, to, tpe), tail) =>
         val params =
           paramListsOf(from, publicConstructor(classSymbol, from)).flatten
@@ -253,86 +253,82 @@ class GenMacro(val c: blackbox.Context) {
               State
                 .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
                 .map { name =>
-                  param.name.toTermName -> ONil(name)
+                  param.name.toTermName -> NotSpecified(name)
                 }
             }
           }
           .map(_.toMap)
-          .map(ProductMerge(classSymbol, _))
-      case arg: Apply => State.pure(ApplyOptic(arg))
+          .map(SpecifiedCaseClass(classSymbol, _))
+      case arg: Apply => State.pure(Specified(arg))
     }
   }
 
-  def mergeOptics[A: WeakTypeTag](ast: AST): VarsState[Option[OpticsMerge]] = {
+  def mergeOptics[A: WeakTypeTag](ast: AST): VarsState[Option[SpecifiedRandom]] = {
     State.traverse(ast) { selector =>
         helpMergeOptics(weakTypeOf[A].typeSymbol.asClass, selector)
       }
       .map { list =>
-        list.foldLeft(None: Option[OpticsMerge]) {
+        list.foldLeft(None: Option[SpecifiedRandom]) {
           case (None, om) => Some(om)
           case (Some(lom), rom) => Some(mergeOptics(lom, rom))
         }
       }
   }
 
-  def mergeOptics(left: OpticsMerge, right: OpticsMerge): OpticsMerge = {
-    (left, right) match {
-      case (ProductMerge(_, l), ProductMerge(cr, r)) =>
-        ProductMerge(
-          cr,
-          l.map { case (k, v) =>
-            k -> mergeOptics(v, r(k))
-          }
-        )
-      case (CoproductMerge(l), CoproductMerge(r)) =>
-        CoproductMerge(l.map { case (k, v) =>
-          k -> mergeOptics(v, r(k))
-        })
-      case (CoproductMerge(l), pm: ProductMerge) =>
-        CoproductMerge(subclasses = l.map { case (subclass, ls) =>
-          subclass -> mergeOptics(ls, pm)
-        })
-      case (lm: ProductMerge, CoproductMerge(r)) =>
-        CoproductMerge(subclasses = r.map { case (subclass, rs) =>
-          subclass -> mergeOptics(lm, rs)
-        })
-      case (m @ ProductMerge(_, fields), o: ONil) =>
-        if (fields.nonEmpty) m else o
-      case (m @ CoproductMerge(subclasses), o: ONil) =>
-        if (subclasses.nonEmpty) m else o
-      case (o: ONil, m @ ProductMerge(_, fields)) =>
-        if (fields.nonEmpty) m else o
-      case (o: ONil, m @ CoproductMerge(subclasses)) =>
-        if (subclasses.nonEmpty) m else o
-      case (_: ONil, or: ONil)      => or
-      case (_: ONil, a: ApplyOptic) => a
-      case (a: ApplyOptic, _: ONil) => a
-      case _ =>
-        c.abort(
-          c.enclosingPosition,
-          s"double application leads to erasure"
-        )
-    }
+  def mergeOptics(
+    left: SpecifiedRandom,
+    right: SpecifiedRandom
+  ): SpecifiedRandom = (left, right) match {
+    case (SpecifiedCaseClass(leftClass, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
+      assert(leftClass == rightClass)
+      val fields = leftFields.map { case (k, v) =>
+        k -> mergeOptics(v, rightFields(k))
+      }
+      SpecifiedCaseClass(rightClass, fields)
+    case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
+      SpecifiedSealedTrait(leftSubclasses.map { case (k, v) =>
+        k -> mergeOptics(v, rightSubclasses(k))
+      })
+    case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
+      SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
+        subclass -> mergeOptics(leftSpecified, right)
+      })
+    case (_: SpecifiedCaseClass, SpecifiedSealedTrait(subclasses)) =>
+      SpecifiedSealedTrait(subclasses.map { case (subclass, rightSpecified) =>
+        subclass -> mergeOptics(left, rightSpecified)
+      })
+    case (SpecifiedCaseClass(_, fields), _: NotSpecified) =>
+      if (fields.nonEmpty) left else right
+    case (SpecifiedSealedTrait(subclasses), _: NotSpecified) =>
+      if (subclasses.nonEmpty) left else right
+    case (_: NotSpecified, SpecifiedCaseClass(_, fields)) =>
+      if (fields.nonEmpty) right else left
+    case (_: NotSpecified, SpecifiedSealedTrait(subclasses)) =>
+      if (subclasses.nonEmpty) right else left
+    case (_: NotSpecified, _: NotSpecified) => right
+    case (_: NotSpecified, _: Specified) => right
+    case (_: Specified, _: NotSpecified) => left
+    case _ => c.abort(c.enclosingPosition, s"Double application leads to erasure")
   }
 
-  def mkTree(om: OpticsMerge): c.Tree = {
+  def mkTree(om: SpecifiedRandom): c.Tree = {
     om match {
-      case ProductMerge(classSymbol, fields) =>
+      case SpecifiedCaseClass(classSymbol, fields) =>
         q"${constructor(classSymbol)}( ..${fields.map { case field -> om =>
             q"$field = ${mkTree(om)}"
           }})"
-      case CoproductMerge(subclasses) =>
+      case SpecifiedSealedTrait(subclasses) =>
         val size = subclasses.size
         q"_root_.scala.util.Random.nextInt($size) match { case ..${subclasses.values.zipWithIndex.map {
-            case ApplyOptic(RandomApply(tree)) -> index =>
+            case Specified(RandomApply(tree)) -> index =>
               cq"$index => ${callApply(tree)}"
-            case ApplyOptic(ConstApply(tree)) -> index => cq"$index => $tree"
-            case ONil(tree) -> index => cq"$index => ${callApply(q"$tree")}"
+            case Specified(ConstApply(tree)) -> index => cq"$index => $tree"
+            case NotSpecified(tree) -> index => cq"$index => ${callApply(q"$tree")}"
             case om -> index         => cq"$index => ${mkTree(om)}"
           }} }"
-      case ApplyOptic(RandomApply(tree)) => callApply(tree)
-      case ApplyOptic(ConstApply(tree))  => tree
-      case ONil(tree)                   => callApply(q"$tree")
+      case Specified(RandomApply(tree)) => callApply(tree)
+      case Specified(ConstApply(tree))  => tree
+      case NotSpecified(tree)                   => callApply(q"$tree")
     }
   }
 
