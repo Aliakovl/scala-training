@@ -79,19 +79,19 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$res; ${variables(weakTypeOf[A])}}"
   }
 
-  def default[A: c.WeakTypeTag](tp: c.Type): FullState[Value] = {
-    val rt = constructType[Random](tp)
+  def default[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
+    val rt = constructType[Random](tpe)
     val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
-    if (implicitValue.nonEmpty && tp != weakTypeOf[A]) {
+    if (implicitValue.nonEmpty && tpe != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
     } else if (
-      tp.typeSymbol.isAbstract && tp.typeSymbol.isClass && tp.typeSymbol.asClass.isSealed
+      tpe.typeSymbol.isAbstract && tpe.typeSymbol.isClass && tpe.typeSymbol.asClass.isSealed
     ) {
-      val subclasses = subclassesOf(tp.typeSymbol.asClass)
+      val subclasses = subclassesOf(tpe.typeSymbol.asClass)
       State.traverse(subclasses) { subclass =>
         for {
           vars <- State.get[VState].map(_._2)
-          t = subclassType(subclass, tp)
+          t = subclassType(subclass, tpe)
           name <- vars
             .get(t)
             .fold {
@@ -103,44 +103,43 @@ class GenMacro(val c: blackbox.Context) {
         } yield subclass -> name
       }.map(_.toMap).map(SealedTrait)
     } else if (
-      c.inferImplicitValue(constructType[ValueOf](tp), withMacrosDisabled = true).nonEmpty
+      c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty
     ) {
       State.pure(CaseObject)
     } else if (
-      tp.typeSymbol.isClass && !tp.typeSymbol.isAbstract && (tp.typeSymbol.asClass.isFinal || tp.typeSymbol.asClass.isCaseClass)
+      tpe.typeSymbol.isClass && !tpe.typeSymbol.isAbstract && (tpe.typeSymbol.asClass.isFinal || tpe.typeSymbol.asClass.isCaseClass)
     ) {
       State.sequence {
-        paramListsOf(tp, publicConstructor(tp.typeSymbol.asClass, tp)).map { params =>
-          State
-            .traverse(params) { param =>
-              for {
-                vars <- State.get[VState].map(_._2)
-                t = param.infoIn(tp)
-                name <- vars
-                  .get(t)
-                  .fold {
-                    val value = c.freshName(t.typeSymbol.name).toTermName
-                    State.modifySecond[Vals, Vars](_.updated(t, value))
-                      .zip(help(t))
-                      .as(value)
-                  }(value => State.pure[VState, c.TermName](value))
-              } yield name
-            }
+        paramListsOf(tpe, publicConstructor(tpe.typeSymbol.asClass, tpe)).map { params =>
+          State.traverse(params) { param =>
+            for {
+              vars <- State.get[VState].map(_._2)
+              t = param.infoIn(tpe)
+              name <- vars
+                .get(t)
+                .fold {
+                  val value = c.freshName(t.typeSymbol.name).toTermName
+                  State.modifySecond[Vals, Vars](_.updated(t, value))
+                    .zip(help(t))
+                    .as(value)
+                }(value => State.pure[VState, c.TermName](value))
+            } yield name
+          }
         }
       }.map(CaseClass)
     } else {
-      State.pure(Implicitly(tp))
+      State.pure(Implicitly(tpe))
     }
   }
 
-  def help[A: WeakTypeTag](tp: c.Type): FullState[Value] = {
+  def help[A: WeakTypeTag](tpe: c.Type): FullState[Value] = {
     State.get[VState].map(_._1).flatMap { values =>
-      values.get(tp) match {
+      values.get(tpe) match {
         case Some(value) => State.pure(value)
         case None =>
           for {
-            value <- default[A](tp)
-            _ <- State.modifyFirst[Vals, Vars](_.updated(tp, value))
+            value <- default[A](tpe)
+            _ <- State.modifyFirst[Vals, Vars](_.updated(tpe, value))
           } yield value
       }
     }
