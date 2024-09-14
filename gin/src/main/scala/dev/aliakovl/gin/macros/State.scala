@@ -58,6 +58,10 @@ private[macros] object State {
     }
   }
 
+  def sequence[C[+E] <: Iterable[E], S, A](ta: C[State[S, A]])(implicit
+      bf: BuildFrom[C[State[S, A]], A, C[A]]
+  ): State[S, C[A]] = traverse(ta)(identity)
+
   def traverse[S, A, B](ta: Set[A])(
       f: A => State[S, B]
   ): State[S, Set[B]] = {

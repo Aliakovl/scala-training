@@ -19,6 +19,10 @@ case object H extends KJH("twert")
 
 class G(val int: Int)
 
+case class Talk(int: Int)(string: String, gerg: List[Int])(implicit wefwef: Option[Long]) {
+  override def toString: String = s"Talk($int)($string, $gerg)($wefwef)"
+}
+
 object GenTest {
 
   implicit val mc2: Random[MyClass2] = Gen[MyClass2].specifyConst(_.mc2field)("LLLLLLL").random
@@ -120,6 +124,15 @@ object GenTest {
 
     println(Random.many[List](10)(Random.oneOf[Any].make[String, Int]).apply())
 
+    val g = Gen[MyClass]
+//      .specify(_.when[MyClass1].m)(Random.random[MyClass])
+      .specifyConst(_.when[MyClass1].m.when[MyClass2].mc2field)("lol")
+      .specify(_.when[MyClass1].m.when[MyClass2].lst)(Random.random[Lst[Int]])
+      .random
+
+    println(g())
+
+    println(Gen[Talk].random())
   }
 
 }
