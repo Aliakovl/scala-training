@@ -82,18 +82,15 @@ class GenMacro(val c: blackbox.Context) {
     if (implicitValue.nonEmpty && tpe != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
     } else if (tpe.typeSymbol.isAbstract && tpe.typeSymbol.isClass && tpe.typeSymbol.asClass.isSealed) {
-      val subclasses = subclassesOf(tpe.typeSymbol.asClass)
-      State.traverse(subclasses) { subclass =>
+      val subtypes = subclassesOf(tpe.typeSymbol.asClass).map(subclassType(_, tpe))
+      State.traverse(subtypes) { subtype =>
         for {
           vars <- State.get[VState].map(_._2)
-          t = subclassType(subclass, tpe)
-          name <- vars
-            .get(t)
-            .fold {
-              val value = c.freshName(t.typeSymbol.name).toTermName
-              State.modifySecond[Vals, Vars](_.updated(t, value)).zip(help(t)).as(value)
+          name <- vars.get(subtype).fold {
+              val value = c.freshName(subtype.typeSymbol.name).toTermName
+              State.modifySecond[Vals, Vars](_.updated(subtype, value)).zip(help(subtype)).as(value)
             }(value => State.pure[VState, c.TermName](value))
-        } yield subclass -> name
+        } yield subtype.typeSymbol -> name
       }.map(_.toMap).map(SealedTrait)
     } else if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
       State.pure(CaseObject)
@@ -203,16 +200,15 @@ class GenMacro(val c: blackbox.Context) {
   ): VarsState[SpecifiedRandom] = {
     selector match {
       case Selector(Prism(_, to), tail) =>
-        val subs = subclassesOf(to.asClass) + to
-        State.traverse(subclassesOf(classSymbol)) { subclass =>
-          if (subs.contains(subclass)) {
-            helpMergeOptics(to.asClass, tail).map(om => subclass -> om)
+        val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
+        val toType = subclassType(to, classSymbol.toType)
+        State.traverse(subtypes) { subtype =>
+          if (subtype <:< toType) {
+            helpMergeOptics(to.asClass, tail).map(om => subtype.typeSymbol -> om)
           } else {
-            val t = subclassType(subclass, classSymbol.toType)
-            State
-              .getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName)
+            State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
               .map { name =>
-                subclass -> NotSpecified(name)
+                subtype.typeSymbol -> NotSpecified(name)
               }
           }
         }.map(_.toMap).map(SpecifiedSealedTrait)
@@ -233,7 +229,6 @@ class GenMacro(val c: blackbox.Context) {
             }.map(_.toMap)
           }
         }.map(SpecifiedCaseClass(classSymbol, _))
-
       case arg: Apply => State.pure(Specified(arg))
     }
   }
