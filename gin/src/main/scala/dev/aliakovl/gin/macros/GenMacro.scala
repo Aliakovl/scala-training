@@ -34,8 +34,7 @@ class GenMacro(val c: blackbox.Context) {
         disassembleTree(c.prefix.tree)
       }.fold(State.pure[Vars, Option[c.Tree]](None)) { methods =>
         mergeOptics[A](methods).map(_.map(mkTree).map(toRandom))
-      }
-      .flatMap(initValues[A])
+      }.flatMap(initValues[A])
       .run(initVars[A])
 
     c.Expr[Random[A]] {
@@ -100,7 +99,7 @@ class GenMacro(val c: blackbox.Context) {
       State.pure(CaseObject)
     } else if (tpe.typeSymbol.isClass && !tpe.typeSymbol.isAbstract && (tpe.typeSymbol.asClass.isFinal || tpe.typeSymbol.asClass.isCaseClass)) {
       State.sequence {
-        paramListsOf(tpe, publicConstructor(tpe.typeSymbol.asClass, tpe)).map { params =>
+        paramListsOf(publicConstructor(tpe.typeSymbol.asClass), tpe).map { params =>
           State.traverse(params) { param =>
             for {
               vars <- State.get[VState].map(_._2)
@@ -219,7 +218,7 @@ class GenMacro(val c: blackbox.Context) {
         }.map(_.toMap).map(SpecifiedSealedTrait)
       case Selector(Lens(from, to, tpe), tail) =>
         State.sequence {
-          paramListsOf(from, publicConstructor(classSymbol, from)).map { params =>
+          paramListsOf(publicConstructor(classSymbol), from).map { params =>
             State.traverse(params) { param =>
               if (param.asTerm.name == to) {
                 helpMergeOptics(tpe.typeSymbol.asClass, tail).map(om =>
@@ -242,13 +241,12 @@ class GenMacro(val c: blackbox.Context) {
   def mergeOptics[A: WeakTypeTag](ast: Methods): VarsState[Option[SpecifiedRandom]] = {
     State.traverse(ast) { selector =>
         helpMergeOptics(weakTypeOf[A].typeSymbol.asClass, selector)
+    }.map { list =>
+      list.foldLeft[Option[SpecifiedRandom]](None) {
+        case (Some(left), right) => Some(mergeSpecifications(left, right))
+        case (None, value) => Some(value)
       }
-      .map { list =>
-        list.foldLeft(None: Option[SpecifiedRandom]) {
-          case (None, om) => Some(om)
-          case (Some(lom), rom) => Some(mergeSpecifications(lom, rom))
-        }
-      }
+    }
   }
 
   def mergeSpecifications(
@@ -257,15 +255,15 @@ class GenMacro(val c: blackbox.Context) {
   ): SpecifiedRandom = (left, right) match {
     case (SpecifiedCaseClass(leftClass, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
       assert(leftClass == rightClass)
-      val fields = leftFields.zip(rightFields).map { case (l, r) =>
-        l.map { case (k, v) =>
-          k -> mergeSpecifications(v, r(k))
+      val fields = leftFields.zip(rightFields).map { case (leftArgs, rightArgs) =>
+        leftArgs.map { case (key, value) =>
+          key -> mergeSpecifications(value, rightArgs(key))
         }
       }
       SpecifiedCaseClass(rightClass, fields)
     case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
-      SpecifiedSealedTrait(leftSubclasses.map { case (k, v) =>
-        k -> mergeSpecifications(v, rightSubclasses(k))
+      SpecifiedSealedTrait(leftSubclasses.map { case (key, value) =>
+        key -> mergeSpecifications(value, rightSubclasses(key))
       })
     case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
       SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
@@ -331,9 +329,7 @@ class GenMacro(val c: blackbox.Context) {
         .partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
-      if (
-        !child.info.typeSymbol.asClass.isFinal && !child.info.typeSymbol.asClass.isCaseClass
-      ) {
+      if (!child.info.typeSymbol.asClass.isFinal && !child.info.typeSymbol.asClass.isCaseClass) {
         c.abort(
           c.enclosingPosition,
           s"child $child of $parent is neither final nor a case class"
@@ -362,12 +358,12 @@ class GenMacro(val c: blackbox.Context) {
     )
   }
 
-  def paramListsOf(tpe: c.Type, method: c.Symbol): List[List[c.universe.Symbol]] = {
+  def paramListsOf(method: c.Symbol, tpe: c.Type): List[List[c.universe.Symbol]] = {
     method.asMethod.infoIn(tpe).paramLists
   }
 
-  def publicConstructor(parent: ClassSymbol, tpe: c.Type): MethodSymbol = {
-    val members = parent.infoIn(tpe).members
+  def publicConstructor(parent: ClassSymbol): MethodSymbol = {
+    val members = parent.info.members
     members
       .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
       .orElse(
