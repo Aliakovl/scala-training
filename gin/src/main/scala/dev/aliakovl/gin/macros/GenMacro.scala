@@ -1,6 +1,7 @@
 package dev.aliakovl.gin.macros
 
-import dev.aliakovl.gin.{Gen, Random}
+import dev.aliakovl.gin
+import dev.aliakovl.gin.Random
 
 import scala.annotation.tailrec
 import scala.reflect.macros.blackbox
@@ -14,7 +15,7 @@ class GenMacro(val c: blackbox.Context) {
   type VState = (Vals, Vars)
   type FullState[A] = State[VState, A]
 
-  val genSymbol = symbolOf[Gen.type].asClass.module
+  val randomSymbol = symbolOf[gin.Random.type].asClass.module
   val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
   def initVars[A: c.WeakTypeTag]: Vars = Map(
@@ -169,8 +170,8 @@ class GenMacro(val c: blackbox.Context) {
       case q"$other.specifyConst[$_](($_) => $selector)($const)" =>
         val s = disassembleSelector(selector, ConstApply(const))
         disassembleTree(other, s +: acc)
-      case q"$module.apply[$_]" if module.symbol == genSymbol => acc
-      case _ => c.abort(c.enclosingPosition, "Shit happens...")
+      case q"$module.custom[$_]" if module.symbol == randomSymbol => acc
+      case _ => c.abort(c.enclosingPosition, "Unsupported syntax.")
     }
   }
 
@@ -184,7 +185,8 @@ class GenMacro(val c: blackbox.Context) {
       case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
         val prism = Prism(from.symbol, to.symbol)
         disassembleSelector(other, Selector(prism, acc))
-      case _ => acc
+      case _: Ident => acc
+      case _ => c.abort(c.enclosingPosition, "Unsupported path element.")
     }
   }
 

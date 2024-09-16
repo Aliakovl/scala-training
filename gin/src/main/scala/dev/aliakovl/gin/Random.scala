@@ -34,6 +34,8 @@ object Random
 
   def const[A](value: A): Random[A] = apply(value)
 
+  def custom[A]: Gen[A] = new Gen[A]
+
   def uglyString(size: Int): Random[String] = apply {
     ScalaRandom.nextString(size)
   }
