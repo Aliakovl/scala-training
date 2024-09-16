@@ -97,16 +97,16 @@ class GenMacro(val c: blackbox.Context) {
       State.pure(CaseObject)
     } else if (tpe.typeSymbol.isClass && !tpe.typeSymbol.isAbstract && (tpe.typeSymbol.asClass.isFinal || tpe.typeSymbol.asClass.isCaseClass)) {
       State.sequence {
-        paramListsOf(publicConstructor(tpe.typeSymbol.asClass), tpe).map { params =>
+        paramListsOf(publicConstructor(tpe), tpe).map { params =>
           State.traverse(params) { param =>
             for {
               vars <- State.get[VState].map(_._2)
-              t = param.infoIn(tpe)
+              paramType = param.info
               name <- vars
-                .get(t)
+                .get(paramType)
                 .fold {
-                  val value = c.freshName(t.typeSymbol.name).toTermName
-                  State.modifySecond[Vals, Vars](_.updated(t, value)).zip(help(t)).as(value)
+                  val value = c.freshName(paramType.typeSymbol.name).toTermName
+                  State.modifySecond[Vals, Vars](_.updated(paramType, value)).zip(help(paramType)).as(value)
                 }(value => State.pure[VState, c.TermName](value))
             } yield name
           }
@@ -179,8 +179,7 @@ class GenMacro(val c: blackbox.Context) {
   final def disassembleSelector(selector: c.Tree, acc: Method): Method = {
     selector match {
       case q"$other.$field" =>
-        val t = selector.tpe.substituteTypes(List(selector.symbol), List(selector.tpe))
-        val lens = Lens(other.tpe, field, t)
+        val lens = Lens(other.tpe, field, selector.tpe)
         disassembleSelector(other, Selector(lens, acc))
       case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
         val prism = Prism(from.symbol, to.symbol)
@@ -217,15 +216,15 @@ class GenMacro(val c: blackbox.Context) {
         }.map(_.toMap).map(SpecifiedSealedTrait)
       case Selector(Lens(from, to, tpe), tail) =>
         State.sequence {
-          paramListsOf(publicConstructor(classSymbol), from).map { params =>
+          paramListsOf(publicConstructor(classSymbol.toType), from).map { params =>
             State.traverse(params) { param =>
               if (param.asTerm.name == to) {
                 helpMergeOptics(tpe.typeSymbol.asClass, tail).map(om =>
                   param.name.toTermName -> om
                 )
               } else {
-                val t = param.infoIn(from)
-                State.getOrElseUpdate(t, c.freshName(t.typeSymbol.name).toTermName).map { name =>
+                val paramType = param.info
+                State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
                   param.name.toTermName -> NotSpecified(name)
                 }
               }
@@ -360,8 +359,8 @@ class GenMacro(val c: blackbox.Context) {
     method.asMethod.infoIn(tpe).paramLists
   }
 
-  def publicConstructor(parent: ClassSymbol): MethodSymbol = {
-    val members = parent.info.members
+  def publicConstructor(tpe: c.Type): MethodSymbol = {
+    val members = tpe.members
     members
       .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
       .orElse(
@@ -371,7 +370,7 @@ class GenMacro(val c: blackbox.Context) {
       .getOrElse {
         c.abort(
           c.enclosingPosition,
-          s"class ${parent.name.decodedName} has no public constructors"
+          s"class ${tpe.typeSymbol.asClass.name.decodedName} has no public constructors"
         )
       }
   }
