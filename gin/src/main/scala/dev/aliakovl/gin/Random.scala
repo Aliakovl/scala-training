@@ -14,10 +14,7 @@ trait Random[A] extends (() => A) {
 
   def product[B](fb: Random[B]): Random[(A, B)] = Random((apply(), fb.apply()))
 
-  def withFilter(p: A => Boolean): Random[Option[A]] = {
-    val t = apply()
-    Random(Option.when(p(t))(t))
-  }
+  def foreach[U](f: A => U): Unit = f(apply())
 
   def widen[T >: A]: Random[T] = this.asInstanceOf[Random[T]]
 }

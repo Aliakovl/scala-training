@@ -202,6 +202,7 @@ class GenMacro(val c: blackbox.Context) {
   ): VarsState[SpecifiedRandom] = {
     selector match {
       case Selector(Prism(_, to), tail) =>
+        if (!classSymbol.isSealed) c.abort(c.enclosingPosition, s"$classSymbol is not sealed")
         val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
         val toType = subclassType(to, classSymbol.toType)
         State.traverse(subtypes) { subtype =>

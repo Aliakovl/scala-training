@@ -104,12 +104,6 @@ object GenTest {
 
     println(Random.many[List](10).make[Lst[String]].apply())
 
-    println {
-      (for {
-        a <- Random.oneOf(1, 2)
-        if a == 1
-      } yield a).apply()
-    }
     println(Random.many[List](10)(f).apply().mkString(", "))
 
     val tt: Random[MyClass] = Random.oneOfRandom(
@@ -169,6 +163,13 @@ object GenTest {
         .specifyConst(f => f.gerg)(List(9, 8, 7))
         .random()
     )
+
+    Random
+      .custom[MyClass]
+      .specifyConst(_.when[KJH])(K("YES"))
+      .random
+      .many[List](10)
+      .foreach(println)
 
   }
 
