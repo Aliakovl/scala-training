@@ -32,20 +32,20 @@ case class Talk(int: Int)(val string: String, val gerg: List[Int])(
 object GenTest {
 
   implicit val mc2: Gen[MyClass2] =
-    Gen.custom[MyClass2].specifyConst(_.mc2field)("LLLLLLL").random
+    Gen.custom[MyClass2].specifyConst(_.mc2field)("LLLLLLL").make
   implicit val mc1: Gen[MyClass1] =
-    Gen.custom[MyClass1].specifyConst(_.m)(H).random
+    Gen.custom[MyClass1].specifyConst(_.m)(H).make
 
   implicit val str: Gen[String] = Gen.const("CONST")
   implicit val int: Gen[Int] = Gen.oneOf(1, 2, 3)
 
   def main(args: Array[String]): Unit = {
     val a: MyClass2 = Gen.random[MyClass2].apply()
-    val b: MyClass2 = Gen.custom[MyClass2].random()
+    val b: MyClass2 = Gen.custom[MyClass2].make()
     println(a)
     println(b)
 
-    println(Gen.custom[List[MyClass1]].random())
+    println(Gen.custom[List[MyClass1]].make())
 
     val mc: Gen[MyClass] =
       Gen
@@ -55,24 +55,24 @@ object GenTest {
         )
         .specifyConst(_.when[MyClass1].m.when[MyClass2].lst)(Cons(3, LNil))
         .specifyConst(_.when[MyClass2].lst)(Cons(4, LNil))
-        .random
+        .make
 
     println(mc())
 
     Gen
-      .many[List](10)(Gen.custom[Lst[Int]].random)
+      .many[List](10)(Gen.custom[Lst[Int]].make)
       .apply()
       .foreach(println)
 
-    Gen.custom[Unit].random()
+    Gen.custom[Unit].make()
 
-    println(Gen.custom[G].specify(_.int)(Gen.oneOf(1, 5)).random().int)
+    println(Gen.custom[G].specify(_.int)(Gen.oneOf(1, 5)).make().int)
 
     println(
       Gen
         .custom[List[String]]
         .specifyConst(_.when[::[String]].head)("wefwefef")
-        .random()
+        .make()
     )
 
     println(
@@ -81,14 +81,14 @@ object GenTest {
         .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(
           Gen.uglyString(10)
         )
-        .random()
+        .make()
     )
 
     val keklol = Gen
       .custom[Lst[String]]
       .specifyConst(_.when[Cons[String]].head)("kek")
       .specifyConst(_.when[Cons[String]].tail.when[Cons[String]].head)("lol")
-      .random
+      .make
 
     println(Gen.many[List](10)(keklol).apply())
 
@@ -98,7 +98,7 @@ object GenTest {
         Gen.random[String].map(_.toUpperCase)
       )
       .specify(_.when[Cons[String]].tail)(Gen.random[Lst[String]])
-      .random
+      .make
 
     println(Gen.many[List](10)(f).apply().mkString(", "))
 
@@ -110,8 +110,8 @@ object GenTest {
       Gen
         .custom[MyClass1]
         .specifyConst(_.m.when[MyClass2].mc2field)("wef")
-        .random,
-      Gen.custom[MyClass3].random
+        .make,
+      Gen.custom[MyClass3].make
     )
 
     println(Gen.many[List](3)(tt).apply())
@@ -124,8 +124,8 @@ object GenTest {
     println(Gen.random[y.type].apply())
 
     val rp: Gen[String] = Gen.oneOfGen[String](
-      Gen.custom["RRRRR"].random,
-      Gen.custom["PPPPPP"].random
+      Gen.custom["RRRRR"].make,
+      Gen.custom["PPPPPP"].make
     )
 
     val rppp = Gen.oneOf[String].make["RRRRR", "PPPPPP"]
@@ -144,30 +144,30 @@ object GenTest {
       .custom[MyClass]
 //      .specify(_.when[MyClass1].m)(Random.random[MyClass])
       .specifyConst(_.when[MyClass2])(MyClass2(null, null, null))
-      .random
+      .make
 
     println(g())
 
-    println(Gen.custom[Talk].random())
+    println(Gen.custom[Talk].make())
 
     println(
       Gen
         .custom[Talk]
         .specifyConst[List[Int]](_.gerg)(List(3, 2, 1))
-        .random()
+        .make()
     )
 
     println(
       Gen
         .custom[Talk]
         .specifyConst(f => f.gerg)(List(9, 8, 7))
-        .random()
+        .make()
     )
 
     Gen
       .custom[MyClass]
       .specifyConst(_.when[KJH])(K("YES"))
-      .random
+      .make
       .many[List](10)
       .foreach(println)
 
