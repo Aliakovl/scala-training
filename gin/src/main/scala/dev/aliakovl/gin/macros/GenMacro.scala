@@ -71,36 +71,35 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   def default[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
+    val sym = tpe.typeSymbol
     val rt = constructType[Gen](tpe)
     val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
     if (implicitValue.nonEmpty && tpe != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
-    } else if (tpe.typeSymbol.isAbstract && tpe.typeSymbol.isClass && tpe.typeSymbol.asClass.isSealed) {
-      val subtypes = subclassesOf(tpe.typeSymbol.asClass).map(subclassType(_, tpe))
+    } else if (isAbstractSealed(sym)) {
+      val subtypes = subclassesOf(sym.asClass).map(subclassType(_, tpe))
       State.traverse(subtypes) { subtype =>
         for {
-          vars <- State.get[VState].map(_._1)
-          name <- vars.get(subtype).fold {
-              val value = c.freshName(subtype.typeSymbol.name).toTermName
-              State.modifyFirst[Variables, Values](_.updated(subtype, value)).zip(help(subtype)).as(value)
-            }(value => State.pure[VState, c.TermName](value))
+          variables <- State.get[VState].map(_._1)
+          name <- variables.get(subtype).fold {
+              val termName = c.freshName(subtype.typeSymbol.name).toTermName
+              State.modifyFirst[Variables, Values](_.updated(subtype, termName)).zip(help(subtype)).as(termName)
+            }(State.pure)
         } yield subtype.typeSymbol -> name
       }.map(_.toMap).map(SealedTrait)
     } else if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
       State.pure(CaseObject)
-    } else if (tpe.typeSymbol.isClass && !tpe.typeSymbol.isAbstract && (tpe.typeSymbol.asClass.isFinal || tpe.typeSymbol.asClass.isCaseClass)) {
+    } else if (isConcreteClass(sym)) {
       State.sequence {
         paramListsOf(publicConstructor(tpe), tpe).map { params =>
           State.traverse(params) { param =>
             for {
-              vars <- State.get[VState].map(_._1)
+              variables <- State.get[VState].map(_._1)
               paramType = param.info
-              name <- vars
-                .get(paramType)
-                .fold {
-                  val value = c.freshName(paramType.typeSymbol.name).toTermName
-                  State.modifyFirst[Variables, Values](_.updated(paramType, value)).zip(help(paramType)).as(value)
-                }(value => State.pure[VState, c.TermName](value))
+              name <- variables.get(paramType).fold {
+                  val termName = c.freshName(paramType.typeSymbol.name).toTermName
+                  State.modifyFirst[Variables, Values](_.updated(paramType, termName)).zip(help(paramType)).as(termName)
+                }(State.pure)
             } yield name
           }
         }
@@ -142,64 +141,64 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   type Methods = List[Method]
+  type Selector = List[Optic]
 
   sealed trait Optic
   case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
   case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
 
   sealed trait Method
-  case class Selector(optics: Optic, tail: Method) extends Method
+  case class SpecifyMethod(selector: Selector, arg: Arg) extends Method
 
-  sealed trait Arg extends Method
+  sealed trait Arg
   case class GenArg(tree: c.Tree) extends Arg
   case class ConstArg(tree: c.Tree) extends Arg
 
   @tailrec
-  final def disassembleTree[A: c.WeakTypeTag](tree: c.Tree, acc: Methods = List.empty): Methods = {
+  final def disassembleTree[A: c.WeakTypeTag](tree: c.Tree, methods: Methods = List.empty): Methods = {
     tree match {
-      case q"$other.specify[$_](($_) => $selector)($gen)" =>
-        val s = disassembleSelector(selector, GenArg(gen))
-        disassembleTree(other, s +: acc)
-      case q"$other.specifyConst[$_](($_) => $selector)($const)" =>
-        val s = disassembleSelector(selector, ConstArg(const))
-        disassembleTree(other, s +: acc)
-      case q"$module.custom[$_]" if module.symbol == genSymbol => acc
+      case q"$other.specify[$_](($_) => $selectorTree)($arg)" =>
+        val selector = disassembleSelector(selectorTree)
+        val method = SpecifyMethod(selector, GenArg(arg))
+        disassembleTree(other, method +: methods)
+      case q"$other.specifyConst[$_](($_) => $selectorTree)($arg)" =>
+        val selector = disassembleSelector(selectorTree)
+        val method = SpecifyMethod(selector, ConstArg(arg))
+        disassembleTree(other, method +: methods)
+      case q"$module.custom[$_]" if module.symbol == genSymbol => methods
       case _ => c.abort(c.enclosingPosition, "Unsupported syntax.")
     }
   }
 
   @tailrec
-  final def disassembleSelector(selector: c.Tree, acc: Method): Method = {
-    selector match {
+  final def disassembleSelector(tree: c.Tree, selector: Selector = List.empty): Selector = {
+    tree match {
       case q"$other.$field" =>
-        val lens = Lens(other.tpe, field, selector.tpe)
-        disassembleSelector(other, Selector(lens, acc))
+        val lens = Lens(other.tpe, field, tree.tpe)
+        disassembleSelector(other, lens :: selector)
       case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
         val prism = Prism(from.symbol, to.symbol)
-        disassembleSelector(other, Selector(prism, acc))
-      case _: Ident => acc
+        disassembleSelector(other, prism :: selector)
+      case _: Ident => selector
       case _ => c.abort(c.enclosingPosition, "Unsupported path element.")
     }
   }
 
   sealed trait SpecifiedGen
-  case class SpecifiedCaseClass(classSymbol: ClassSymbol, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
+  case class SpecifiedCaseClass(sym: ClassSymbol, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
   case class SpecifiedSealedTrait(subclasses: Map[c.Symbol, SpecifiedGen]) extends SpecifiedGen
   case class Specified(tree: Arg) extends SpecifiedGen
   case class NotSpecified(tree: c.TermName) extends SpecifiedGen
 
-  def helpMergeOptics(
-      classSymbol: ClassSymbol,
-      selector: Method
-  ): VarsState[SpecifiedGen] = {
-    selector match {
-      case Selector(Prism(_, to), tail) =>
+  object SpecifiedGen {
+    def fromMethod(classSymbol: ClassSymbol, optics: List[Optic], arg: Arg): VarsState[SpecifiedGen] = optics match {
+      case Prism(_, to) :: tail =>
         if (!classSymbol.isSealed) c.abort(c.enclosingPosition, s"$classSymbol is not sealed")
         val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
         val toType = subclassType(to, classSymbol.toType)
         State.traverse(subtypes) { subtype =>
           if (subtype <:< toType) {
-            helpMergeOptics(to.asClass, tail).map(om => subtype.typeSymbol -> om)
+            fromMethod(to.asClass, tail, arg).map(subtype.typeSymbol -> _)
           } else {
             State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
               .map { name =>
@@ -207,12 +206,12 @@ class GenMacro(val c: blackbox.Context) {
               }
           }
         }.map(_.toMap).map(SpecifiedSealedTrait)
-      case Selector(Lens(from, to, tpe), tail) =>
+      case Lens(from, to, tpe) :: tail =>
         State.sequence {
           paramListsOf(publicConstructor(classSymbol.toType), from).map { params =>
             State.traverse(params) { param =>
               if (param.asTerm.name == to) {
-                helpMergeOptics(tpe.typeSymbol.asClass, tail).map(om =>
+                fromMethod(tpe.typeSymbol.asClass, tail, arg).map(om =>
                   param.name.toTermName -> om
                 )
               } else {
@@ -224,13 +223,13 @@ class GenMacro(val c: blackbox.Context) {
             }.map(_.toMap)
           }
         }.map(SpecifiedCaseClass(classSymbol, _))
-      case arg: Arg => State.pure(Specified(arg))
+      case Nil => State.pure(Specified(arg))
     }
   }
 
-  def mergeMethods[A: WeakTypeTag](ast: Methods): VarsState[Option[SpecifiedGen]] = {
-    State.traverse(ast) { selector =>
-        helpMergeOptics(weakTypeOf[A].typeSymbol.asClass, selector)
+  def mergeMethods[A: WeakTypeTag](methods: Methods): VarsState[Option[SpecifiedGen]] = {
+    State.traverse(methods) { case SpecifyMethod(optics, arg) =>
+      SpecifiedGen.fromMethod(weakTypeOf[A].typeSymbol.asClass, optics, arg)
     }.map { list =>
       list.foldLeft[Option[SpecifiedGen]](None) {
         case (Some(left), right) => Some(mergeSpecifications(left, right))
@@ -285,6 +284,14 @@ class GenMacro(val c: blackbox.Context) {
     case Specified(GenArg(tree)) => callApply(tree)
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))
+  }
+
+  def isAbstractSealed(sym: c.Symbol): Boolean = {
+    sym.isAbstract && sym.isClass && sym.asClass.isSealed
+  }
+
+  def isConcreteClass(sym: c.Symbol): Boolean = {
+    sym.isClass && !sym.isAbstract && (sym.asClass.isFinal || sym.asClass.isCaseClass)
   }
 
   def toGen(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.apply($tree)"
