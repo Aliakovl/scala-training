@@ -12,7 +12,7 @@ class GenMacro(val c: blackbox.Context) {
   type Variables = Map[c.Type, c.TermName]
   type Values = Map[c.Type, Value]
   type VarsState[A] = State[Variables, A]
-  type VState = (Values, Variables)
+  type VState = (Variables, Values)
   type FullState[A] = State[VState, A]
 
   val genSymbol = symbolOf[gin.Gen.type].asClass.module
@@ -79,10 +79,10 @@ class GenMacro(val c: blackbox.Context) {
       val subtypes = subclassesOf(tpe.typeSymbol.asClass).map(subclassType(_, tpe))
       State.traverse(subtypes) { subtype =>
         for {
-          vars <- State.get[VState].map(_._2)
+          vars <- State.get[VState].map(_._1)
           name <- vars.get(subtype).fold {
               val value = c.freshName(subtype.typeSymbol.name).toTermName
-              State.modifySecond[Values, Variables](_.updated(subtype, value)).zip(help(subtype)).as(value)
+              State.modifyFirst[Variables, Values](_.updated(subtype, value)).zip(help(subtype)).as(value)
             }(value => State.pure[VState, c.TermName](value))
         } yield subtype.typeSymbol -> name
       }.map(_.toMap).map(SealedTrait)
@@ -93,13 +93,13 @@ class GenMacro(val c: blackbox.Context) {
         paramListsOf(publicConstructor(tpe), tpe).map { params =>
           State.traverse(params) { param =>
             for {
-              vars <- State.get[VState].map(_._2)
+              vars <- State.get[VState].map(_._1)
               paramType = param.info
               name <- vars
                 .get(paramType)
                 .fold {
                   val value = c.freshName(paramType.typeSymbol.name).toTermName
-                  State.modifySecond[Values, Variables](_.updated(paramType, value)).zip(help(paramType)).as(value)
+                  State.modifyFirst[Variables, Values](_.updated(paramType, value)).zip(help(paramType)).as(value)
                 }(value => State.pure[VState, c.TermName](value))
             } yield name
           }
@@ -111,13 +111,13 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   def help[A: WeakTypeTag](tpe: c.Type): FullState[Value] = {
-    State.get[VState].map(_._1).flatMap { values =>
+    State.get[VState].map(_._2).flatMap { values =>
       values.get(tpe) match {
         case Some(value) => State.pure(value)
         case None =>
           for {
             value <- default[A](tpe)
-            _ <- State.modifyFirst[Values, Variables](_.updated(tpe, value))
+            _ <- State.modifySecond[Variables, Values](_.updated(tpe, value))
           } yield value
       }
     }
@@ -126,19 +126,19 @@ class GenMacro(val c: blackbox.Context) {
   def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): VarsState[Values] = {
     tree.fold {
         help(weakTypeOf[A]).flatMap { value =>
-          State.modifyFirst[Values, Variables](_.updated(weakTypeOf[A], value))
+          State.modifySecond[Variables, Values](_.updated(weakTypeOf[A], value))
         }
       } { value =>
         for {
-          _ <- State.modifyFirst[Values, Variables](
+          _ <- State.modifySecond[Variables, Values](
             _.updated(weakTypeOf[A], Refer(value))
           )
-          vars <- State.get[VState].map(_._2)
+          vars <- State.get[VState].map(_._1)
           _ <- State.traverse(vars.keySet - weakTypeOf[A])(help)
         } yield ()
       }
-      .flatMap(_ => State.get[VState].map(_._1))
-      .modifyState(_._2)((Map.empty, _))
+      .flatMap(_ => State.get[VState].map(_._2))
+      .modifyState(_._1)((_, Map.empty))
   }
 
   type Methods = List[Method]
