@@ -10,11 +10,11 @@ package object gin {
     def when[B <: A]: B = ???
   }
 
-  implicit final class RandomMany[A](private val random: Random[A]) extends AnyVal {
+  implicit final class GenOps[A](private val gen: Gen[A]) extends AnyVal {
     def many[C[E] <: IterableOnce[E]](size: Int)(implicit
         f: Factory[A, C[A]]
-    ): Random[C[A]] = Random.many[C](size).apply(random)
+    ): Gen[C[A]] = Gen.many[C](size).apply(gen)
   }
 
-  implicit def widen[A, B >: A](ra: Random[A]): Random[B] = ra.widen[B]
+  implicit def widen[A, B >: A](ra: Gen[A]): Gen[B] = ra.widen[B]
 }

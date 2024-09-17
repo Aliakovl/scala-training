@@ -1,7 +1,7 @@
 package dev.aliakovl.gin.macros
 
 import dev.aliakovl.gin
-import dev.aliakovl.gin.Random
+import dev.aliakovl.gin.Gen
 
 import scala.annotation.tailrec
 import scala.reflect.macros.blackbox
@@ -15,22 +15,22 @@ class GenMacro(val c: blackbox.Context) {
   type VState = (Vals, Vars)
   type FullState[A] = State[VState, A]
 
-  val randomSymbol = symbolOf[gin.Random.type].asClass.module
+  val genSymbol = symbolOf[gin.Gen.type].asClass.module
   val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
   def initVars[A: c.WeakTypeTag]: Vars = Map(
     weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
   )
 
-  def materializeRandom[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
+  def materializeGen[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
     val (vars, vals) = initValues[A](None).run(initVars[A])
 
-    c.Expr[Random[A]] {
+    c.Expr[Gen[A]] {
       mkBlock[A](vars, vals)
     }
   }
 
-  def randomImpl[A: c.WeakTypeTag]: c.Expr[Random[A]] = {
+  def randomImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
     val (vars, vals) = Option.when(weakTypeOf[A].typeSymbol.isClass) {
         disassembleTree(c.prefix.tree)
       }.fold(State.pure[Vars, Option[c.Tree]](None)) { methods =>
@@ -38,7 +38,7 @@ class GenMacro(val c: blackbox.Context) {
       }.flatMap(initValues[A])
       .run(initVars[A])
 
-    c.Expr[Random[A]] {
+    c.Expr[Gen[A]] {
       mkBlock[A](vars, vals)
     }
   }
@@ -53,16 +53,16 @@ class GenMacro(val c: blackbox.Context) {
   def mkBlock[A: c.WeakTypeTag](variables: Vars, values: Vals): c.Tree = {
     val res = values.map {
       case tp -> Implicitly(rType) =>
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = _root_.scala.Predef.implicitly[$rType]"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Gen[$tp] = _root_.scala.Predef.implicitly[$rType]"
       case tp -> Refer(value) =>
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${c.untypecheck(value.duplicate)}"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Gen[$tp] = ${c.untypecheck(value.duplicate)}"
       case tp -> CaseObject =>
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = ${toConst(q"_root_.scala.Predef.valueOf[$tp]")}"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Gen[$tp] = ${toConst(q"_root_.scala.Predef.valueOf[$tp]")}"
       case tp -> CaseClass(fields) =>
         val args = fields.map(_.map(name => callApply(q"$name")))
         construct(tp, args)
         val value = toRandom(construct(tp, args))
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Gen[$tp] = $value"
       case tp -> SealedTrait(subclasses) =>
         val size = subclasses.size
         val value = toRandom {
@@ -71,14 +71,14 @@ class GenMacro(val c: blackbox.Context) {
                 cq"$index => ${callApply(q"$name")}"
               }} }"
         }
-        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Random[$tp] = $value"
+        q"lazy val ${variables(tp)}: _root_.dev.aliakovl.gin.Gen[$tp] = $value"
     }
 
     q"{..$res; ${variables(weakTypeOf[A])}}"
   }
 
   def default[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
-    val rt = constructType[Random](tpe)
+    val rt = constructType[Gen](tpe)
     val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
     if (implicitValue.nonEmpty && tpe != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
@@ -170,7 +170,7 @@ class GenMacro(val c: blackbox.Context) {
       case q"$other.specifyConst[$_](($_) => $selector)($const)" =>
         val s = disassembleSelector(selector, ConstApply(const))
         disassembleTree(other, s +: acc)
-      case q"$module.custom[$_]" if module.symbol == randomSymbol => acc
+      case q"$module.custom[$_]" if module.symbol == genSymbol => acc
       case _ => c.abort(c.enclosingPosition, "Unsupported syntax.")
     }
   }
@@ -302,9 +302,9 @@ class GenMacro(val c: blackbox.Context) {
     case NotSpecified(tree)           => callApply(q"$tree")
   }
 
-  def toRandom(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Random.apply($tree)"
+  def toRandom(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.apply($tree)"
 
-  def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Random.const($tree)"
+  def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.const($tree)"
 
   def callApply(tree: c.Tree): c.Tree = q"$tree.apply()"
 

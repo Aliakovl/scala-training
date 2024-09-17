@@ -1,11 +1,11 @@
 package dev.aliakovl.gin.internal
 
-import dev.aliakovl.gin.Random
-import dev.aliakovl.gin.internal.ManyRandom._
+import dev.aliakovl.gin.Gen
+import dev.aliakovl.gin.internal.GenMany._
 
 import scala.collection.Factory
 
-trait ManyRandom {
+trait GenMany {
   def many[C[E] <: IterableOnce[E]](size: Int): ApplyMany[C] =
     new ApplyMany[C](size)
 
@@ -13,26 +13,26 @@ trait ManyRandom {
     new ApplyMany2[M](size)
 }
 
-object ManyRandom {
+object GenMany {
   final class ApplyMany[C[E] <: IterableOnce[E]](private val size: Int)
       extends AnyVal {
-    def apply[A](ra: Random[A])(implicit
+    def apply[A](ra: Gen[A])(implicit
         f: Factory[A, C[A]]
-    ): Random[C[A]] = Random {
+    ): Gen[C[A]] = Gen {
       f.fromSpecific(Iterable.fill(size)(ra.apply()))
     }
 
     def make[A](implicit
-        ra: Random[A],
+        ra: Gen[A],
         f: Factory[A, C[A]]
-    ): Random[C[A]] = apply(ra)
+    ): Gen[C[A]] = apply(ra)
   }
 
   final class ApplyMany2[M[K, V] <: Iterable[(K, V)]](private val size: Int)
       extends AnyVal {
-    def apply[K, V](rk: Random[K], rv: Random[V])(implicit
+    def apply[K, V](rk: Gen[K], rv: Gen[V])(implicit
         f: Factory[(K, V), M[K, V]]
-    ): Random[M[K, V]] = Random {
+    ): Gen[M[K, V]] = Gen {
       f.fromSpecific(
         Iterable
           .fill(size)(rk.apply())
@@ -41,9 +41,9 @@ object ManyRandom {
     }
 
     def make[K, V](implicit
-        rk: Random[K],
-        rv: Random[V],
+        rk: Gen[K],
+        rv: Gen[V],
         f: Factory[(K, V), M[K, V]]
-    ): Random[M[K, V]] = apply(rk, rv)
+    ): Gen[M[K, V]] = apply(rk, rv)
   }
 }
