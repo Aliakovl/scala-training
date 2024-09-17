@@ -18,6 +18,8 @@ class GenMacro(val c: blackbox.Context) {
   val genSymbol = symbolOf[gin.Gen.type].asClass.module
   val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
+  def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
+
   def initVars[A: c.WeakTypeTag]: Variables = Map(
     weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
   )
@@ -26,7 +28,7 @@ class GenMacro(val c: blackbox.Context) {
     val (vars, vals) = initValues[A](None).run(initVars[A])
 
     c.Expr[Gen[A]] {
-      mkBlock[A](vars, vals)
+      genTree[A](vars, vals)
     }
   }
 
@@ -39,7 +41,7 @@ class GenMacro(val c: blackbox.Context) {
       .run(initVars[A])
 
     c.Expr[Gen[A]] {
-      mkBlock[A](vars, vals)
+      genTree[A](vars, vals)
     }
   }
 
@@ -50,7 +52,7 @@ class GenMacro(val c: blackbox.Context) {
   case object CaseObject extends Value
   case class SealedTrait(subclasses: Map[c.Symbol, c.TermName]) extends Value
 
-  def mkBlock[A: c.WeakTypeTag](variables: Variables, values: Values): c.Tree = {
+  def genTree[A: c.WeakTypeTag](variables: Variables, values: Values): c.Tree = {
     def lazyVal(tpe: c.Type, value: c.Tree): c.Tree = q"lazy val ${variables(tpe)}: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
 
     val declaration = values.map {
@@ -70,10 +72,10 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$declaration; ${variables(weakTypeOf[A])}}"
   }
 
-  def default[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
+  def createValue[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
     val sym = tpe.typeSymbol
-    val rt = constructType[Gen](tpe)
-    val implicitValue = c.inferImplicitValue(rt, withMacrosDisabled = true)
+    val genType = constructType[Gen](tpe)
+    val implicitValue = c.inferImplicitValue(genType, withMacrosDisabled = true)
     if (implicitValue.nonEmpty && tpe != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
     } else if (isAbstractSealed(sym)) {
@@ -83,7 +85,7 @@ class GenMacro(val c: blackbox.Context) {
           variables <- State.get[VState].map(_._1)
           name <- variables.get(subtype).fold {
               val termName = c.freshName(subtype.typeSymbol.name).toTermName
-              State.modifyFirst[Variables, Values](_.updated(subtype, termName)).zip(help(subtype)).as(termName)
+              State.modifyFirst[Variables, Values](_.updated(subtype, termName)).zip(getOrElseCreateValue(subtype)).as(termName)
             }(State.pure)
         } yield subtype.typeSymbol -> name
       }.map(_.toMap).map(SealedTrait)
@@ -98,7 +100,7 @@ class GenMacro(val c: blackbox.Context) {
               paramType = param.info
               name <- variables.get(paramType).fold {
                   val termName = c.freshName(paramType.typeSymbol.name).toTermName
-                  State.modifyFirst[Variables, Values](_.updated(paramType, termName)).zip(help(paramType)).as(termName)
+                  State.modifyFirst[Variables, Values](_.updated(paramType, termName)).zip(getOrElseCreateValue(paramType)).as(termName)
                 }(State.pure)
             } yield name
           }
@@ -109,13 +111,13 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def help[A: WeakTypeTag](tpe: c.Type): FullState[Value] = {
+  def getOrElseCreateValue[A: WeakTypeTag](tpe: c.Type): FullState[Value] = {
     State.get[VState].map(_._2).flatMap { values =>
       values.get(tpe) match {
         case Some(value) => State.pure(value)
         case None =>
           for {
-            value <- default[A](tpe)
+            value <- createValue[A](tpe)
             _ <- State.modifySecond[Variables, Values](_.updated(tpe, value))
           } yield value
       }
@@ -124,7 +126,7 @@ class GenMacro(val c: blackbox.Context) {
 
   def initValues[A: c.WeakTypeTag](tree: Option[c.Tree]): VarsState[Values] = {
     tree.fold {
-        help(weakTypeOf[A]).flatMap { value =>
+        getOrElseCreateValue(weakTypeOf[A]).flatMap { value =>
           State.modifySecond[Variables, Values](_.updated(weakTypeOf[A], value))
         }
       } { value =>
@@ -133,7 +135,7 @@ class GenMacro(val c: blackbox.Context) {
             _.updated(weakTypeOf[A], Refer(value))
           )
           vars <- State.get[VState].map(_._1)
-          _ <- State.traverse(vars.keySet - weakTypeOf[A])(help)
+          _ <- State.traverse(vars.keySet - weakTypeOf[A])(getOrElseCreateValue)
         } yield ()
       }
       .flatMap(_ => State.get[VState].map(_._2))
@@ -148,7 +150,42 @@ class GenMacro(val c: blackbox.Context) {
   case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
 
   sealed trait Method
-  case class SpecifyMethod(selector: Selector, arg: Arg) extends Method
+  case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
+    def toSpecifiedGen(classSymbol: ClassSymbol, optics: List[Optic] = selector): VarsState[SpecifiedGen] = optics match {
+      case Prism(_, to) :: tail =>
+        if (!classSymbol.isSealed) fail(s"$classSymbol is not sealed")
+        val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
+        val toType = subclassType(to, classSymbol.toType)
+        State.traverse(subtypes) { subtype =>
+          if (subtype <:< toType) {
+            toSpecifiedGen(to.asClass, tail).map(subtype.typeSymbol -> _)
+          } else {
+            State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
+              .map { name =>
+                subtype.typeSymbol -> NotSpecified(name)
+              }
+          }
+        }.map(_.toMap).map(SpecifiedSealedTrait)
+      case Lens(from, to, tpe) :: tail =>
+        State.sequence {
+          paramListsOf(publicConstructor(classSymbol.toType), from).map { params =>
+            State.traverse(params) { param =>
+              if (param.asTerm.name == to) {
+                toSpecifiedGen(tpe.typeSymbol.asClass, tail).map(om =>
+                  param.name.toTermName -> om
+                )
+              } else {
+                val paramType = param.info
+                State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
+                  param.name.toTermName -> NotSpecified(name)
+                }
+              }
+            }.map(_.toMap)
+          }
+        }.map(SpecifiedCaseClass(classSymbol, _))
+      case Nil => State.pure(Specified(arg))
+    }
+  }
 
   sealed trait Arg
   case class GenArg(tree: c.Tree) extends Arg
@@ -166,7 +203,7 @@ class GenMacro(val c: blackbox.Context) {
         val method = SpecifyMethod(selector, ConstArg(arg))
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
-      case _ => c.abort(c.enclosingPosition, "Unsupported syntax.")
+      case _ => fail("Unsupported syntax.")
     }
   }
 
@@ -180,7 +217,7 @@ class GenMacro(val c: blackbox.Context) {
         val prism = Prism(from.symbol, to.symbol)
         disassembleSelector(other, prism :: selector)
       case _: Ident => selector
-      case _ => c.abort(c.enclosingPosition, "Unsupported path element.")
+      case _ => fail("Unsupported path element.")
     }
   }
 
@@ -190,46 +227,9 @@ class GenMacro(val c: blackbox.Context) {
   case class Specified(tree: Arg) extends SpecifiedGen
   case class NotSpecified(tree: c.TermName) extends SpecifiedGen
 
-  object SpecifiedGen {
-    def fromMethod(classSymbol: ClassSymbol, optics: List[Optic], arg: Arg): VarsState[SpecifiedGen] = optics match {
-      case Prism(_, to) :: tail =>
-        if (!classSymbol.isSealed) c.abort(c.enclosingPosition, s"$classSymbol is not sealed")
-        val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
-        val toType = subclassType(to, classSymbol.toType)
-        State.traverse(subtypes) { subtype =>
-          if (subtype <:< toType) {
-            fromMethod(to.asClass, tail, arg).map(subtype.typeSymbol -> _)
-          } else {
-            State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
-              .map { name =>
-                subtype.typeSymbol -> NotSpecified(name)
-              }
-          }
-        }.map(_.toMap).map(SpecifiedSealedTrait)
-      case Lens(from, to, tpe) :: tail =>
-        State.sequence {
-          paramListsOf(publicConstructor(classSymbol.toType), from).map { params =>
-            State.traverse(params) { param =>
-              if (param.asTerm.name == to) {
-                fromMethod(tpe.typeSymbol.asClass, tail, arg).map(om =>
-                  param.name.toTermName -> om
-                )
-              } else {
-                val paramType = param.info
-                State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
-                  param.name.toTermName -> NotSpecified(name)
-                }
-              }
-            }.map(_.toMap)
-          }
-        }.map(SpecifiedCaseClass(classSymbol, _))
-      case Nil => State.pure(Specified(arg))
-    }
-  }
-
   def mergeMethods[A: WeakTypeTag](methods: Methods): VarsState[Option[SpecifiedGen]] = {
-    State.traverse(methods) { case SpecifyMethod(optics, arg) =>
-      SpecifiedGen.fromMethod(weakTypeOf[A].typeSymbol.asClass, optics, arg)
+    State.traverse(methods) { case method: SpecifyMethod =>
+      method.toSpecifiedGen(weakTypeOf[A].typeSymbol.asClass)
     }.map { list =>
       list.foldLeft[Option[SpecifiedGen]](None) {
         case (Some(left), right) => Some(mergeSpecifications(left, right))
@@ -273,7 +273,7 @@ class GenMacro(val c: blackbox.Context) {
     case (_: NotSpecified, _: NotSpecified) => right
     case (_: NotSpecified, _: Specified) => right
     case (_: Specified, _: NotSpecified) => left
-    case _ => c.abort(c.enclosingPosition, s"Some specifications conflict")
+    case _ => fail(s"Some specifications conflict")
   }
 
   def specifiedTree(gen: SpecifiedGen): c.Tree = gen match {
@@ -339,7 +339,7 @@ class GenMacro(val c: blackbox.Context) {
       if (childClass.isSealed) {
         subclassesOf(childClass)
       } else {
-        c.abort(c.enclosingPosition, s"child $child of $parent is not sealed")
+        fail(s"child $child of $parent is not sealed")
       }
     }
   }

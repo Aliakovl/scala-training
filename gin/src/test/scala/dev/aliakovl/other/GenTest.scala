@@ -142,7 +142,7 @@ object GenTest {
 
     val g = Gen
       .custom[MyClass]
-//      .specify(_.when[MyClass1].m)(Random.random[MyClass])
+      .specify(_.when[MyClass1].m)(Gen.random[MyClass4.type])
       .specifyConst(_.when[MyClass2])(MyClass2(null, null, null))
       .make
 
