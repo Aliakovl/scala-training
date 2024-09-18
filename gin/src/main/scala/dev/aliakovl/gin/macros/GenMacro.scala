@@ -74,7 +74,7 @@ class GenMacro(val c: blackbox.Context) {
     q"{..$declaration; ${variables(weakTypeOf[A])}}"
   }
 
-  def createValue[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
+  def buildValue[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
     val sym = tpe.typeSymbol
     val genType = constructType[Gen](tpe)
     val implicitValue = c.inferImplicitValue(genType, withMacrosDisabled = true)
@@ -119,7 +119,7 @@ class GenMacro(val c: blackbox.Context) {
         case Some(value) => State.pure(value)
         case None =>
           for {
-            value <- createValue[A](tpe)
+            value <- buildValue[A](tpe)
             _ <- State.modifySecond[Variables, Values](_.updated(tpe, value))
           } yield value
       }
