@@ -13,7 +13,7 @@ package object gin {
   implicit final class GenOps[A](private val gen: Gen[A]) extends AnyVal {
     def many[C[E] <: IterableOnce[E]](size: Int)(implicit
         f: Factory[A, C[A]]
-    ): Gen[C[A]] = Gen.many[C](size).apply(gen)
+    ): Gen[C[A]] = Gen.many[C](size)(gen)
   }
 
   implicit def widen[A, B >: A](ra: Gen[A]): Gen[B] = ra.widen[B]
