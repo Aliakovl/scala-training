@@ -53,7 +53,9 @@ class GenMacro(val c: blackbox.Context) {
   case class SealedTrait(subclasses: Map[c.Symbol, c.TermName]) extends Value
 
   def genTree[A: c.WeakTypeTag](variables: Variables, values: Values): c.Tree = {
-    def lazyVal(tpe: c.Type, value: c.Tree): c.Tree = q"lazy val ${variables(tpe)}: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
+    def lazyVal(tpe: c.Type, value: c.Tree): c.Tree = {
+      q"lazy val ${variables(tpe)}: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
+    }
 
     val declaration = values.map {
       case tp -> Implicitly(rType) => lazyVal(tp, implicitly(rType))
@@ -327,10 +329,7 @@ class GenMacro(val c: blackbox.Context) {
 
     concreteChildren.foreach { child =>
       if (!child.asClass.isFinal && !child.asClass.isCaseClass) {
-        c.abort(
-          c.enclosingPosition,
-          s"child $child of $parent is neither final nor a case class"
-        )
+        fail(s"child $child of $parent is neither final nor a case class")
       }
     }
 
@@ -368,10 +367,7 @@ class GenMacro(val c: blackbox.Context) {
       )
       .map(_.asMethod)
       .getOrElse {
-        c.abort(
-          c.enclosingPosition,
-          s"class ${tpe.typeSymbol.asClass.name.decodedName} has no public constructors"
-        )
+        fail(s"class ${tpe.typeSymbol.asClass.name.decodedName} has no public constructors")
       }
   }
 }
