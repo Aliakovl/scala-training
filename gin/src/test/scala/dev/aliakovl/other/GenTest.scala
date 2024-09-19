@@ -23,13 +23,15 @@ case object H extends KJH("twert")
 
 class G(val int: Int)
 
-case class Talk(int: Int)(val string: String, val gerg: List[Int])(
-    wefwef: Option[Long]
+case class Talk(int: Int)(val string: String, val gerg: List[Int])(implicit
+    val wefwef: Option[Long], sec: Int
 ) {
-  override def toString: String = s"Talk($int)($string, $gerg)($wefwef)"
+  override def toString: String = s"Talk($int)($string, $gerg)($wefwef, $sec)"
 }
 
 object GenTest {
+
+  implicit val ol: Option[Long] = Some(11111111111L)
 
   implicit val mc2: Gen[MyClass2] =
     Gen.custom[MyClass2].specifyConst(_.mc2field)("LLLLLLL").make
@@ -148,12 +150,15 @@ object GenTest {
 
     println(g())
 
+    implicit val sec: Int = 1234
+
     println(Gen.custom[Talk].make())
 
     println(
       Gen
         .custom[Talk]
         .specifyConst[List[Int]](_.gerg)(List(3, 2, 1))
+        .specifyConst(_.wefwef)(Some(0))
         .make()
     )
 
@@ -170,6 +175,8 @@ object GenTest {
       .make
       .many[List](10)
       .foreach(println)
+
+    Gen.custom[MyClass4.type].make.foreach(println)
 
   }
 

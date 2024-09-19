@@ -25,23 +25,26 @@ class GenMacro(val c: blackbox.Context) {
   )
 
   def materializeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
-    val (vars, vals) = initValues[A](None).run(initVars[A])
+    val (variables, values) = initValues[A](None).run(initVars[A])
 
     c.Expr[Gen[A]] {
-      genTree[A](vars, vals)
+      genTree[A](variables, values)
     }
   }
 
   def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
-    val (vars, vals) = Option.when(weakTypeOf[A].typeSymbol.isClass) {
-        disassembleTree(c.prefix.tree)
-      }.fold(State.pure[Variables, Option[c.Tree]](None)) { methods =>
-        mergeMethods[A](methods).map(_.map(specifiedTree).map(toGen))
-      }.flatMap(initValues[A])
+    val (variables, values) = State.sequence {
+        Option.when(weakTypeOf[A].typeSymbol.isClass) {
+          mergeMethods[A](disassembleTree(c.prefix.tree))
+            .map(_.map(specifiedTree).map(toGen))
+        }
+      }
+      .map(_.flatten)
+      .flatMap(initValues[A])
       .run(initVars[A])
 
     c.Expr[Gen[A]] {
-      genTree[A](vars, vals)
+      genTree[A](variables, values)
     }
   }
 
@@ -95,7 +98,7 @@ class GenMacro(val c: blackbox.Context) {
       State.pure(CaseObject)
     } else if (isConcreteClass(sym)) {
       State.sequence {
-        paramListsOf(publicConstructor(tpe), tpe).map { params =>
+        notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
           State.traverse(params) { param =>
             for {
               variables <- State.get[VState].map(_._1)
@@ -109,7 +112,7 @@ class GenMacro(val c: blackbox.Context) {
         }
       }.map(CaseClass)
     } else {
-      State.pure(Implicitly(tpe))
+      State.pure(Implicitly(genType))
     }
   }
 
@@ -136,8 +139,8 @@ class GenMacro(val c: blackbox.Context) {
           _ <- State.modifySecond[Variables, Values](
             _.updated(weakTypeOf[A], Refer(value))
           )
-          vars <- State.get[VState].map(_._1)
-          _ <- State.traverse(vars.keySet - weakTypeOf[A])(getOrElseCreateValue)
+          variables <- State.get[VState].map(_._1)
+          _ <- State.traverse(variables.keySet - weakTypeOf[A])(getOrElseCreateValue)
         } yield ()
       }
       .flatMap(_ => State.get[VState].map(_._2))
@@ -172,10 +175,11 @@ class GenMacro(val c: blackbox.Context) {
         State.sequence {
           paramListsOf(publicConstructor(classSymbol.toType), from).map { params =>
             State.traverse(params) { param =>
+              val termName = param.name.toTermName
               if (param.asTerm.name == to) {
-                toSpecifiedGen(tpe.typeSymbol.asClass, tail).map(om =>
-                  param.name.toTermName -> om
-                )
+                toSpecifiedGen(tpe.typeSymbol.asClass, tail).map(termName -> _)
+              } else if (param.isImplicit) {
+                State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(c.inferImplicitValue(param.info))).map(termName -> _)
               } else {
                 val paramType = param.info
                 State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
@@ -227,6 +231,7 @@ class GenMacro(val c: blackbox.Context) {
   case class SpecifiedCaseClass(sym: ClassSymbol, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
   case class SpecifiedSealedTrait(subclasses: Map[c.Symbol, SpecifiedGen]) extends SpecifiedGen
   case class Specified(tree: Arg) extends SpecifiedGen
+  case class NotSpecifiedImplicit(tree: c.Tree) extends SpecifiedGen
   case class NotSpecified(tree: c.TermName) extends SpecifiedGen
 
   def mergeMethods[A: WeakTypeTag](methods: Methods): VarsState[Option[SpecifiedGen]] = {
@@ -264,17 +269,17 @@ class GenMacro(val c: blackbox.Context) {
       SpecifiedSealedTrait(subclasses.map { case (subclass, rightSpecified) =>
         subclass -> mergeSpecifications(left, rightSpecified)
       })
-    case (SpecifiedCaseClass(_, fields), _: NotSpecified) =>
+    case (SpecifiedCaseClass(_, fields), _: NotSpecified | _: NotSpecifiedImplicit) =>
       if (fields.nonEmpty) left else right
     case (SpecifiedSealedTrait(subclasses), _: NotSpecified) =>
       if (subclasses.nonEmpty) left else right
-    case (_: NotSpecified, SpecifiedCaseClass(_, fields)) =>
+    case (_: NotSpecified | _: NotSpecifiedImplicit, SpecifiedCaseClass(_, fields)) =>
       if (fields.nonEmpty) right else left
-    case (_: NotSpecified, SpecifiedSealedTrait(subclasses)) =>
+    case (_: NotSpecified | _: NotSpecifiedImplicit, SpecifiedSealedTrait(subclasses)) =>
       if (subclasses.nonEmpty) right else left
-    case (_: NotSpecified, _: NotSpecified) => right
-    case (_: NotSpecified, _: Specified) => right
-    case (_: Specified, _: NotSpecified) => left
+    case (_: NotSpecified | _: NotSpecifiedImplicit, _: NotSpecified | _: NotSpecifiedImplicit) => right
+    case (_: NotSpecified | _: NotSpecifiedImplicit, _: Specified) => right
+    case (_: Specified, _: NotSpecified | _: NotSpecifiedImplicit) => left
     case _ => fail(s"Some specifications conflict")
   }
 
@@ -286,6 +291,7 @@ class GenMacro(val c: blackbox.Context) {
     case Specified(GenArg(tree)) => callApply(tree)
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))
+    case NotSpecifiedImplicit(tree)   => tree
   }
 
   def isAbstractSealed(sym: c.Symbol): Boolean = {
@@ -358,16 +364,22 @@ class GenMacro(val c: blackbox.Context) {
     method.asMethod.infoIn(tpe).paramLists
   }
 
+  def notImplicitParamLists(params: List[List[c.universe.Symbol]]): List[List[c.universe.Symbol]] = {
+    params.filterNot(_.headOption.exists(_.isImplicit))
+  }
+
+  def isPhantomConstructor(constructor: Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
+
   def publicConstructor(tpe: c.Type): MethodSymbol = {
     val members = tpe.members
-    members
-      .find(m => m.isMethod && m.asMethod.isPrimaryConstructor && m.isPublic)
-      .orElse(
-        members.find(m => m.isMethod && m.asMethod.isConstructor && m.isPublic)
-      )
+    val constructors: Iterable[MethodSymbol] = members
+      .filter(m => m.isMethod && m.asMethod.isConstructor && m.isPublic)
+      .filterNot(isPhantomConstructor)
       .map(_.asMethod)
-      .getOrElse {
-        fail(s"class ${tpe.typeSymbol.asClass.name.decodedName} has no public constructors")
-      }
+
+    constructors
+      .find(_.isPrimaryConstructor)
+      .orElse(constructors.headOption)
+      .getOrElse(fail(s"class ${tpe.typeSymbol.asClass.name.decodedName} has no public constructors"))
   }
 }

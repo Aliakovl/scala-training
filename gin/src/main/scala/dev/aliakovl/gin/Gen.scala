@@ -16,6 +16,12 @@ trait Gen[A] extends (() => A) {
 
   def foreach[U](f: A => U): Unit = f(apply())
 
+  def tap[U](f: A => U): Gen[A] = Gen {
+    val r = apply()
+    f(r)
+    r
+  }
+
   def widen[T >: A]: Gen[T] = this.asInstanceOf[Gen[T]]
 }
 
