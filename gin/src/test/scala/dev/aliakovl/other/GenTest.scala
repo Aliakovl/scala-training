@@ -8,7 +8,11 @@ case class Cons[B](head: B, tail: Lst[B]) extends Lst[B]
 
 sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
-case class MyClass2(lst: Lst[Int], mc2field: String = "lol", other: Lst[Long] = LNil) extends MyClass
+case class MyClass2(
+    lst: Lst[Int],
+    mc2field: String = "lol",
+    other: Lst[Long] = LNil
+) extends MyClass
 case class MyClass3(t: 2) extends MyClass
 case object MyClass4 extends MyClass
 
@@ -19,106 +23,160 @@ case object H extends KJH("twert")
 
 class G(val int: Int)
 
+case class Talk(int: Int)(val string: String, val gerg: List[Int])(implicit
+    val wefwef: Option[Long], sec: Int
+) {
+  override def toString: String = s"Talk($int)($string, $gerg)($wefwef, $sec)"
+}
+
 object GenTest {
 
-  implicit val mc2: Random[MyClass2] = Gen[MyClass2].specifyConst(_.mc2field)("LLLLLLL").random
-  implicit val mc1: Random[MyClass1] = Gen[MyClass1].specifyConst(_.m)(H).random
+  implicit val ol: Option[Long] = Some(11111111111L)
 
-  implicit val str: Random[String] = Random.const("CONST")
-  implicit val int: Random[Int] = Random.oneOf(1, 2, 3)
+  implicit val mc2: Gen[MyClass2] =
+    Gen.custom[MyClass2].specifyConst(_.mc2field)("LLLLLLL").make
+  implicit val mc1: Gen[MyClass1] =
+    Gen.custom[MyClass1].specifyConst(_.m)(H).make
+
+  implicit val str: Gen[String] = Gen.const("CONST")
+  implicit val int: Gen[Int] = Gen.oneOf(1, 2, 3)
 
   def main(args: Array[String]): Unit = {
-    val a: MyClass2 = Random.random[MyClass2].apply()
-    val b: MyClass2 = Gen[MyClass2].random()
+    val a: MyClass2 = Gen.random[MyClass2].apply()
+    val b: MyClass2 = Gen.custom[MyClass2].make()
     println(a)
     println(b)
 
-    println(Gen[List[MyClass1]].random())
+    println(Gen.custom[List[MyClass1]].make())
 
-    val mc: Random[MyClass] =
-      Gen[MyClass]
+    val mc: Gen[MyClass] =
+      Gen
+        .custom[MyClass]
         .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field)(
-          Random.uglyString(100)
+          Gen.uglyString(100)
         )
         .specifyConst(_.when[MyClass1].m.when[MyClass2].lst)(Cons(3, LNil))
         .specifyConst(_.when[MyClass2].lst)(Cons(4, LNil))
-        .random
+        .make
 
     println(mc())
 
-    Random.many[List](10)(Gen[Lst[Int]].random).apply().foreach(println)
+    Gen
+      .many[List](10)(Gen.custom[Lst[Int]].make)
+      .apply()
+      .foreach(println)
 
-    Gen[Unit].random()
+    Gen.custom[Unit].make()
 
-    println(Gen[G].specify(_.int)(Random.oneOf(1, 5)).random().int)
+    println(Gen.custom[G].specify(_.int)(Gen.oneOf(1, 5)).make().int)
 
     println(
-      Gen[List[String]]
+      Gen
+        .custom[List[String]]
         .specifyConst(_.when[::[String]].head)("wefwefef")
-        .random()
+        .make()
     )
 
     println(
-      Gen[Lst[String]]
+      Gen
+        .custom[Lst[String]]
         .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(
-          Random.uglyString(10)
+          Gen.uglyString(10)
         )
-        .random()
+        .make()
     )
 
-    val keklol = Gen[Lst[String]]
+    val keklol = Gen
+      .custom[Lst[String]]
       .specifyConst(_.when[Cons[String]].head)("kek")
       .specifyConst(_.when[Cons[String]].tail.when[Cons[String]].head)("lol")
-      .random
+      .make
 
-    println(Random.many[List](10)(keklol).apply())
+    println(Gen.many[List](10)(keklol).apply())
 
-    val f: Random[Lst[String]] = Gen[Lst[String]]
-      .specify(_.when[Cons[String]].head)(Random.random[String].map(_.toUpperCase))
-      .specify(_.when[Cons[String]].tail)(Random.random[Lst[String]])
-      .random
+    val f: Gen[Lst[String]] = Gen
+      .custom[Lst[String]]
+      .specify(_.when[Cons[String]].head)(
+        Gen.random[String].map(_.toUpperCase)
+      )
+      .specify(_.when[Cons[String]].tail)(Gen.random[Lst[String]])
+      .make
 
-    println(Random.many[List](10)(f).apply().mkString(", "))
+    println(Gen.many[List](10)(f).apply().mkString(", "))
 
-    println(Random.many[List](10).make[Lst[String]].apply())
+    println(Gen.many[List](10).make[Lst[String]].apply())
 
-    println {
-      (for {
-        a <- Random.oneOf(1, 2)
-        if a == 1
-      } yield a).apply()
-    }
-    println(Random.many[List](10)(f).apply().mkString(", "))
+    println(Gen.many[List](10)(f).apply().mkString(", "))
 
-    val tt: Random[MyClass] = Random.oneOfRandom(
-      Gen[MyClass1].specifyConst(_.m.when[MyClass2].mc2field)("wef").random,
-      Gen[MyClass3].random
+    val tt: Gen[MyClass] = Gen.oneOfGen(
+      Gen
+        .custom[MyClass1]
+        .specifyConst(_.m.when[MyClass2].mc2field)("wef")
+        .make,
+      Gen.custom[MyClass3].make
     )
 
-    println(Random.many[List](3)(tt).apply())
+    println(Gen.many[List](3)(tt).apply())
 
     val y: (Int, MyClass4.type) = (4, MyClass4)
 
-    val r = Random.random[MyClass3]
-    println(Random.many[List](10)(r).apply())
+    val r = Gen.random[MyClass3]
+    println(Gen.many[List](10)(r).apply())
 
-    println(Random.random[y.type].apply())
+    println(Gen.random[y.type].apply())
 
-    val rp: Random[String] = Random.oneOfRandom[String](
-      Gen["RRRRR"].random,
-      Gen["PPPPPP"].random
+    val rp: Gen[String] = Gen.oneOfGen[String](
+      Gen.custom["RRRRR"].make,
+      Gen.custom["PPPPPP"].make
     )
 
-    val rppp = Random.oneOf[String].make["RRRRR", "PPPPPP"]
+    val rppp = Gen.oneOf[String].make["RRRRR", "PPPPPP"]
 
-    println(Random.many[List](10)(rp).apply())
-    println(Random.many[List](10)(rppp).apply())
+    println(Gen.many[List](10)(rp).apply())
+    println(Gen.many[List](10)(rppp).apply())
 
-    val cr: Random[MyClass] = Random.oneOf[MyClass].make[MyClass1, MyClass2, MyClass3]
+    val cr: Gen[MyClass] =
+      Gen.oneOf[MyClass].make[MyClass1, MyClass2, MyClass3]
 
     println(cr())
 
-    println(Random.many[List](10)(Random.oneOf[Any].make[String, Int]).apply())
+    println(Gen.many[List](10)(Gen.oneOf[Any].make[String, Int]).apply())
+
+    val g = Gen
+      .custom[MyClass]
+      .specify(_.when[MyClass1].m)(Gen.random[MyClass4.type])
+      .specifyConst(_.when[MyClass2])(MyClass2(null, null, null))
+      .make
+
+    println(g())
+
+    implicit val sec: Int = 1234
+
+    println(Gen.custom[Talk].make())
+
+    println(
+      Gen
+        .custom[Talk]
+        .specifyConst[List[Int]](_.gerg)(List(3, 2, 1))
+        .specifyConst(_.wefwef)(Some(0))
+        .make()
+    )
+
+    println(
+      Gen
+        .custom[Talk]
+        .specifyConst(f => f.gerg)(List(9, 8, 7))
+        .make()
+    )
+
+    Gen
+      .custom[MyClass]
+      .specifyConst(_.when[KJH])(K("YES"))
+      .make
+      .many[List](10)
+      .foreach(println)
+
+    Gen.custom[MyClass4.type].make.foreach(println)
 
   }
 

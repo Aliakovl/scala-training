@@ -39,7 +39,7 @@ private[macros] object State {
     State(p => ((f(p._1), p._2), ()))
   def modifySecond[S, T](f: T => T): State[(S, T), Unit] =
     State(p => ((p._1, f(p._2)), ()))
-  def traverse[S, C[+E] <: Iterable[E], A, B](ta: C[A])(
+  def traverse[S, C[+E] <: IterableOnce[E], A, B](ta: C[A])(
       f: A => State[S, B]
   )(implicit bf: BuildFrom[C[A], B, C[B]]): State[S, C[B]] = {
     val iterator = ta.iterator
@@ -57,6 +57,13 @@ private[macros] object State {
       (state, builder.result())
     }
   }
+
+  def sequence[C[+E] <: IterableOnce[E], S, A](ta: C[State[S, A]])(implicit
+      bf: BuildFrom[C[State[S, A]], A, C[A]]
+  ): State[S, C[A]] = traverse(ta)(identity)
+
+  def sequence[S, A](ta: Option[State[S, A]]): State[S, Option[A]] =
+    ta.fold[State[S, Option[A]]](State.pure(None))(_.map(Some(_)))
 
   def traverse[S, A, B](ta: Set[A])(
       f: A => State[S, B]
