@@ -161,7 +161,6 @@ class GenMacro(val c: blackbox.Context) {
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
     def toSpecifiedGen(classSymbol: ClassSymbol, optics: List[Optic] = selector): VarsState[SpecifiedGen] = optics match {
       case Prism(_, to) :: tail =>
-        if (!classSymbol.isSealed) fail(s"$classSymbol is not sealed")
         if (tail.isEmpty && arg.isInstanceOf[DefaultArg]) fail(s"$classSymbol not a case class")
         val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
         val toType = subclassType(to, classSymbol.toType)
@@ -179,7 +178,7 @@ class GenMacro(val c: blackbox.Context) {
         State.sequence {
           val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(classSymbol.toType), from)
           val defaultMap = defaults(classSymbol.companion)(allParams)
-          if (!allParams.flatten.map(_.name).contains(to)) fail(s"Constructor of $classSymbol does not take $to argument")
+          if (!allParams.flatten.map(_.name).contains(to)) c.abort(from.termSymbol.pos, s"Constructor of $classSymbol does not take $to argument")
           allParams.map { params =>
             State.traverse(params) { param =>
               val termName = param.name.toTermName
@@ -226,7 +225,7 @@ class GenMacro(val c: blackbox.Context) {
         val method = SpecifyMethod(selector, DefaultArg(None))
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
-      case _ => fail("Unsupported syntax.")
+      case _ => c.abort(tree.pos, "Unsupported syntax.")
     }
   }
 
@@ -237,13 +236,18 @@ class GenMacro(val c: blackbox.Context) {
         val lens = Lens(other.tpe, field, tree.tpe)
         disassembleSelector(other, lens :: selector)
       case q"$module.GenWhen[$_]($other).arg[$_]($fieldName)" if module.symbol == ginModule =>
-        val lens = Lens(other.tpe, TermName(c.eval(c.Expr[String](fieldName))), tree.tpe)
-        disassembleSelector(other, lens :: selector)
+        fieldName match {
+          case Literal(Constant(name: String)) =>
+            val lens = Lens(other.tpe, TermName(name), tree.tpe)
+            disassembleSelector(other, lens :: selector)
+          case _ => c.abort(fieldName.pos, "Only string literals supported")
+        }
       case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
+        if (!from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(from.symbol, to.symbol)
         disassembleSelector(other, prism :: selector)
       case _: Ident => selector
-      case _ => fail("Unsupported path element.")
+      case tree => c.abort(tree.pos, "Unsupported path element.")
     }
   }
 
