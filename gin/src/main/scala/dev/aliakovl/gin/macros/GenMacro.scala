@@ -176,6 +176,7 @@ class GenMacro(val c: blackbox.Context) {
         State.sequence {
           val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(classSymbol.toType), from)
           val defaultMap = defaults(classSymbol.companion)(allParams)
+          if (!allParams.flatten.map(_.name).contains(to)) fail(s"Constructor of $classSymbol does not take $to argument")
           allParams.map { params =>
             State.traverse(params) { param =>
               val termName = param.name.toTermName
@@ -231,6 +232,9 @@ class GenMacro(val c: blackbox.Context) {
     tree match {
       case q"$other.$field" =>
         val lens = Lens(other.tpe, field, tree.tpe)
+        disassembleSelector(other, lens :: selector)
+      case q"$module.GenWhen[$_]($other).arg[$_]($fieldName)" if module.symbol == ginModule =>
+        val lens = Lens(other.tpe, TermName(c.eval(c.Expr[String](fieldName))), tree.tpe)
         disassembleSelector(other, lens :: selector)
       case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
         val prism = Prism(from.symbol, to.symbol)
@@ -320,7 +324,7 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   def isConcreteClass(sym: c.Symbol): Boolean = {
-    sym.isClass && !sym.isAbstract && (sym.asClass.isFinal || sym.asClass.isCaseClass)
+    sym.isClass && !sym.isAbstract
   }
 
   def toGen(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.apply($tree)"

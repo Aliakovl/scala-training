@@ -10,7 +10,7 @@ sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
 case class MyClass2(
     lst: Lst[Int],
-    mc2field: String = "lol-default")(val other: Lst[Long] = Cons(mc2field.length.toLong, LNil)
+    mc2field: String = "lol-default")(other: Lst[Long] = Cons(mc2field.length.toLong, LNil)
 ) extends MyClass {
   override def toString: String = s"MyClass2($lst, $mc2field)($other)"
 }
@@ -28,6 +28,13 @@ case class Talk(int: Int)(val string: String, val gerg: List[Int])(implicit
     val wefwef: Option[Long], sec: Int
 ) {
   override def toString: String = s"Talk($int)($string, $gerg)($wefwef, $sec)"
+}
+
+class TestClass(val g: Int) {
+  override def toString: String = s"TestClass($g)"
+}
+class TestClass2(private val t: String) extends TestClass(3) {
+  override def toString: String = s"TestClass2($t)($g)"
 }
 
 object GenTest {
@@ -186,9 +193,18 @@ object GenTest {
 
     Gen.custom[MyClass2]
       .useDefault(_.mc2field)
-      .useDefault(_.other)
+      .useDefault(_.arg("other"))
       .make.foreach(println)
 
+    Gen.custom[TestClass]
+      .specifyConst(_.g)(1000)
+      .make
+      .foreach(println)
+
+    Gen.custom[TestClass2]
+      .specifyConst(_.arg("t"))("I am private")
+      .make
+      .foreach(println)
   }
 
 }

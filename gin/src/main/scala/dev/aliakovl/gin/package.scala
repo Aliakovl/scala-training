@@ -8,6 +8,9 @@ package object gin {
   implicit final class GenWhen[A](private val value: A) extends AnyVal {
     @compileTimeOnly("when can only be used inside specify")
     def when[B <: A]: B = ???
+
+    @compileTimeOnly("arg can only be used inside specify")
+    def arg[P](name: String): P = ???
   }
 
   implicit final class GenOps[A](private val gen: Gen[A]) extends AnyVal {
