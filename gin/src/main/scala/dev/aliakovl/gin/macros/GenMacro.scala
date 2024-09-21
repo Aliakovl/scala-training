@@ -159,6 +159,7 @@ class GenMacro(val c: blackbox.Context) {
     def toSpecifiedGen(classSymbol: ClassSymbol, optics: List[Optic] = selector): VarsState[SpecifiedGen] = optics match {
       case Prism(_, to) :: tail =>
         if (!classSymbol.isSealed) fail(s"$classSymbol is not sealed")
+        if (tail.isEmpty && arg.isInstanceOf[DefaultArg]) fail(s"$classSymbol not a case class")
         val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
         val toType = subclassType(to, classSymbol.toType)
         State.traverse(subtypes) { subtype =>
@@ -173,11 +174,18 @@ class GenMacro(val c: blackbox.Context) {
         }.map(_.toMap).map(SpecifiedSealedTrait)
       case Lens(from, to, tpe) :: tail =>
         State.sequence {
-          paramListsOf(publicConstructor(classSymbol.toType), from).map { params =>
+          val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(classSymbol.toType), from)
+          val defaultMap = defaults(classSymbol.companion)(allParams)
+          allParams.map { params =>
             State.traverse(params) { param =>
               val termName = param.name.toTermName
               if (param.asTerm.name == to) {
-                toSpecifiedGen(tpe.typeSymbol.asClass, tail).map(termName -> _)
+                val defaultOpt = defaultMap.get(param)
+                if (tail.isEmpty && arg.isInstanceOf[DefaultArg] && defaultOpt.nonEmpty) {
+                  State.pure[Variables, SpecifiedGen](Specified(DefaultArg(defaultOpt))).map(termName -> _)
+                } else {
+                  toSpecifiedGen(tpe.typeSymbol.asClass, tail).map(termName -> _)
+                }
               } else if (param.isImplicit) {
                 State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(c.inferImplicitValue(param.info))).map(termName -> _)
               } else {
@@ -196,6 +204,7 @@ class GenMacro(val c: blackbox.Context) {
   sealed trait Arg
   case class GenArg(tree: c.Tree) extends Arg
   case class ConstArg(tree: c.Tree) extends Arg
+  case class DefaultArg(tree: Option[c.Tree]) extends Arg
 
   @tailrec
   final def disassembleTree[A: c.WeakTypeTag](tree: c.Tree, methods: Methods = List.empty): Methods = {
@@ -207,6 +216,10 @@ class GenMacro(val c: blackbox.Context) {
       case q"$other.specifyConst[$_](($_) => $selectorTree)($arg)" =>
         val selector = disassembleSelector(selectorTree)
         val method = SpecifyMethod(selector, ConstArg(arg))
+        disassembleTree(other, method +: methods)
+      case q"$other.useDefault[$_](($_) => $selectorTree)" =>
+        val selector = disassembleSelector(selectorTree)
+        val method = SpecifyMethod(selector, DefaultArg(None))
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
       case _ => fail("Unsupported syntax.")
@@ -285,13 +298,21 @@ class GenMacro(val c: blackbox.Context) {
 
   def specifiedTree(gen: SpecifiedGen): c.Tree = gen match {
     case SpecifiedCaseClass(classSymbol, fields) =>
-      val args = fields.map(_.values.map(specifiedTree).toList)
+      val args = fields.foldLeft(List.empty[List[c.Tree]]) { case (acc, next) =>
+        val params = next.values.map {
+          case Specified(DefaultArg(Some(value))) => q"$value(...$acc)"
+          case other => specifiedTree(other)
+        }.toList
+
+        acc :+ params
+      }
       construct(classSymbol.toType, args)
     case SpecifiedSealedTrait(subclasses) => constructCases(subclasses.values)(specifiedTree)
     case Specified(GenArg(tree)) => callApply(tree)
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))
     case NotSpecifiedImplicit(tree)   => tree
+    case _ => fail("never")
   }
 
   def isAbstractSealed(sym: c.Symbol): Boolean = {
@@ -358,6 +379,23 @@ class GenMacro(val c: blackbox.Context) {
         .map(_.typeSymbol),
       to = parent.typeArgs
     )
+  }
+
+  def defaults(companion: c.Symbol)(params: List[List[c.Symbol]]): Map[c.Symbol, c.Tree] = {
+    val res: List[List[Option[c.Tree]]] = params.foldLeft(List.empty[List[Option[c.Tree]]]) { case (acc, next) =>
+      val defaultOpts: List[Option[c.Tree]] = next.zipWithIndex.map { case (sym, index) =>
+        Option.when(sym.asTerm.isParamWithDefault) {
+          val i = acc.flatten.size + index + 1
+          val default = companion.info.member(TermName(s"<init>$$default$$$i").encodedName)
+          q"$companion.$default"
+        }
+      }
+      acc :+ defaultOpts
+    }
+
+    params.flatten.zip(res.flatten).collect {
+      case sym -> Some(tree) => sym -> tree
+    }.toMap
   }
 
   def paramListsOf(method: c.Symbol, tpe: c.Type): List[List[c.universe.Symbol]] = {

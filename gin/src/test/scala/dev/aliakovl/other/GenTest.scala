@@ -10,9 +10,10 @@ sealed trait MyClass
 case class MyClass1(m: MyClass) extends MyClass
 case class MyClass2(
     lst: Lst[Int],
-    mc2field: String = "lol",
-    other: Lst[Long] = LNil
-) extends MyClass
+    mc2field: String = "lol-default")(val other: Lst[Long] = Cons(mc2field.length.toLong, LNil)
+) extends MyClass {
+  override def toString: String = s"MyClass2($lst, $mc2field)($other)"
+}
 case class MyClass3(t: 2) extends MyClass
 case object MyClass4 extends MyClass
 
@@ -145,7 +146,7 @@ object GenTest {
     val g = Gen
       .custom[MyClass]
       .specify(_.when[MyClass1].m)(Gen.random[MyClass4.type])
-      .specifyConst(_.when[MyClass2])(MyClass2(null, null, null))
+      .specifyConst(_.when[MyClass2])(MyClass2(null, null)(null))
       .make
 
     println(g())
@@ -177,6 +178,16 @@ object GenTest {
       .foreach(println)
 
     Gen.custom[MyClass4.type].make.foreach(println)
+
+    Gen
+      .custom[MyClass1]
+      .useDefault(_.m.when[MyClass2].mc2field)
+      .make.foreach(println)
+
+    Gen.custom[MyClass2]
+      .useDefault(_.mc2field)
+      .useDefault(_.other)
+      .make.foreach(println)
 
   }
 
