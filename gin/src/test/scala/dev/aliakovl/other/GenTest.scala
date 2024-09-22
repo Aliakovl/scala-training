@@ -1,5 +1,6 @@
 package dev.aliakovl.other
 
+import cats.implicits.toTraverseOps
 import dev.aliakovl.gin._
 
 sealed trait Lst[+A]
@@ -203,8 +204,7 @@ object GenTest {
     )
   )
 
-  def main(args: Array[String]): Unit = Gen
-    .sequence(gens)
+  def main(args: Array[String]): Unit = gens.sequence
     .foreach(
       _.zipWithIndex
         .map { case (value, id) =>

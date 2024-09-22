@@ -131,7 +131,7 @@ lazy val gin = (project in file("./gin"))
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.typelevel" %% "cats-core" % "2.12.0" % Test,
+      "org.typelevel" %% "cats-core" % "2.12.0"
     ),
     scalacOptions ++= Seq(
       "--language:experimental.macros",

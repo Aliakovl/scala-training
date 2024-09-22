@@ -2,21 +2,20 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.internal._
 
-import scala.collection.BuildFrom
 import scala.language.implicitConversions
 import scala.util.Random
 
-trait Gen[A] extends (() => A) {
-  override def apply(): A
+final class Gen[A] private (private val run: () => A) {
+  def apply(): A = run()
 
-  def map[B](f: A => B): Gen[B] = Gen(f(apply()))
+  def map[B](f: A => B): Gen[B] = Gen(f(run()))
 
-  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(f(apply()).apply())
+  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(f(run()).run())
 
-  def foreach[U](f: A => U): Unit = f(apply())
+  def foreach[U](f: A => U): Unit = f(run())
 
   def tap[U](f: A => U): Gen[A] = Gen {
-    val r = apply()
+    val r = run()
     f(r)
     r
   }
@@ -24,9 +23,9 @@ trait Gen[A] extends (() => A) {
   def widen[T >: A]: Gen[T] = this.asInstanceOf[Gen[T]]
 }
 
-object Gen extends GenDerivation with GenInstances with GenOneOf {
+object Gen extends GenLowPriority with GenDerivation with GenInstances with GenOneOf {
 
-  def apply[A](eval: => A): Gen[A] = () => eval
+  def apply[A](eval: => A): Gen[A] = new Gen(() => eval)
 
   def random[A](implicit inst: Gen[A]): Gen[A] = inst
 
@@ -61,19 +60,4 @@ object Gen extends GenDerivation with GenInstances with GenOneOf {
   ): Gen[E#Value] = Gen {
     en(Random.nextInt(en.maxId))
   }
-
-  def traverse[C[+E] <: IterableOnce[E], A, B](ta: C[A])(
-      f: A => Gen[B]
-  )(implicit bf: BuildFrom[C[A], B, C[B]]): Gen[C[B]] = {
-    val iterator = ta.iterator
-    val builder = bf.newBuilder(ta)
-    while (iterator.hasNext) {
-      builder += f(iterator.next())()
-    }
-    Gen(builder.result())
-  }
-
-  def sequence[C[+E] <: IterableOnce[E], A](ta: C[Gen[A]])(implicit
-      bf: BuildFrom[C[Gen[A]], A, C[A]]
-  ): Gen[C[A]] = traverse(ta)(identity)
 }

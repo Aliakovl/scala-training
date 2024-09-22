@@ -20,8 +20,10 @@ package object gin {
     ): Gen[C[A]] = Gen(
       factory.fromSpecific(Iterable.fill(size)(gen.apply()))
     )
+  }
 
-    def makeMap[K, V](size: Int)(implicit ev: A <:< (K, V)): Gen[Map[K, V]] = Gen(
+  implicit final class GenTuple2Ops[K, V](private val gen: Gen[(K, V)]) extends AnyVal {
+    def makeMap(size: Int): Gen[Map[K, V]] = Gen(
       Map.fromSpecific(Iterable.fill(size)(gen.apply()))
     )
   }

@@ -11,16 +11,20 @@ trait GenInstances {
   implicit val uuidGen: Gen[UUID] = Gen(UUID.randomUUID())
   implicit val stringGen: Gen[String] = Gen.alphanumeric(10)
   implicit val charGen: Gen[Char] = Gen(Random.nextPrintableChar())
-  implicit val instantGen: Gen[Instant] = Gen(Instant.now().truncatedTo(ChronoUnit.MILLIS))
+  implicit val instantGen: Gen[Instant] = Gen(
+    Instant.now().truncatedTo(ChronoUnit.MILLIS)
+  )
   implicit val intGen: Gen[Int] = Gen(Random.nextInt())
   implicit val longGen: Gen[Long] = Gen(Random.nextLong())
   implicit val doubleGen: Gen[Double] = Gen(Random.nextDouble())
   implicit val booleanGen: Gen[Boolean] = Gen(Random.nextBoolean())
-  implicit val bigDecimalGen: Gen[BigDecimal] = Gen(BigDecimal.valueOf(Random.nextDouble()))
+  implicit val bigDecimalGen: Gen[BigDecimal] = Gen(
+    BigDecimal.valueOf(Random.nextDouble())
+  )
   implicit val localDateGen: Gen[LocalDate] = Gen(LocalDate.now())
   implicit val localDateTimeGen: Gen[LocalDateTime] = Gen(LocalDateTime.now())
   implicit val yearMonthGen: Gen[YearMonth] = Gen(YearMonth.now())
-  implicit def defaultIterableGen2d[A: Gen, B: Gen]: Gen[Map[A, B]] = {
-    Gen.between(0, 10).flatMap(Gen.product(Gen.random[A], Gen.random[B]).makeMap(_))
-  }
+  implicit def defaultIterableGen2d[A: Gen, B: Gen]: Gen[Map[A, B]] = Gen
+    .between(0, 10)
+    .flatMap(Gen.product[A, B](Gen.random[A], Gen.random[B]).makeMap(_))
 }
