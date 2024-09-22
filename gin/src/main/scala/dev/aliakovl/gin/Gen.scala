@@ -24,10 +24,7 @@ trait Gen[A] extends (() => A) {
   def widen[T >: A]: Gen[T] = this.asInstanceOf[Gen[T]]
 }
 
-object Gen
-    extends GenDerivation
-    with GenInstances
-    with GenOneOf {
+object Gen extends GenDerivation with GenInstances with GenOneOf {
 
   def apply[A](eval: => A): Gen[A] = () => eval
 
@@ -66,7 +63,7 @@ object Gen
   }
 
   def traverse[C[+E] <: IterableOnce[E], A, B](ta: C[A])(
-    f: A => Gen[B]
+      f: A => Gen[B]
   )(implicit bf: BuildFrom[C[A], B, C[B]]): Gen[C[B]] = {
     val iterator = ta.iterator
     val builder = bf.newBuilder(ta)
@@ -76,5 +73,7 @@ object Gen
     Gen(builder.result())
   }
 
-  def sequence[C[+E] <: IterableOnce[E], A](ta: C[Gen[A]])(implicit bf: BuildFrom[C[Gen[A]], A, C[A]]): Gen[C[A]] = traverse(ta)(identity)
+  def sequence[C[+E] <: IterableOnce[E], A](ta: C[Gen[A]])(implicit
+      bf: BuildFrom[C[Gen[A]], A, C[A]]
+  ): Gen[C[A]] = traverse(ta)(identity)
 }

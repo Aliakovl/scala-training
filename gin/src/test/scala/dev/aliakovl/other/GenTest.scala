@@ -33,8 +33,8 @@ case class Talk(int: Int)(val string: String, val gerg: List[Int])(implicit
 class TestClass(val g: Int) {
   override def toString: String = s"TestClass($g)"
 }
-class TestClass2(private val t: String) extends TestClass(3) {
-  override def toString: String = s"TestClass2($t)($g)"
+class TestClass2(private val t: String, val s: Int) extends TestClass(3) {
+  override def toString: String = s"TestClass2($t)($g)($s)"
 }
 
 class T(a: Int, b: String) {
@@ -157,6 +157,7 @@ object GenTest {
       .useDefault(_.mc2field)
       .useDefault(_.arg("other"))
       .make,
+    Gen.fromFunction { lst: Lst[Int] => MyClass2(lst)() },
     Gen
       .custom[TestClass]
       .specifyConst(_.g)(1000)
@@ -165,6 +166,7 @@ object GenTest {
       .custom[TestClass2]
       .specifyConst(_.arg("t"))("I am private")
       .make,
+    Gen.fromFunction { new TestClass2("I am private", _) },
     Gen
       .fromFunction {
         s: String =>
@@ -174,7 +176,7 @@ object GenTest {
     Gen.fromFunction(T.apply _).many[List](3),
     Gen.custom[T].specifyConst(_.arg[Int]("a"))(2134).make,
     Gen.fromFunction(
-      (
+      Some(
         _: String,
         _: String,
         _: String,
