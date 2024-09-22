@@ -39,6 +39,10 @@ object Gen
 
   def custom[A]: GenSpecify[A] = new GenSpecify[A]
 
+  def fromFunction[In](in: In)(implicit
+      constructor: FunctionConstructor[In]
+  ): constructor.Out = constructor(in)
+
   def uglyString(size: Int): Gen[String] = apply {
     Random.nextString(size)
   }
@@ -48,6 +52,10 @@ object Gen
 
   def alphanumeric(size: Int): Gen[String] = apply {
     Random.alphanumeric.take(size).mkString
+  }
+
+  def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = apply {
+    Random.between(minInclusive, maxExclusive)
   }
 
   def enumeration[E <: Enumeration](

@@ -46,7 +46,7 @@ object GenTest {
   implicit val mc1: Gen[MyClass1] =
     Gen.custom[MyClass1].specifyConst(_.m)(H).make
 
-  implicit val str: Gen[String] = Gen.const("CONST")
+  implicit val str: Gen[String] = Gen.between(0, 5).flatMap(Gen.alphanumeric)
   implicit val int: Gen[Int] = Gen.oneOf(1, 2, 3)
 
   def main(args: Array[String]): Unit = {
@@ -205,6 +205,27 @@ object GenTest {
       .specifyConst(_.arg("t"))("I am private")
       .make
       .foreach(println)
+
+    Gen.fromFunction { s: String =>
+      s.length
+    }.foreach(println)
+
+    class T(a: Int, b: String) {
+      override def toString: String = s"T($a, $b)"
+    }
+
+    object T {
+      def apply(str: String): Option[T] =
+        Option.when(str.nonEmpty) {
+          new T(str.length, str)
+        }
+    }
+
+    Gen.fromFunction(new T(2134, _)).foreach(println)
+
+    Gen.fromFunction(T.apply _).many[List](3).foreach(println)
+
+    Gen.custom[T].specifyConst(_.arg[Int]("a"))(2134).make.foreach(println)
   }
 
 }
