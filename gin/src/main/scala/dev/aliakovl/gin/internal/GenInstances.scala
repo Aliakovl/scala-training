@@ -10,16 +10,16 @@ import scala.util.Random
 trait GenInstances {
   implicit val uuidGen: Gen[UUID] = Gen(UUID.randomUUID())
   implicit val stringGen: Gen[String] = Gen.alphanumeric(10)
-  implicit val charGen: Gen[Char] = Gen(Random.nextPrintableChar())
+  implicit val charGen: Gen[Char] = Gen(_.nextPrintableChar())
   implicit val instantGen: Gen[Instant] = Gen(
     Instant.now().truncatedTo(ChronoUnit.MILLIS)
   )
-  implicit val intGen: Gen[Int] = Gen(Random.nextInt())
-  implicit val longGen: Gen[Long] = Gen(Random.nextLong())
-  implicit val doubleGen: Gen[Double] = Gen(Random.nextDouble())
-  implicit val booleanGen: Gen[Boolean] = Gen(Random.nextBoolean())
-  implicit val bigDecimalGen: Gen[BigDecimal] = Gen(
-    BigDecimal.valueOf(Random.nextDouble())
+  implicit val intGen: Gen[Int] = Gen(_.nextInt())
+  implicit val longGen: Gen[Long] = Gen(_.nextLong())
+  implicit val doubleGen: Gen[Double] = Gen(_.nextDouble())
+  implicit val booleanGen: Gen[Boolean] = Gen(_.nextBoolean())
+  implicit val bigDecimalGen: Gen[BigDecimal] = Gen( r =>
+    BigDecimal.valueOf(r.nextDouble())
   )
   implicit val localDateGen: Gen[LocalDate] = Gen(LocalDate.now())
   implicit val localDateTimeGen: Gen[LocalDateTime] = Gen(LocalDateTime.now())

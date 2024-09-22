@@ -5,17 +5,22 @@ import dev.aliakovl.gin.internal._
 import scala.language.implicitConversions
 import scala.util.Random
 
-final class Gen[A] private (private val run: () => A) {
-  def apply(): A = run()
+final class Gen[A] private (private val run: Random => A) {
+  def apply(inst: Random): A = run(inst)
+  def apply(): A = run(Random)
 
-  def map[B](f: A => B): Gen[B] = Gen(f(run()))
+  def map[B](f: A => B): Gen[B] = Gen { r =>
+    f(run(r))
+  }
 
-  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(f(run()).run())
+  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen { r =>
+    f(run(r)).run(r)
+  }
 
-  def foreach[U](f: A => U): Unit = f(run())
+  def foreach[U](f: A => U): Unit = f(run(Random))
 
   def tap[U](f: A => U): Gen[A] = Gen {
-    val r = run()
+    val r = run(Random)
     f(r)
     r
   }
@@ -23,9 +28,15 @@ final class Gen[A] private (private val run: () => A) {
   def widen[T >: A]: Gen[T] = this.asInstanceOf[Gen[T]]
 }
 
-object Gen extends GenLowPriority with GenDerivation with GenInstances with GenOneOf {
+object Gen
+    extends GenLowPriority
+    with GenDerivation
+    with GenInstances
+    with GenOneOf {
 
-  def apply[A](eval: => A): Gen[A] = new Gen(() => eval)
+  def apply[A](eval: Random => A): Gen[A] = new Gen(eval)
+
+  def apply[A](eval: => A): Gen[A] = new Gen(_ => eval)
 
   def random[A](implicit inst: Gen[A]): Gen[A] = inst
 
@@ -37,10 +48,12 @@ object Gen extends GenLowPriority with GenDerivation with GenInstances with GenO
       constructor: FunctionConstructor[In]
   ): constructor.Out = constructor(in)
 
-  def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen((ga(), gb()))
+  def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen { r =>
+    (ga.run(r), gb.run(r))
+  }
 
-  def uglyString(size: Int): Gen[String] = apply {
-    Random.nextString(size)
+  def uglyString(size: Int): Gen[String] = Gen {
+    _.nextString(size)
   }
 
   def string(size: Int): Gen[String] = {
@@ -48,16 +61,16 @@ object Gen extends GenLowPriority with GenDerivation with GenInstances with GenO
   }
 
   def alphanumeric(size: Int): Gen[String] = apply {
-    Random.alphanumeric.take(size).mkString
+    _.alphanumeric.take(size).mkString
   }
 
   def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = apply {
-    Random.between(minInclusive, maxExclusive)
+    _.between(minInclusive, maxExclusive)
   }
 
   def enumeration[E <: Enumeration](
       en: E
-  ): Gen[E#Value] = Gen {
-    en(Random.nextInt(en.maxId))
+  ): Gen[E#Value] = Gen { r =>
+    en(r.nextInt(en.maxId))
   }
 }
