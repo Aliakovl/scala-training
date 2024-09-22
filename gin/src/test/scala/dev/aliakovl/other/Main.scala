@@ -12,33 +12,40 @@ object Main {
   sealed trait SubClass extends MyClass
   case class One() extends SubClass
 
-  def main(args: Array[String]): Unit = {
-    println(Gen.random[Map[String, List[Option[MyClass]]]].apply())
-    println(Gen.many[List](3)(Gen.random[String]).apply())
-    println(
-      Gen.many2[Map](3)(Gen.random[String], Gen.random[Int]).apply()
+  val gens = Seq[Gen[Any]](
+    Gen.random[Map[String, List[Option[MyClass]]]],
+    Gen.random[String].many[List](3),
+    Gen.product(Gen.random[String], Gen.random[Int]).makeMap(3),
+    Gen.random[(String, Int)].makeMap(3),
+    Gen.random[Either[String, Int]],
+    Gen.oneOf[MyClass].make[MyClass2, MyClass1].many[List](10),
+    Gen
+      .oneOf[MyClass]
+      .make[MyClass1, MyClass2, MyClass3, SubClass]
+      .many[List](4000)
+      .map { list =>
+        (
+          list.count(_.isInstanceOf[MyClass1]),
+          list.count(_.isInstanceOf[MyClass2]),
+          list.count(_.isInstanceOf[MyClass3]),
+          list.count(_.isInstanceOf[MyClass4.type]),
+          list.count(_.isInstanceOf[One])
+        )
+      },
+    Gen.random[Int].many[List](10),
+    Gen.uglyString(10),
+    Gen.string(10),
+    Gen.alphanumeric(10),
+    Gen.oneOf(3, 4, 5, 7).many[List](10)
+  )
+
+  def main(args: Array[String]): Unit = Gen
+    .sequence(gens)
+    .foreach(
+      _.zipWithIndex
+        .map { case (value, id) =>
+          s"$id\t-> $value"
+        }
+        .foreach(println)
     )
-    println(Gen.many2[Map](3).make[String, Int].apply())
-    println(Gen.random[Either[String, Int]].apply())
-    val a: Gen[MyClass] = Gen.oneOf[MyClass].make[MyClass2, MyClass1]
-    println(Gen.many[List](10)(a).apply())
-    val b: List[MyClass] = Gen
-      .many[List](4000)(
-        Gen.oneOf[MyClass].make[MyClass1, MyClass2, MyClass3, SubClass]
-      )
-      .apply()
-    println(b.count(_.isInstanceOf[MyClass1]))
-    println(b.count(_.isInstanceOf[MyClass2]))
-    println(b.count(_.isInstanceOf[MyClass3]))
-    println(b.count(_.isInstanceOf[One]))
-    println(Gen.many[List](10).make[Int].apply())
-    println(Gen.random[Int].many[List](10).apply())
-
-    println(Gen.uglyString(10)())
-    println(Gen.string(10)())
-    println(Gen.alphanumeric(10)())
-    println(Gen.many[List](10)(Gen.oneOf(3, 4, 5, 7)).apply())
-
-    println(Gen.oneOfGen(Gen({print("first - "); 1}), Gen({print("second - "); 2})).apply())
-  }
 }

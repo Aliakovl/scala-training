@@ -20,6 +20,7 @@ trait GenInstances {
   implicit val localDateGen: Gen[LocalDate] = Gen(LocalDate.now())
   implicit val localDateTimeGen: Gen[LocalDateTime] = Gen(LocalDateTime.now())
   implicit val yearMonthGen: Gen[YearMonth] = Gen(YearMonth.now())
-  implicit def defaultIterableGen2d[A: Gen, B: Gen]: Gen[Map[A, B]] =
-    Gen.many2[Map](5).make[A, B]
+  implicit def defaultIterableGen2d[A: Gen, B: Gen]: Gen[Map[A, B]] = {
+    Gen.between(0, 10).flatMap(Gen.product(Gen.random[A], Gen.random[B]).makeMap(_))
+  }
 }

@@ -2,6 +2,7 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.internal._
 
+import scala.collection.BuildFrom
 import scala.language.implicitConversions
 import scala.util.Random
 
@@ -11,8 +12,6 @@ trait Gen[A] extends (() => A) {
   def map[B](f: A => B): Gen[B] = Gen(f(apply()))
 
   def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(f(apply()).apply())
-
-  def product[B](fb: Gen[B]): Gen[(A, B)] = Gen((apply(), fb.apply()))
 
   def foreach[U](f: A => U): Unit = f(apply())
 
@@ -28,8 +27,7 @@ trait Gen[A] extends (() => A) {
 object Gen
     extends GenDerivation
     with GenInstances
-    with GenOneOf
-    with GenMany {
+    with GenOneOf {
 
   def apply[A](eval: => A): Gen[A] = () => eval
 
@@ -43,12 +41,15 @@ object Gen
       constructor: FunctionConstructor[In]
   ): constructor.Out = constructor(in)
 
+  def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen((ga(), gb()))
+
   def uglyString(size: Int): Gen[String] = apply {
     Random.nextString(size)
   }
 
-  def string(size: Int): Gen[String] =
-    many[LazyList](size).make[Char].map(_.mkString)
+  def string(size: Int): Gen[String] = {
+    Gen.charGen.many[LazyList](size).map(_.mkString)
+  }
 
   def alphanumeric(size: Int): Gen[String] = apply {
     Random.alphanumeric.take(size).mkString
@@ -64,4 +65,16 @@ object Gen
     en(Random.nextInt(en.maxId))
   }
 
+  def traverse[C[+E] <: IterableOnce[E], A, B](ta: C[A])(
+    f: A => Gen[B]
+  )(implicit bf: BuildFrom[C[A], B, C[B]]): Gen[C[B]] = {
+    val iterator = ta.iterator
+    val builder = bf.newBuilder(ta)
+    while (iterator.hasNext) {
+      builder += f(iterator.next())()
+    }
+    Gen(builder.result())
+  }
+
+  def sequence[C[+E] <: IterableOnce[E], A](ta: C[Gen[A]])(implicit bf: BuildFrom[C[Gen[A]], A, C[A]]): Gen[C[A]] = traverse(ta)(identity)
 }
