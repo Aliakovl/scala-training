@@ -172,7 +172,33 @@ object GenTest {
       },
     Gen.fromFunction(new T(2134, _)),
     Gen.fromFunction(T.apply _).many[List](3),
-    Gen.custom[T].specifyConst(_.arg[Int]("a"))(2134).make
+    Gen.custom[T].specifyConst(_.arg[Int]("a"))(2134).make,
+    Gen.fromFunction(
+      (
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String,
+        _: String
+      )
+    )
   )
 
   def main(args: Array[String]): Unit = Gen
