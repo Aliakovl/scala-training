@@ -35,8 +35,9 @@ class GenMacro(val c: blackbox.Context) {
   def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
     val (variables, values) = State.sequence {
         Option.when(weakTypeOf[A].typeSymbol.isClass) {
+          val termName = TermName(c.freshName())
           mergeMethods[A](disassembleTree(c.prefix.tree))
-            .map(_.map(specifiedTree).map(toGen))
+            .map(_.map(specifiedTree(termName)).map(toGen(termName)))
         }
       }
       .map(_.flatten)
@@ -65,12 +66,14 @@ class GenMacro(val c: blackbox.Context) {
       case tp -> Refer(value) => lazyVal(tp, c.untypecheck(value.duplicate))
       case tp -> CaseObject => lazyVal(tp, constValueOf(tp))
       case tp -> CaseClass(fields) =>
-        val args = fields.map(_.map(name => callApply(Ident(name))))
+        val termName = TermName(c.freshName())
+        val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
         construct(tp, args)
-        val value = toGen(construct(tp, args))
+        val value = toGen(termName)(construct(tp, args))
         lazyVal(tp, value)
       case tp -> SealedTrait(subclasses) =>
-        val value = toGen(constructCases(subclasses.values){ name => callApply(Ident(name)) })
+        val termName = TermName(c.freshName())
+        val value = toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
         lazyVal(tp, value)
     }
 
@@ -300,21 +303,21 @@ class GenMacro(val c: blackbox.Context) {
     case _ => fail(s"Some specifications conflict")
   }
 
-  def specifiedTree(gen: SpecifiedGen): c.Tree = gen match {
+  def specifiedTree(termName: TermName)(gen: SpecifiedGen): c.Tree = gen match {
     case SpecifiedCaseClass(classSymbol, fields) =>
       val args = fields.foldLeft(List.empty[List[c.Tree]]) { case (acc, next) =>
         val params = next.values.map {
           case Specified(DefaultArg(Some(value))) => q"$value(...$acc)"
-          case other => specifiedTree(other)
+          case other => specifiedTree(termName)(other)
         }.toList
 
         acc :+ params
       }
       construct(classSymbol.toType, args)
-    case SpecifiedSealedTrait(subclasses) => constructCases(subclasses.values)(specifiedTree)
-    case Specified(GenArg(tree)) => callApply(tree)
+    case SpecifiedSealedTrait(subclasses) => constructCases(termName)(subclasses)(specifiedTree(termName))
+    case Specified(GenArg(tree)) => callApply(tree)(termName)
     case Specified(ConstArg(tree)) => tree
-    case NotSpecified(tree)        => callApply(Ident(tree))
+    case NotSpecified(tree)        => callApply(Ident(tree))(termName)
     case NotSpecifiedImplicit(tree)   => tree
     case _ => fail("never")
   }
@@ -327,11 +330,14 @@ class GenMacro(val c: blackbox.Context) {
     sym.isClass && !sym.isAbstract
   }
 
-  def toGen(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.apply($tree)"
+  def toGen(termName: TermName)(tree: c.Tree): c.Tree = {
+    val f: c.Tree = Function(ValDef(Modifiers(Flag.PARAM), termName, TypeTree(), EmptyTree) :: Nil, tree)
+    q"_root_.dev.aliakovl.gin.Gen.apply($f)"
+  }
 
   def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.const($tree)"
 
-  def callApply(tree: c.Tree): c.Tree = q"$tree.apply()"
+  def callApply(tree: c.Tree)(termName: TermName): c.Tree = q"$tree.apply(${Ident(termName)})"
 
   def implicitly(tpe: c.Type): c.Tree = q"_root_.scala.Predef.implicitly[$tpe]"
 
@@ -346,8 +352,9 @@ class GenMacro(val c: blackbox.Context) {
     constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
   }
 
-  def constructCases[T](cases: Iterable[T])(f: T => c.Tree): c.Tree = {
-    q"_root_.scala.util.Random.nextInt(${cases.size}) match { case ..${cases.zipWithIndex.map {
+  def constructCases[T](termName: TermName)(subclasses: Map[c.Symbol, T])(f: T => c.Tree): c.Tree = {
+    val cases = subclasses.toList.sortBy(_._1.fullName).map(_._2)
+    q"$termName.nextInt(${cases.size}) match { case ..${cases.zipWithIndex.map {
       case value -> index => cq"$index => ${f(value)}"
     }} }"
   }

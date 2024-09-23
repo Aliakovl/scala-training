@@ -3,8 +3,10 @@ package dev.aliakovl.gin.internal
 import dev.aliakovl.gin.Gen
 import dev.aliakovl.gin.internal.GenOneOf.OneOfTypePartiallyApplied
 
+import scala.util.Random
+
 trait GenOneOf {
-  def oneOf[A](values: A*): Gen[A] = Gen(GenOneOf.oneOfImpl(values))
+  def oneOf[A](values: A*): Gen[A] = Gen(random => GenOneOf.oneOfImpl(random)(values))
 
   def oneOf[W]: OneOfTypePartiallyApplied[W] = new OneOfTypePartiallyApplied[W]()
 
@@ -12,13 +14,13 @@ trait GenOneOf {
 }
 
 object GenOneOf {
-  private def oneOfImpl[A](values: Seq[A]): A = {
-    val index = scala.util.Random.nextInt(values.size)
+  private def oneOfImpl[A](r: Random)(values: Seq[A]): A = {
+    val index = r.nextInt(values.size)
     values(index)
   }
 
-  private def oneOfGenImpl[A](values: Gen[A]*): Gen[A] = Gen {
-    oneOfImpl(values)()
+  private def oneOfGenImpl[A](values: Gen[A]*): Gen[A] = Gen { random =>
+    oneOfImpl(random)(values)(random)
   }
 
   final class OneOfTypePartiallyApplied[W](private val dummy: Boolean = true) extends AnyVal {

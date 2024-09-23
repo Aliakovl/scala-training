@@ -2,35 +2,47 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.internal._
 
-import scala.collection.BuildFrom
 import scala.language.implicitConversions
 import scala.util.Random
 
-trait Gen[A] extends (() => A) {
-  override def apply(): A
+final class Gen[A] private (private[gin] val unsafeRun: Random => A) {
 
-  def map[B](f: A => B): Gen[B] = Gen(f(apply()))
+  def apply(random: Random): A = unsafeRun(random)
 
-  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen(f(apply()).apply())
+  def runWithCtx()(implicit random: Random): A = unsafeRun(random)
 
-  def foreach[U](f: A => U): Unit = f(apply())
+  def runWithSeed(seed: Long): A = unsafeRun(new Random(seed))
 
-  def tap[U](f: A => U): Gen[A] = Gen {
-    val r = apply()
-    f(r)
-    r
+  def run(): A = unsafeRun(Random)
+
+  def map[B](f: A => B): Gen[B] = Gen { random =>
+    f(unsafeRun(random))
+  }
+
+  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen { random =>
+    f(unsafeRun(random)).unsafeRun(random)
+  }
+
+  def tap[U](f: A => U): Gen[A] = Gen { random =>
+    val r = unsafeRun(random); f(r); r
   }
 
   def widen[T >: A]: Gen[T] = this.asInstanceOf[Gen[T]]
 }
 
-object Gen extends GenDerivation with GenInstances with GenOneOf {
+object Gen
+    extends GenLowPriority
+    with GenDerivation
+    with GenInstances
+    with GenOneOf {
 
-  def apply[A](eval: => A): Gen[A] = () => eval
+  def apply[A](eval: Random => A): Gen[A] = new Gen(eval)
+
+  def make[A](eval: => A): Gen[A] = new Gen(_ => eval)
+
+  def const[A](value: A): Gen[A] = make(value)
 
   def random[A](implicit inst: Gen[A]): Gen[A] = inst
-
-  def const[A](value: A): Gen[A] = apply(value)
 
   def custom[A]: GenSpecify[A] = new GenSpecify[A]
 
@@ -38,10 +50,12 @@ object Gen extends GenDerivation with GenInstances with GenOneOf {
       constructor: FunctionConstructor[In]
   ): constructor.Out = constructor(in)
 
-  def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen((ga(), gb()))
+  def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen { random =>
+    (ga.unsafeRun(random), gb.unsafeRun(random))
+  }
 
-  def uglyString(size: Int): Gen[String] = apply {
-    Random.nextString(size)
+  def uglyString(size: Int): Gen[String] = Gen {
+    _.nextString(size)
   }
 
   def string(size: Int): Gen[String] = {
@@ -49,31 +63,16 @@ object Gen extends GenDerivation with GenInstances with GenOneOf {
   }
 
   def alphanumeric(size: Int): Gen[String] = apply {
-    Random.alphanumeric.take(size).mkString
+    _.alphanumeric.take(size).mkString
   }
 
   def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = apply {
-    Random.between(minInclusive, maxExclusive)
+    _.between(minInclusive, maxExclusive)
   }
 
   def enumeration[E <: Enumeration](
       en: E
-  ): Gen[E#Value] = Gen {
-    en(Random.nextInt(en.maxId))
+  ): Gen[E#Value] = Gen { random =>
+    en(random.nextInt(en.maxId))
   }
-
-  def traverse[C[+E] <: IterableOnce[E], A, B](ta: C[A])(
-      f: A => Gen[B]
-  )(implicit bf: BuildFrom[C[A], B, C[B]]): Gen[C[B]] = {
-    val iterator = ta.iterator
-    val builder = bf.newBuilder(ta)
-    while (iterator.hasNext) {
-      builder += f(iterator.next())()
-    }
-    Gen(builder.result())
-  }
-
-  def sequence[C[+E] <: IterableOnce[E], A](ta: C[Gen[A]])(implicit
-      bf: BuildFrom[C[Gen[A]], A, C[A]]
-  ): Gen[C[A]] = traverse(ta)(identity)
 }

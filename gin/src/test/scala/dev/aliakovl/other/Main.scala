@@ -1,6 +1,8 @@
 package dev.aliakovl.other
 
-import dev.aliakovl.gin.Gen
+import cats.Traverse
+import cats.implicits.toTraverseOps
+import dev.aliakovl.gin._
 
 object Main {
   sealed trait MyClass extends Product with Serializable
@@ -15,6 +17,9 @@ object Main {
   val gens = Seq[Gen[Any]](
     Gen.random[Map[String, List[Option[MyClass]]]],
     Gen.random[String].many[List](3),
+    Traverse[List].sequence(
+      List(Gen.random[String], Gen.random[String], Gen.random[String])
+    ),
     Gen.product(Gen.random[String], Gen.random[Int]).makeMap(3),
     Gen.random[(String, Int)].makeMap(3),
     Gen.random[Either[String, Int]],
@@ -39,13 +44,12 @@ object Main {
     Gen.oneOf(3, 4, 5, 7).many[List](10)
   )
 
-  def main(args: Array[String]): Unit = Gen
-    .sequence(gens)
-    .foreach(
+  def main(args: Array[String]): Unit = gens.sequence
+    .tap(
       _.zipWithIndex
         .map { case (value, id) =>
           s"$id\t-> $value"
         }
         .foreach(println)
-    )
+    ).runWithSeed(11)
 }
