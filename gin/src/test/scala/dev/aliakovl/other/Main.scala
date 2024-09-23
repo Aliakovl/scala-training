@@ -45,11 +45,11 @@ object Main {
   )
 
   def main(args: Array[String]): Unit = gens.sequence
-    .foreach(
+    .tap(
       _.zipWithIndex
         .map { case (value, id) =>
           s"$id\t-> $value"
         }
         .foreach(println)
-    )
+    ).runWithSeed(11)
 }

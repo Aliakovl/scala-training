@@ -17,15 +17,15 @@ package object gin {
   implicit final class GenOps[A](private val gen: Gen[A]) extends AnyVal {
     def many[C[E] <: IterableOnce[E]](size: Int)(implicit
         factory: Factory[A, C[A]]
-    ): Gen[C[A]] = Gen( r =>
+    ): Gen[C[A]] = Gen { r =>
       factory.fromSpecific(Iterable.fill(size)(gen(r)))
-    )
+    }
   }
 
   implicit final class GenTuple2Ops[K, V](private val gen: Gen[(K, V)]) extends AnyVal {
-    def makeMap(size: Int): Gen[Map[K, V]] = Gen( r =>
+    def makeMap(size: Int): Gen[Map[K, V]] = Gen { r =>
       Map.fromSpecific(Iterable.fill(size)(gen(r)))
-    )
+    }
   }
 
   implicit def widen[A, B >: A](ra: Gen[A]): Gen[B] = ra.widen[B]

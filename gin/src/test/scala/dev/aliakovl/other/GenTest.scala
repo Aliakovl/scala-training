@@ -19,10 +19,14 @@ case object MyClass4 extends MyClass
 
 sealed abstract class KJH(val message: String) extends MyClass
 case class K(override val message: String) extends KJH(message)
-final class J(message: String) extends KJH(message)
+final class J(message: String) extends KJH(message) {
+  override def toString: String = s"J($message)"
+}
 case object H extends KJH("twert")
 
-class G(val int: Int)
+class G(val int: Int) {
+  override def toString: String = s"G($int)"
+}
 
 case class Talk(int: Int)(val string: String, val gerg: List[Int])(implicit
     val wefwef: Option[Long],
@@ -205,12 +209,12 @@ object GenTest {
   )
 
   def main(args: Array[String]): Unit = gens.sequence
-    .foreach(
+    .tap(
       _.zipWithIndex
         .map { case (value, id) =>
           s"$id\t-> $value"
         }
         .foreach(println)
-    )
+    ).runWithSeed(11)
 
 }

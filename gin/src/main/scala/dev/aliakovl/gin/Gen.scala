@@ -7,7 +7,8 @@ import scala.util.Random
 
 final class Gen[A] private (private val run: Random => A) {
   def apply(inst: Random): A = run(inst)
-  def apply(): A = run(Random)
+  def unsafe(): A = run(Random)
+  def runWithSeed(seed: Long): A = run(new Random(seed))
 
   def map[B](f: A => B): Gen[B] = Gen { r =>
     f(run(r))
@@ -17,10 +18,8 @@ final class Gen[A] private (private val run: Random => A) {
     f(run(r)).run(r)
   }
 
-  def foreach[U](f: A => U): Unit = f(run(Random))
-
-  def tap[U](f: A => U): Gen[A] = Gen {
-    val r = run(Random)
+  def tap[U](f: A => U): Gen[A] = Gen { rand =>
+    val r = run(rand)
     f(r)
     r
   }

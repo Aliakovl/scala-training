@@ -6,7 +6,7 @@ import dev.aliakovl.gin.Gen
 
 abstract private[gin] class GenLowPriority {
   implicit val catsMonadForGen: Monad[Gen] = new Monad[Gen] {
-    override def pure[A](x: A): Gen[A] = Gen(x)
+    override def pure[A](x: A): Gen[A] = Gen.const(x)
 
     override def flatMap[A, B](fa: Gen[A])(f: A => Gen[B]): Gen[B] =
       fa.flatMap(f)
