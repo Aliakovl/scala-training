@@ -4,6 +4,11 @@ import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
 import dev.aliakovl.other.MyClass
 
+import java.util.UUID
+
+case class User(id: UUID, name: String)
+case class Email(id: UUID, from: UUID, to: UUID, content: String)
+
 object Main {
 
   implicit val intGen: Gen[Int] = Gen.const(1)
@@ -70,5 +75,20 @@ object Main {
       }
       .tap(println)
       .runWithSeed(927469873677L)
+
+    val (
+      email,
+      fromUser,
+      toUser
+    ) = (for {
+      from <- Gen.random[User]
+      to <- Gen.random[User]
+      email <- Gen.fromFunction(Email(_, from.id, to.id, _))
+    } yield (email, from, to)).runWithSeed(2234)
+
+    assert(email.from == fromUser.id)
+    assert(email.to == toUser.id)
+
+    println(email, fromUser, toUser)
   }
 }
