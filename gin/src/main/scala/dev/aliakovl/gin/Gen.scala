@@ -5,23 +5,26 @@ import dev.aliakovl.gin.internal._
 import scala.language.implicitConversions
 import scala.util.Random
 
-final class Gen[A] private (private val run: Random => A) {
-  def apply(inst: Random): A = run(inst)
-  def unsafe(): A = run(Random)
-  def runWithSeed(seed: Long): A = run(new Random(seed))
+final class Gen[A] private (private[gin] val unsafeRun: Random => A) {
 
-  def map[B](f: A => B): Gen[B] = Gen { r =>
-    f(run(r))
+  def apply(random: Random): A = unsafeRun(random)
+
+  def runWithCtx()(implicit random: Random): A = unsafeRun(random)
+
+  def runWithSeed(seed: Long): A = unsafeRun(new Random(seed))
+
+  def run(): A = unsafeRun(Random)
+
+  def map[B](f: A => B): Gen[B] = Gen { random =>
+    f(unsafeRun(random))
   }
 
-  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen { r =>
-    f(run(r)).run(r)
+  def flatMap[B](f: A => Gen[B]): Gen[B] = Gen { random =>
+    f(unsafeRun(random)).unsafeRun(random)
   }
 
-  def tap[U](f: A => U): Gen[A] = Gen { rand =>
-    val r = run(rand)
-    f(r)
-    r
+  def tap[U](f: A => U): Gen[A] = Gen { random =>
+    val r = unsafeRun(random); f(r); r
   }
 
   def widen[T >: A]: Gen[T] = this.asInstanceOf[Gen[T]]
@@ -35,11 +38,11 @@ object Gen
 
   def apply[A](eval: Random => A): Gen[A] = new Gen(eval)
 
-  def apply[A](eval: => A): Gen[A] = new Gen(_ => eval)
+  def make[A](eval: => A): Gen[A] = new Gen(_ => eval)
+
+  def const[A](value: A): Gen[A] = make(value)
 
   def random[A](implicit inst: Gen[A]): Gen[A] = inst
-
-  def const[A](value: A): Gen[A] = apply(value)
 
   def custom[A]: GenSpecify[A] = new GenSpecify[A]
 
@@ -47,8 +50,8 @@ object Gen
       constructor: FunctionConstructor[In]
   ): constructor.Out = constructor(in)
 
-  def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen { r =>
-    (ga.run(r), gb.run(r))
+  def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen { random =>
+    (ga.unsafeRun(random), gb.unsafeRun(random))
   }
 
   def uglyString(size: Int): Gen[String] = Gen {
@@ -69,7 +72,7 @@ object Gen
 
   def enumeration[E <: Enumeration](
       en: E
-  ): Gen[E#Value] = Gen { r =>
-    en(r.nextInt(en.maxId))
+  ): Gen[E#Value] = Gen { random =>
+    en(random.nextInt(en.maxId))
   }
 }

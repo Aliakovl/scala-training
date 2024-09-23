@@ -1,10 +1,12 @@
 package dev.aliakovl.gin
 
+import cats.syntax.all._
 import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
 import dev.aliakovl.other.MyClass
 
 import java.util.UUID
+import scala.util.Random
 
 case class User(id: UUID, name: String)
 case class Email(id: UUID, from: UUID, to: UUID, content: String)
@@ -15,7 +17,7 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     println(
-      Gen.custom[(Int, String)].make.unsafe()
+      Gen.custom[(Int, String)].make.run()
     )
 
     println(
@@ -23,7 +25,7 @@ object Main {
         .custom[Option[Int]]
         .specifyConst(_.when[Some[Int]].value)(-1)
         .make
-        .unsafe()
+        .run()
     )
 
     implicitly[Monad[Gen]].map(Gen.intGen)(_.toString).tap(println)
@@ -59,6 +61,8 @@ object Main {
     Gen.random[Long].flatMap(_.pure[Gen]).tap(println).runWithSeed(4234)
     Gen.random[Long].tap(println).runWithSeed(4234)
 
+    implicit val ra: Random = new Random(927469873677L)
+
     Gen
       .between(0, 100)
       .flatMap(Gen.alphanumeric)
@@ -90,5 +94,7 @@ object Main {
     assert(email.to == toUser.id)
 
     println(email, fromUser, toUser)
+
+    Gen.random[Long] <* Gen(_.setSeed(123)) product Gen.random[Long] tap println runWithSeed 123
   }
 }

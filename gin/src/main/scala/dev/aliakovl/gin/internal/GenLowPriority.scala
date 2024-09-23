@@ -13,9 +13,9 @@ abstract private[gin] class GenLowPriority {
 
     override def map[A, B](fa: Gen[A])(f: A => B): Gen[B] = fa.map(f)
 
-    override def tailRecM[A, B](a: A)(f: A => Gen[Either[A, B]]): Gen[B] = Gen { r =>
-      f(a)(r) match {
-        case Left(value)  => tailRecM(value)(f)(r)
+    override def tailRecM[A, B](a: A)(f: A => Gen[Either[A, B]]): Gen[B] = Gen { random =>
+      f(a)(random) match {
+        case Left(value)  => tailRecM(value)(f)(random)
         case Right(value) => value
       }
     }
