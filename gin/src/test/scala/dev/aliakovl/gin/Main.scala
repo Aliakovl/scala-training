@@ -95,6 +95,6 @@ object Main {
 
     println(email, fromUser, toUser)
 
-    Gen.random[Long] <* Gen(_.setSeed(123)) product Gen.random[Long] tap println runWithSeed 123
+    Gen.random[UUID] <* Gen(_.setSeed(123)) product Gen.random[UUID] tap println runWithSeed 123
   }
 }

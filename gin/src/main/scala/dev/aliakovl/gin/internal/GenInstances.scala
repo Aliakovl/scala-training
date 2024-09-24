@@ -7,7 +7,12 @@ import java.time.{Instant, LocalDate, LocalDateTime, YearMonth}
 import java.util.UUID
 
 trait GenInstances {
-  implicit val uuidGen: Gen[UUID] = Gen.make(UUID.randomUUID())
+  implicit val uuidGen: Gen[UUID] = Gen { random =>
+    new UUID(
+      (random.nextLong() & 0xffff0fff) | 0x00004000,
+      (random.nextLong() & 0x3fffffffffffffffL) | 8000000000000000L
+    )
+  }
   implicit val stringGen: Gen[String] = Gen.alphanumeric(10)
   implicit val charGen: Gen[Char] = Gen(_.nextPrintableChar())
   implicit val instantGen: Gen[Instant] = Gen.make(
