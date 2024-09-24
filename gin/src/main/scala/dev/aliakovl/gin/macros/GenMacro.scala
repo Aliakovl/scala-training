@@ -50,7 +50,6 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait Value
-  case class Implicitly(tpe: c.Type) extends Value
   case class Refer(value: c.Tree) extends Value
   case class CaseClass(fields: List[List[c.TermName]]) extends Value
   case object CaseObject extends Value
@@ -62,7 +61,6 @@ class GenMacro(val c: blackbox.Context) {
     }
 
     val declaration = values.map {
-      case tp -> Implicitly(rType) => lazyVal(tp, implicitly(rType))
       case tp -> Refer(value) => lazyVal(tp, c.untypecheck(value.duplicate))
       case tp -> CaseObject => lazyVal(tp, constValueOf(tp))
       case tp -> CaseClass(fields) =>
@@ -115,7 +113,7 @@ class GenMacro(val c: blackbox.Context) {
         }
       }.map(CaseClass)
     } else {
-      State.pure(Implicitly(genType))
+      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try provide it implicitly")
     }
   }
 
