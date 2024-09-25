@@ -84,6 +84,10 @@ class GenMacro(val c: blackbox.Context) {
     val implicitValue = c.inferImplicitValue(genType, withMacrosDisabled = true)
     if (implicitValue.nonEmpty && tpe != weakTypeOf[A]) {
       State.pure(Refer(implicitValue))
+    } else if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
+      State.pure(CaseObject)
+    } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
+      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
     } else if (isAbstractSealed(sym)) {
       val subtypes = subclassesOf(sym.asClass).map(subclassType(_, tpe))
       State.traverse(subtypes) { subtype =>
@@ -95,8 +99,6 @@ class GenMacro(val c: blackbox.Context) {
             }(State.pure)
         } yield subtype.typeSymbol -> name
       }.map(_.toMap).map(SealedTrait)
-    } else if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-      State.pure(CaseObject)
     } else if (isConcreteClass(sym)) {
       State.sequence {
         notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
