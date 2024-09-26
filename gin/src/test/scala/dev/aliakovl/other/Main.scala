@@ -20,8 +20,8 @@ object Main {
     Traverse[List].sequence(
       List(Gen.random[String], Gen.random[String], Gen.random[String])
     ),
-    Gen.product(Gen.random[String], Gen.random[Int]).makeMap(3),
-    Gen.random[(String, Int)].makeMap(3),
+    Gen.product(Gen.random[String], Gen.random[Int]).toMap[String, Int](3),
+    Gen.random[(String, Int)].toMap[String, Int](3),
     Gen.random[Either[String, Int]],
     Gen.oneOf[MyClass].make[MyClass2, MyClass1].many[List](10),
     Gen

@@ -15,6 +15,8 @@ case class User private (id: UUID, name: String) {
 }
 case class Email(id: UUID, from: UUID, to: UUID, content: String)
 
+case class Jwelfkn(k: Int) extends AnyVal
+
 object Main {
 
   implicit val intGen: Gen[Int] = Gen.const(1)
@@ -117,11 +119,17 @@ object Main {
       }
     }.many[Seq](10)
 
+    println(t.run().map(_.apply(UUID.randomUUID())))
+
     val tt = Gen.function[(UUID, String), Email] { case (id, content) =>
       Gen.fromFunction(Email(id, _, _, content))
     }
-    println(tt.run()((UUID.randomUUID(), "wefwef")))
 
-    println(t.run().map(_.apply(UUID.randomUUID())))
+    tt.ap(Gen.product(Gen.random[UUID], Gen.alphanumeric(100))).tap(println).run()
+
+    Gen.random[Short].tap(println).run()
+
+    Gen.make(Jwelfkn(234)).tap(println).run()
+
   }
 }
