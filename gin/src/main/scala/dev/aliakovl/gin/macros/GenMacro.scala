@@ -155,18 +155,17 @@ class GenMacro(val c: blackbox.Context) {
 
   sealed trait Optic
   case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
-  case class Prism(from: c.Symbol, to: c.Symbol) extends Optic
+  case class Prism(to: c.Type) extends Optic
 
   sealed trait Method
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
     def toSpecifiedGen(classSymbol: ClassSymbol, optics: List[Optic] = selector): VarsState[SpecifiedGen] = optics match {
-      case Prism(_, to) :: tail =>
-        if (tail.isEmpty && arg.isInstanceOf[DefaultArg]) fail(s"$classSymbol not a case class")
+      case Prism(to) :: tail =>
         val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
-        val toType = subclassType(to, classSymbol.toType)
+        val toType = subclassType(to.typeSymbol, classSymbol.toType)
         State.traverse(subtypes) { subtype =>
           if (subtype <:< toType) {
-            toSpecifiedGen(to.asClass, tail).map(subtype.typeSymbol -> _)
+            toSpecifiedGen(to.typeSymbol.asClass, tail).map(subtype.typeSymbol -> _)
           } else {
             State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
               .map { name =>
@@ -222,6 +221,9 @@ class GenMacro(val c: blackbox.Context) {
         disassembleTree(other, method +: methods)
       case q"$other.useDefault[$_](($_) => $selectorTree)" =>
         val selector = disassembleSelector(selectorTree)
+        if (selector.last.isInstanceOf[Prism]) {
+          c.abort(selectorTree.pos, "Default value can be specified only for class constructor fields")
+        }
         val method = SpecifyMethod(selector, DefaultArg(None))
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
@@ -244,7 +246,7 @@ class GenMacro(val c: blackbox.Context) {
         }
       case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
         if (!from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
-        val prism = Prism(from.symbol, to.symbol)
+        val prism = Prism(to.tpe)
         disassembleSelector(other, prism :: selector)
       case _: Ident => selector
       case tree => c.abort(tree.pos, "Unsupported path element.")
@@ -323,7 +325,7 @@ class GenMacro(val c: blackbox.Context) {
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))(termName)
     case NotSpecifiedImplicit(tree)   => tree
-    case _ => fail("never")
+    case _ => fail("unreachable")
   }
 
   def isAbstractSealed(sym: c.Symbol): Boolean = {
