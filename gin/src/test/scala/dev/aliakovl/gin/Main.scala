@@ -3,7 +3,7 @@ package dev.aliakovl.gin
 import cats.syntax.all._
 import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
-import dev.aliakovl.other.MyClass
+import dev.aliakovl.other.{J, MyClass, MyClass1, MyClass3}
 
 import java.util.UUID
 import scala.util.Random
@@ -113,11 +113,15 @@ object Main {
     Gen.random[UUID] <* Gen(_.setSeed(123)) product Gen
       .random[UUID] tap println runWithSeed 123
 
-    val t: Gen[Seq[UUID => String => Email]] = Gen.function { id: UUID =>
-      Gen.function { content: String =>
-        Gen.fromFunction(Email(id, _, _, content))
+    val t: Gen[Seq[UUID => String => Email]] = Gen
+      .function {
+        id: UUID =>
+          Gen.function {
+            content: String =>
+              Gen.fromFunction(Email(id, _, _, content))
+          }
       }
-    }.many[Seq](10)
+      .many[Seq](10)
 
     println(t.run().map(_.apply(UUID.randomUUID())))
 
@@ -125,11 +129,25 @@ object Main {
       Gen.fromFunction(Email(id, _, _, content))
     }
 
-    tt.ap(Gen.product(Gen.random[UUID], Gen.alphanumeric(100))).tap(println).run()
+    tt.ap(Gen.product(Gen.random[UUID], Gen.alphanumeric(100)))
+      .tap(println)
+      .run()
 
     Gen.random[Short].tap(println).run()
 
     Gen.make(Jwelfkn(234)).tap(println).run()
+
+    Gen
+      .custom[MyClass]
+      .specifyConst(_.when[MyClass1])(MyClass1())
+      .specifyConst(_.when[J])(new J(";lkjewflkqjhefw"))
+      .exclude[MyClass3]
+      .make
+      .many[List](10)
+      .map(_.mkString("\t"))
+      .tap(println)
+      .run()
+
 
   }
 }

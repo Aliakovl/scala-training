@@ -157,9 +157,26 @@ class GenMacro(val c: blackbox.Context) {
   case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
   case class Prism(to: c.Type) extends Optic
 
-  sealed trait Method
+  sealed trait Method {
+    def toSpecifiedGen(classSymbol: ClassSymbol): VarsState[SpecifiedGen]
+  }
+  case class ExcludeMethod(tpe: c.Type) extends Method {
+    override def toSpecifiedGen(classSymbol: ClassSymbol): VarsState[SpecifiedGen] = {
+      if (!classSymbol.isSealed && !classSymbol.isAbstract) fail(s"class $classSymbol is not abstract sealed")
+      val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
+      val excludedType = subclassType(tpe.typeSymbol, classSymbol.toType)
+      State.traverse(subtypes.filterNot(_ <:< excludedType)) { subtype =>
+        State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
+          .map { name =>
+            subtype.typeSymbol -> NotSpecified(name)
+          }
+      }.map(_.toMap).map(SpecifiedSealedTrait)
+    }
+  }
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
-    def toSpecifiedGen(classSymbol: ClassSymbol, optics: List[Optic] = selector): VarsState[SpecifiedGen] = optics match {
+    override def toSpecifiedGen(classSymbol: c.universe.ClassSymbol): VarsState[SpecifiedGen] = toSpecifiedGen(classSymbol, selector)
+
+    private def toSpecifiedGen(classSymbol: ClassSymbol, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Prism(to) :: tail =>
         val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
         val toType = subclassType(to.typeSymbol, classSymbol.toType)
@@ -226,6 +243,9 @@ class GenMacro(val c: blackbox.Context) {
         }
         val method = SpecifyMethod(selector, DefaultArg(None))
         disassembleTree(other, method +: methods)
+      case q"$other.exclude[$tpeTree]" =>
+        val method = ExcludeMethod(tpeTree.tpe)
+        disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
       case _ => c.abort(tree.pos, "Unsupported syntax.")
     }
@@ -261,14 +281,18 @@ class GenMacro(val c: blackbox.Context) {
   case class NotSpecified(tree: c.TermName) extends SpecifiedGen
 
   def mergeMethods[A: WeakTypeTag](methods: Methods): VarsState[Option[SpecifiedGen]] = {
-    State.traverse(methods) { case method: SpecifyMethod =>
-      method.toSpecifiedGen(weakTypeOf[A].typeSymbol.asClass)
-    }.map { list =>
+    State.traverse(methods)(_.toSpecifiedGen(weakTypeOf[A].typeSymbol.asClass)).map { list =>
       list.foldLeft[Option[SpecifiedGen]](None) {
         case (Some(left), right) => Some(mergeSpecifications(left, right))
         case (None, value) => Some(value)
       }
     }
+  }
+
+  def join[K, A, B](left: Map[K, A], right: Map[K, B]): Map[K, (A, B)] = {
+    (left.keySet & right.keySet).map { key =>
+      key -> (left(key), right(key))
+    }.toMap
   }
 
   def mergeSpecifications(
@@ -284,8 +308,8 @@ class GenMacro(val c: blackbox.Context) {
       }
       SpecifiedCaseClass(rightClass, fields)
     case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
-      SpecifiedSealedTrait(leftSubclasses.map { case (key, value) =>
-        key -> mergeSpecifications(value, rightSubclasses(key))
+      SpecifiedSealedTrait(join(leftSubclasses, rightSubclasses).map { case (key, (left, right)) =>
+        key -> mergeSpecifications(left, right)
       })
     case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
       SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
@@ -320,7 +344,9 @@ class GenMacro(val c: blackbox.Context) {
         acc :+ params
       }
       construct(classSymbol.toType, args)
-    case SpecifiedSealedTrait(subclasses) => constructCases(termName)(subclasses)(specifiedTree(termName))
+    case SpecifiedSealedTrait(subclasses) =>
+      if (subclasses.isEmpty) fail("All subtypes was excluded")
+      constructCases(termName)(subclasses)(specifiedTree(termName))
     case Specified(GenArg(tree)) => callApply(tree)(termName)
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))(termName)
