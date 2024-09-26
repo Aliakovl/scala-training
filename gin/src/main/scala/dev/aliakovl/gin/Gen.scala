@@ -50,6 +50,10 @@ object Gen
       constructor: FunctionConstructor[In]
   ): constructor.Out = constructor(in)
 
+  def function[A, B](f: A => Gen[B]): Gen[A => B] = Gen { random => in =>
+    f(in).unsafeRun(random)
+  }
+
   def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen { random =>
     (ga.unsafeRun(random), gb.unsafeRun(random))
   }

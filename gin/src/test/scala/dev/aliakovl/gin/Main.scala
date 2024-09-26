@@ -110,5 +110,18 @@ object Main {
 
     Gen.random[UUID] <* Gen(_.setSeed(123)) product Gen
       .random[UUID] tap println runWithSeed 123
+
+    val t: Gen[Seq[UUID => String => Email]] = Gen.function { id: UUID =>
+      Gen.function { content: String =>
+        Gen.fromFunction(Email(id, _, _, content))
+      }
+    }.many[Seq](10)
+
+    val tt = Gen.function[(UUID, String), Email] { case (id, content) =>
+      Gen.fromFunction(Email(id, _, _, content))
+    }
+    println(tt.run()((UUID.randomUUID(), "wefwef")))
+
+    println(t.run().map(_.apply(UUID.randomUUID())))
   }
 }
