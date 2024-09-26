@@ -8,7 +8,7 @@ case object LNil extends Lst[Nothing]
 case class Cons[B](head: B, tail: Lst[B]) extends Lst[B]
 
 sealed trait MyClass
-case class MyClass1(m: MyClass) extends MyClass
+case class MyClass1(m: MyClass = MyClass4) extends MyClass
 case class MyClass2(lst: Lst[Int], mc2field: String = "lol-default")(
     other: Lst[Long] = Cons(mc2field.length.toLong, LNil)
 ) extends MyClass {
@@ -42,7 +42,7 @@ class TestClass2(private val t: String, val s: Int) extends TestClass(3) {
   override def toString: String = s"TestClass2($t)($g)($s)"
 }
 
-class T(a: Int, b: String) {
+class T(a: Int, b: String = "bbbb") {
   override def toString: String = s"T($a, $b)"
 }
 
@@ -205,7 +205,11 @@ object GenTest {
         _: String,
         _: String
       )
-    )
+    ),
+    Gen.custom[T].useDefault(_.arg[String]("b")).make,
+    Gen.custom[MyClass]
+      .useDefault(_.when[MyClass1].m)
+      .make
   )
 
   def main(args: Array[String]): Unit = gens.sequence
@@ -215,6 +219,7 @@ object GenTest {
           s"$id\t-> $value"
         }
         .foreach(println)
-    ).runWithSeed(11)
+    )
+    .runWithSeed(11)
 
 }

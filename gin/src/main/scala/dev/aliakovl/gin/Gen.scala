@@ -2,10 +2,11 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.internal._
 
+import scala.collection.Factory
 import scala.language.implicitConversions
 import scala.util.Random
 
-final class Gen[A] private (private[gin] val unsafeRun: Random => A) {
+final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends AnyVal {
 
   def apply(random: Random): A = unsafeRun(random)
 
@@ -28,6 +29,17 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) {
   }
 
   def widen[T >: A]: Gen[T] = this.asInstanceOf[Gen[T]]
+
+  def many[C[E] <: IterableOnce[E]](size: Int)(implicit
+      factory: Factory[A, C[A]]
+  ): Gen[C[A]] = Gen { random =>
+    factory.fromSpecific(Iterable.fill(size)(unsafeRun(random)))
+  }
+
+  def toMap[K, V](size: Int)(implicit ev: A <:< (K, V)): Gen[Map[K, V]] =
+    Gen { random =>
+      Iterable.fill(size)(unsafeRun(random)).toMap
+    }
 }
 
 object Gen
@@ -49,6 +61,10 @@ object Gen
   def fromFunction[In](in: In)(implicit
       constructor: FunctionConstructor[In]
   ): constructor.Out = constructor(in)
+
+  def function[A, B](f: A => Gen[B]): Gen[A => B] = Gen { random => in =>
+    f(in).unsafeRun(random)
+  }
 
   def product[A, B](ga: Gen[A], gb: Gen[B]): Gen[(A, B)] = Gen { random =>
     (ga.unsafeRun(random), gb.unsafeRun(random))

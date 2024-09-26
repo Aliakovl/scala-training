@@ -8,8 +8,14 @@ import dev.aliakovl.other.MyClass
 import java.util.UUID
 import scala.util.Random
 
-case class User(id: UUID, name: String)
+case class User private (id: UUID, name: String) {
+  def this(myName: String) {
+    this(UUID.randomUUID(), myName)
+  }
+}
 case class Email(id: UUID, from: UUID, to: UUID, content: String)
+
+case class Jwelfkn(k: Int) extends AnyVal
 
 object Main {
 
@@ -95,6 +101,35 @@ object Main {
 
     println(email, fromUser, toUser)
 
-    Gen.random[Long] <* Gen(_.setSeed(123)) product Gen.random[Long] tap println runWithSeed 123
+    val awe: Gen[User] = Gen.fromFunction { name: String => new User(name) }
+
+    Gen
+      .custom[User]
+      .specifyConst(_.arg("myName"))("that name")
+      .make
+      .tap(println)
+      .runWithSeed(123)
+
+    Gen.random[UUID] <* Gen(_.setSeed(123)) product Gen
+      .random[UUID] tap println runWithSeed 123
+
+    val t: Gen[Seq[UUID => String => Email]] = Gen.function { id: UUID =>
+      Gen.function { content: String =>
+        Gen.fromFunction(Email(id, _, _, content))
+      }
+    }.many[Seq](10)
+
+    println(t.run().map(_.apply(UUID.randomUUID())))
+
+    val tt = Gen.function[(UUID, String), Email] { case (id, content) =>
+      Gen.fromFunction(Email(id, _, _, content))
+    }
+
+    tt.ap(Gen.product(Gen.random[UUID], Gen.alphanumeric(100))).tap(println).run()
+
+    Gen.random[Short].tap(println).run()
+
+    Gen.make(Jwelfkn(234)).tap(println).run()
+
   }
 }
