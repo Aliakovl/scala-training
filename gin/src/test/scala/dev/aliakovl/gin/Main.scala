@@ -3,7 +3,7 @@ package dev.aliakovl.gin
 import cats.syntax.all._
 import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
-import dev.aliakovl.other.MyClass
+import dev.aliakovl.other._
 
 import java.util.UUID
 import scala.util.Random
@@ -113,11 +113,15 @@ object Main {
     Gen.random[UUID] <* Gen(_.setSeed(123)) product Gen
       .random[UUID] tap println runWithSeed 123
 
-    val t: Gen[Seq[UUID => String => Email]] = Gen.function { id: UUID =>
-      Gen.function { content: String =>
-        Gen.fromFunction(Email(id, _, _, content))
+    val t: Gen[Seq[UUID => String => Email]] = Gen
+      .function {
+        id: UUID =>
+          Gen.function {
+            content: String =>
+              Gen.fromFunction(Email(id, _, _, content))
+          }
       }
-    }.many[Seq](10)
+      .many[Seq](10)
 
     println(t.run().map(_.apply(UUID.randomUUID())))
 
@@ -125,11 +129,96 @@ object Main {
       Gen.fromFunction(Email(id, _, _, content))
     }
 
-    tt.ap(Gen.product(Gen.random[UUID], Gen.alphanumeric(100))).tap(println).run()
+    tt.ap(Gen.product(Gen.random[UUID], Gen.alphanumeric(100)))
+      .tap(println)
+      .run()
 
     Gen.random[Short].tap(println).run()
 
     Gen.make(Jwelfkn(234)).tap(println).run()
+
+    Gen
+      .custom[MyClass]
+      .specifyConst(_.when[MyClass1])(MyClass1())
+      .specifyConst(_.when[J])(new J(";lkjewflkqjhefw"))
+      .exclude[MyClass3]
+      .make
+      .many[List](10)
+      .map(_.mkString("\t"))
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Option[MyClass]]
+      .specifyConst(_.when[Option[MyClass1]])(None)
+      .make
+      .many[List](10)
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Option[String]]
+      .specifyConst(_.when[Option[String]])(None)
+      .make
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Either[String, MyClass]]
+      .exclude[Right[String, MyClass1]]
+      .exclude[Left[String, MyClass]]
+      .useDefault(_.when[Right[String, MyClass2]].value.mc2field)
+      .specifyConst(_.when[Right[String, J]].value)(new J("ahefjkl"))
+      .make
+      .tap(println)
+      .run()
+
+    sealed abstract class Clazz
+    case class A() extends Clazz
+    case class B() extends Clazz
+    case class C() extends Clazz
+
+    sealed trait Opt[A]
+    case class Noth[A]() extends Opt[A]
+    case class Maybe[A](value: A) extends Opt[A]
+
+    Gen
+      .custom[Option[Clazz]]
+      .exclude[None.type]
+      .make
+      .many[List](10000)
+      .map(_.count {
+        case Some(A()) => true
+        case Some(B()) => true
+        case Some(C()) => true
+        case None      => false
+      })
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Clazz]
+      .exclude[A]
+      .make
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Opt[Clazz]]
+      .specify(_.when[Maybe[Clazz]])(
+        Gen.custom[Clazz].exclude[A].make.map(Maybe(_))
+      )
+      .exclude[Noth[Clazz]]
+      .make
+      .many[List](10000)
+      .map(_.count {
+        case Maybe(A()) => false
+        case Maybe(B()) => true
+        case Maybe(C()) => true
+        case Noth()     => false
+      })
+      .tap(println)
+      .run()
 
   }
 }

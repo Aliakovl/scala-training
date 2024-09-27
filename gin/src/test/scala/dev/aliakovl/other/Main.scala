@@ -23,10 +23,10 @@ object Main {
     Gen.product(Gen.random[String], Gen.random[Int]).toMap[String, Int](3),
     Gen.random[(String, Int)].toMap[String, Int](3),
     Gen.random[Either[String, Int]],
-    Gen.oneOf[MyClass].make[MyClass2, MyClass1].many[List](10),
+    Gen.one[MyClass].of[MyClass2, MyClass1].many[List](10),
     Gen
-      .oneOf[MyClass]
-      .make[MyClass1, MyClass2, MyClass3, SubClass]
+      .one[MyClass]
+      .of[MyClass1, MyClass2, MyClass3, SubClass]
       .many[List](4000)
       .map { list =>
         (
