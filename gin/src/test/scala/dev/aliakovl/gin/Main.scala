@@ -173,5 +173,52 @@ object Main {
       .tap(println)
       .run()
 
+    sealed abstract class Clazz
+    case class A() extends Clazz
+    case class B() extends Clazz
+    case class C() extends Clazz
+
+    sealed trait Opt[A]
+    case class Noth[A]() extends Opt[A]
+    case class Maybe[A](value: A) extends Opt[A]
+
+    Gen
+      .custom[Option[Clazz]]
+      .exclude[None.type]
+      .make
+      .many[List](10000)
+      .map(_.count {
+        case Some(A()) => true
+        case Some(B()) => true
+        case Some(C()) => true
+        case None      => false
+      })
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Clazz]
+      .exclude[A]
+      .make
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Opt[Clazz]]
+      .specify(_.when[Maybe[Clazz]])(
+        Gen.custom[Clazz].exclude[A].make.map(Maybe(_))
+      )
+      .exclude[Noth[Clazz]]
+      .make
+      .many[List](10000)
+      .map(_.count {
+        case Maybe(A()) => false
+        case Maybe(B()) => true
+        case Maybe(C()) => true
+        case Noth()     => false
+      })
+      .tap(println)
+      .run()
+
   }
 }

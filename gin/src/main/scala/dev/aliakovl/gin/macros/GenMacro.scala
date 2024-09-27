@@ -155,17 +155,17 @@ class GenMacro(val c: blackbox.Context) {
   type Selector = List[Optic]
 
   sealed trait Optic
-  case class Lens(from: c.Type, to: c.TermName, tpe: c.Type) extends Optic
-  case class Prism(to: c.Type) extends Optic
+  case class Lens(fromType: c.Type, field: c.TermName, toType: c.Type) extends Optic
+  case class Prism(toType: c.Type) extends Optic
 
   sealed trait Method {
     def toSpecifiedGen(classSymbol: c.Type): VarsState[SpecifiedGen]
   }
-  case class ExcludeMethod(tpe: c.Type) extends Method {
-    override def toSpecifiedGen(classSymbol: c.Type): VarsState[SpecifiedGen] = {
-      if (!classSymbol.typeSymbol.asClass.isSealed && !classSymbol.typeSymbol.isAbstract) fail(s"class $classSymbol is not abstract sealed")
-      val subtypes = subTypesOf(classSymbol)
-      State.traverse(subtypes.filterNot(_ <:< tpe)) { subtype =>
+  case class ExcludeMethod(excludedType: c.Type) extends Method {
+    override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = {
+      if (!tpe.typeSymbol.asClass.isSealed || !tpe.typeSymbol.isAbstract) fail(s"type $tpe is not abstract sealed")
+      val subtypes = subTypesOf(tpe)
+      State.traverse(subtypes.filterNot(_ <:< excludedType)) { subtype =>
         State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
           .map { name =>
             subtype -> NotSpecified(name)
@@ -174,14 +174,14 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
-    override def toSpecifiedGen(classSymbol: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(classSymbol, selector)
+    override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
 
-    private def toSpecifiedGen(classSymbol: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
-      case Prism(to) :: tail =>
-        val subtypes = subTypesOf(classSymbol)
+    private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
+      case Prism(toType) :: tail =>
+        val subtypes = subTypesOf(tpe)
         State.traverse(subtypes) { subtype =>
-          if (subtype <:< to) {
-            toSpecifiedGen(to, tail).map(subtype -> _)
+          if (subtype <:< toType) {
+            toSpecifiedGen(toType, tail).map(subtype -> _)
           } else {
             State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
               .map { name =>
@@ -189,20 +189,20 @@ class GenMacro(val c: blackbox.Context) {
               }
           }
         }.map(_.toMap).map(SpecifiedSealedTrait)
-      case Lens(from, to, tpe) :: tail =>
+      case Lens(fromType, field, toType) :: tail =>
         State.sequence {
-          val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(classSymbol), from)
-          val defaultMap = defaults(classSymbol.typeSymbol.asClass.companion)(allParams)
-          if (!allParams.flatten.map(_.name).contains(to)) c.abort(from.termSymbol.pos, s"Constructor of $classSymbol does not take $to argument")
+          val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(tpe), fromType)
+          val defaultMap = defaults(tpe.typeSymbol.asClass.companion)(allParams)
+          if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $tpe does not take $field argument")
           allParams.map { params =>
             State.traverse(params) { param =>
               val termName = param.name.toTermName
-              if (param.asTerm.name == to) {
+              if (param.asTerm.name == field) {
                 val defaultOpt = defaultMap.get(param)
                 if (tail.isEmpty && arg.isInstanceOf[DefaultArg] && defaultOpt.nonEmpty) {
                   State.pure[Variables, SpecifiedGen](Specified(DefaultArg(defaultOpt))).map(termName -> _)
                 } else {
-                  toSpecifiedGen(tpe, tail).map(termName -> _)
+                  toSpecifiedGen(toType, tail).map(termName -> _)
                 }
               } else if (param.isImplicit) {
                 State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(c.inferImplicitValue(param.info))).map(termName -> _)
@@ -214,7 +214,7 @@ class GenMacro(val c: blackbox.Context) {
               }
             }.map(_.toMap)
           }
-        }.map(SpecifiedCaseClass(classSymbol, _))
+        }.map(SpecifiedCaseClass(tpe, _))
       case Nil => State.pure(Specified(arg))
     }
   }
@@ -412,21 +412,21 @@ class GenMacro(val c: blackbox.Context) {
 
   def subclassAllTypes(subclass: c.Symbol, parent: c.Type): Seq[c.Type] = {
     val sEta = subclass.asType.toType.etaExpand
+    val subclassTypeArgs = sEta.baseType(parent.typeSymbol).typeArgs.map(_.typeSymbol)
     if (parent.typeArgs.isEmpty) {
       Seq(sEta)
     } else {
-      val allCases = parent.typeArgs.map { s =>
-        val l = subTypesOf(s).toList
-        if (l.isEmpty) {
-          List(s)
+      val allCases = subclassTypeArgs.zip(parent.typeArgs).map { case (sym, tpe) =>
+        if (tpe.takesTypeArgs && sym.asType.isCovariant) {
+          subTypesOf(tpe).toList
         } else {
-          l
+          List(tpe)
         }
       }.sequence
 
       allCases.map { typeArgs =>
         sEta.finalResultType.substituteTypes(
-          from = sEta.baseType(parent.typeSymbol).typeArgs.map(_.typeSymbol),
+          from = subclassTypeArgs,
           to = typeArgs
         )
       }
