@@ -129,9 +129,9 @@ object GenTest {
         Gen.custom["PPPPPP"].make
       )
       .many[List](10),
-    Gen.oneOf[String].make["RRRRR", "PPPPPP"].many[List](10),
-    Gen.oneOf[MyClass].make[MyClass1, MyClass2, MyClass3],
-    Gen.oneOf[Any].make[String, Int].many[List](10),
+    Gen.one[String].of["RRRRR", "PPPPPP"].many[List](10),
+    Gen.one[MyClass].of[MyClass1, MyClass2, MyClass3],
+    Gen.one[Any].of[String, Int].many[List](10),
     Gen
       .custom[MyClass]
       .specify(_.when[MyClass1].m)(Gen.random[MyClass4.type])

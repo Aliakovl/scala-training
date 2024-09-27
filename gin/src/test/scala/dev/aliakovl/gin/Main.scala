@@ -3,7 +3,7 @@ package dev.aliakovl.gin
 import cats.syntax.all._
 import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
-import dev.aliakovl.other.{J, MyClass, MyClass1, MyClass3}
+import dev.aliakovl.other._
 
 import java.util.UUID
 import scala.util.Random
@@ -148,6 +148,30 @@ object Main {
       .tap(println)
       .run()
 
+    Gen
+      .custom[Option[MyClass]]
+      .specifyConst(_.when[Option[MyClass1]])(None)
+      .make
+      .many[List](10)
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Option[String]]
+      .specifyConst(_.when[Option[String]])(None)
+      .make
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Either[String, MyClass]]
+      .exclude[Right[String, MyClass1]]
+      .exclude[Left[String, MyClass]]
+      .useDefault(_.when[Right[String, MyClass2]].value.mc2field)
+      .specifyConst(_.when[Right[String, J]].value)(new J("ahefjkl"))
+      .make
+      .tap(println)
+      .run()
 
   }
 }

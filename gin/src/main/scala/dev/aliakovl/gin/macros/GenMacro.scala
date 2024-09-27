@@ -1,5 +1,6 @@
 package dev.aliakovl.gin.macros
 
+import cats.implicits.toTraverseOps
 import dev.aliakovl.gin
 import dev.aliakovl.gin.Gen
 
@@ -53,7 +54,7 @@ class GenMacro(val c: blackbox.Context) {
   case class Refer(value: c.Tree) extends Value
   case class CaseClass(fields: List[List[c.TermName]]) extends Value
   case object CaseObject extends Value
-  case class SealedTrait(subclasses: Map[c.Symbol, c.TermName]) extends Value
+  case class SealedTrait(subclasses: Map[c.Type, c.TermName]) extends Value
 
   def genTree[A: c.WeakTypeTag](variables: Variables, values: Values): c.Tree = {
     def lazyVal(tpe: c.Type, value: c.Tree): c.Tree = {
@@ -89,7 +90,7 @@ class GenMacro(val c: blackbox.Context) {
     } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
       c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
     } else if (isAbstractSealed(sym)) {
-      val subtypes = subclassesOf(sym.asClass).map(subclassType(_, tpe))
+      val subtypes = subTypesOf(tpe)
       State.traverse(subtypes) { subtype =>
         for {
           variables <- State.get[VState].map(_._1)
@@ -97,7 +98,7 @@ class GenMacro(val c: blackbox.Context) {
               val termName = c.freshName(subtype.typeSymbol.name).toTermName
               State.modifyFirst[Variables, Values](_.updated(subtype, termName)).zip(getOrElseCreateValue(subtype)).as(termName)
             }(State.pure)
-        } yield subtype.typeSymbol -> name
+        } yield subtype -> name
       }.map(_.toMap).map(SealedTrait)
     } else if (isConcreteClass(sym)) {
       State.sequence {
@@ -158,42 +159,40 @@ class GenMacro(val c: blackbox.Context) {
   case class Prism(to: c.Type) extends Optic
 
   sealed trait Method {
-    def toSpecifiedGen(classSymbol: ClassSymbol): VarsState[SpecifiedGen]
+    def toSpecifiedGen(classSymbol: c.Type): VarsState[SpecifiedGen]
   }
   case class ExcludeMethod(tpe: c.Type) extends Method {
-    override def toSpecifiedGen(classSymbol: ClassSymbol): VarsState[SpecifiedGen] = {
-      if (!classSymbol.isSealed && !classSymbol.isAbstract) fail(s"class $classSymbol is not abstract sealed")
-      val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
-      val excludedType = subclassType(tpe.typeSymbol, classSymbol.toType)
-      State.traverse(subtypes.filterNot(_ <:< excludedType)) { subtype =>
+    override def toSpecifiedGen(classSymbol: c.Type): VarsState[SpecifiedGen] = {
+      if (!classSymbol.typeSymbol.asClass.isSealed && !classSymbol.typeSymbol.isAbstract) fail(s"class $classSymbol is not abstract sealed")
+      val subtypes = subTypesOf(classSymbol)
+      State.traverse(subtypes.filterNot(_ <:< tpe)) { subtype =>
         State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
           .map { name =>
-            subtype.typeSymbol -> NotSpecified(name)
+            subtype -> NotSpecified(name)
           }
       }.map(_.toMap).map(SpecifiedSealedTrait)
     }
   }
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
-    override def toSpecifiedGen(classSymbol: c.universe.ClassSymbol): VarsState[SpecifiedGen] = toSpecifiedGen(classSymbol, selector)
+    override def toSpecifiedGen(classSymbol: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(classSymbol, selector)
 
-    private def toSpecifiedGen(classSymbol: ClassSymbol, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
+    private def toSpecifiedGen(classSymbol: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Prism(to) :: tail =>
-        val subtypes = subclassesOf(classSymbol).map(subclassType(_, classSymbol.toType))
-        val toType = subclassType(to.typeSymbol, classSymbol.toType)
+        val subtypes = subTypesOf(classSymbol)
         State.traverse(subtypes) { subtype =>
-          if (subtype <:< toType) {
-            toSpecifiedGen(to.typeSymbol.asClass, tail).map(subtype.typeSymbol -> _)
+          if (subtype <:< to) {
+            toSpecifiedGen(to, tail).map(subtype -> _)
           } else {
             State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
               .map { name =>
-                subtype.typeSymbol -> NotSpecified(name)
+                subtype -> NotSpecified(name)
               }
           }
         }.map(_.toMap).map(SpecifiedSealedTrait)
       case Lens(from, to, tpe) :: tail =>
         State.sequence {
-          val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(classSymbol.toType), from)
-          val defaultMap = defaults(classSymbol.companion)(allParams)
+          val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(classSymbol), from)
+          val defaultMap = defaults(classSymbol.typeSymbol.asClass.companion)(allParams)
           if (!allParams.flatten.map(_.name).contains(to)) c.abort(from.termSymbol.pos, s"Constructor of $classSymbol does not take $to argument")
           allParams.map { params =>
             State.traverse(params) { param =>
@@ -203,7 +202,7 @@ class GenMacro(val c: blackbox.Context) {
                 if (tail.isEmpty && arg.isInstanceOf[DefaultArg] && defaultOpt.nonEmpty) {
                   State.pure[Variables, SpecifiedGen](Specified(DefaultArg(defaultOpt))).map(termName -> _)
                 } else {
-                  toSpecifiedGen(tpe.typeSymbol.asClass, tail).map(termName -> _)
+                  toSpecifiedGen(tpe, tail).map(termName -> _)
                 }
               } else if (param.isImplicit) {
                 State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(c.inferImplicitValue(param.info))).map(termName -> _)
@@ -274,14 +273,14 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait SpecifiedGen
-  case class SpecifiedCaseClass(sym: ClassSymbol, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
-  case class SpecifiedSealedTrait(subclasses: Map[c.Symbol, SpecifiedGen]) extends SpecifiedGen
+  case class SpecifiedCaseClass(sym: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
+  case class SpecifiedSealedTrait(subclasses: Map[c.Type, SpecifiedGen]) extends SpecifiedGen
   case class Specified(tree: Arg) extends SpecifiedGen
   case class NotSpecifiedImplicit(tree: c.Tree) extends SpecifiedGen
   case class NotSpecified(tree: c.TermName) extends SpecifiedGen
 
   def mergeMethods[A: WeakTypeTag](methods: Methods): VarsState[Option[SpecifiedGen]] = {
-    State.traverse(methods)(_.toSpecifiedGen(weakTypeOf[A].typeSymbol.asClass)).map { list =>
+    State.traverse(methods)(_.toSpecifiedGen(weakTypeOf[A])).map { list =>
       list.foldLeft[Option[SpecifiedGen]](None) {
         case (Some(left), right) => Some(mergeSpecifications(left, right))
         case (None, value) => Some(value)
@@ -343,7 +342,7 @@ class GenMacro(val c: blackbox.Context) {
 
         acc :+ params
       }
-      construct(classSymbol.toType, args)
+      construct(classSymbol, args)
     case SpecifiedSealedTrait(subclasses) =>
       if (subclasses.isEmpty) fail("All subtypes was excluded")
       constructCases(termName)(subclasses)(specifiedTree(termName))
@@ -384,18 +383,16 @@ class GenMacro(val c: blackbox.Context) {
     constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
   }
 
-  def constructCases[T](termName: TermName)(subclasses: Map[c.Symbol, T])(f: T => c.Tree): c.Tree = {
-    val cases = subclasses.toList.sortBy(_._1.fullName).map(_._2)
+  def constructCases[T](termName: TermName)(subclasses: Map[c.Type, T])(f: T => c.Tree): c.Tree = {
+    val cases = subclasses.toList.sortBy(_._1.typeSymbol.fullName).map(_._2)
     q"$termName.nextInt(${cases.size}) match { case ..${cases.zipWithIndex.map {
       case value -> index => cq"$index => ${f(value)}"
     }} }"
   }
 
-  def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
-    val (abstractChildren, concreteChildren) =
-      parent.knownDirectSubclasses
-        .tapEach(_.info)
-        .partition(_.isAbstract)
+  def subTypesOf(parent: c.Type): Set[c.Type] = {
+    val (abstractChildren, concreteChildren) = parent.typeSymbol.asClass.knownDirectSubclasses.tapEach(_.info)
+      .partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
       if (!child.asClass.isFinal && !child.asClass.isCaseClass) {
@@ -403,25 +400,37 @@ class GenMacro(val c: blackbox.Context) {
       }
     }
 
-    concreteChildren ++ abstractChildren.flatMap { child =>
-      val childClass = child.asClass
+    concreteChildren.flatMap(subclassAllTypes(_, parent)) ++ abstractChildren.flatMap(subclassAllTypes(_, parent)).flatMap { child =>
+      val childClass = child.typeSymbol.asClass
       if (childClass.isSealed) {
-        subclassesOf(childClass)
+        subTypesOf(child)
       } else {
         fail(s"child $child of $parent is not sealed")
       }
     }
   }
 
-  def subclassType(subclass: c.Symbol, parent: c.Type): c.Type = {
+  def subclassAllTypes(subclass: c.Symbol, parent: c.Type): Seq[c.Type] = {
     val sEta = subclass.asType.toType.etaExpand
-    sEta.finalResultType.substituteTypes(
-      from = sEta
-        .baseType(parent.typeSymbol)
-        .typeArgs
-        .map(_.typeSymbol),
-      to = parent.typeArgs
-    )
+    if (parent.typeArgs.isEmpty) {
+      Seq(sEta)
+    } else {
+      val allCases = parent.typeArgs.map { s =>
+        val l = subTypesOf(s).toList
+        if (l.isEmpty) {
+          List(s)
+        } else {
+          l
+        }
+      }.sequence
+
+      allCases.map { typeArgs =>
+        sEta.finalResultType.substituteTypes(
+          from = sEta.baseType(parent.typeSymbol).typeArgs.map(_.typeSymbol),
+          to = typeArgs
+        )
+      }
+    }
   }
 
   def defaults(companion: c.Symbol)(params: List[List[c.Symbol]]): Map[c.Symbol, c.Tree] = {

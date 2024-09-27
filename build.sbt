@@ -121,6 +121,10 @@ lazy val `shapeless-guide` = (project in file("./shapeless-guide"))
       "com.chuusai" %% "shapeless" % "2.3.12",
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.typelevel" %% "cats-core" % "2.12.0"
+    ),
+    scalacOptions ++= Seq(
+      "--language:experimental.macros",
+      "--language:implicitConversions"
     )
   )
   .dependsOn(gin)
