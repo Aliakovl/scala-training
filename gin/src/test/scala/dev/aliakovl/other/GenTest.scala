@@ -28,7 +28,7 @@ class G(val int: Int) {
   override def toString: String = s"G($int)"
 }
 
-case class Talk(int: Int)(val string: String, val gerg: List[Int])(implicit
+case class Talk(int: Int)(val string: String, val gerg: List[Int], val mc: Option[MyClass] = None)(implicit
     val wefwef: Option[Long],
     sec: Int
 ) {
@@ -62,7 +62,7 @@ object GenTest {
   implicit val mc1: Gen[MyClass1] =
     Gen.custom[MyClass1].specifyConst(_.m)(H).make
 
-  implicit val str: Gen[String] = Gen.between(0, 5).flatMap(Gen.alphanumeric)
+  implicit val str: Gen[String] = Gen.between(1, 5).flatMap(Gen.alphanumeric)
   implicit val int: Gen[Int] = Gen.oneOf(1, 2, 3)
 
   val y: (Int, MyClass4.type) = (4, MyClass4)
@@ -207,7 +207,8 @@ object GenTest {
       )
     ),
     Gen.custom[T].useDefault(_.arg[String]("b")).make,
-    Gen.custom[MyClass]
+    Gen
+      .custom[MyClass]
       .useDefault(_.when[MyClass1].m)
       .make
   )
