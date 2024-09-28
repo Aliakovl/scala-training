@@ -71,7 +71,7 @@ class GenMacro(val c: blackbox.Context) {
         val value = toGen(termName)(construct(tp, args))
         lazyVal(tp, value)
       case tp -> SealedTrait(subclasses) =>
-        if (subclasses.isEmpty) fail(s"Type ${tp.typeSymbol.name.decodedName} does not have constructors")
+        if (subclasses.isEmpty) fail(s"Type ${tp.typeSymbol.name} does not have constructors")
         val termName = TermName(c.freshName())
         val value = toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
         lazyVal(tp, value)
@@ -179,17 +179,21 @@ class GenMacro(val c: blackbox.Context) {
 
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Prism(toType) :: tail =>
-        val subtypes = subTypesOf(tpe)
-        State.traverse(subtypes) { subtype =>
-          if (subtype <:< toType) {
-            toSpecifiedGen(toType, tail).map(subtype -> _)
-          } else {
-            State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
-              .map { name =>
-                subtype -> NotSpecified(name)
-              }
-          }
-        }.map(_.toMap).map(SpecifiedSealedTrait)
+        if (tpe =:= toType) {
+          toSpecifiedGen(toType, tail)
+        } else {
+          val subtypes = subTypesOf(tpe)
+          State.traverse(subtypes) { subtype =>
+            if (subtype <:< toType) {
+              toSpecifiedGen(toType, tail).map(subtype -> _)
+            } else {
+              State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
+                .map { name =>
+                  subtype -> NotSpecified(name)
+                }
+            }
+          }.map(_.toMap).map(SpecifiedSealedTrait)
+        }
       case Lens(fromType, field, toType) :: tail =>
         State.sequence {
           val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(tpe), fromType)
@@ -206,7 +210,9 @@ class GenMacro(val c: blackbox.Context) {
                   toSpecifiedGen(toType, tail).map(termName -> _)
                 }
               } else if (param.isImplicit) {
-                State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(c.inferImplicitValue(param.info))).map(termName -> _)
+                val impl = c.inferImplicitValue(param.info)
+                if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
+                State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
               } else {
                 val paramType = param.info
                 State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
@@ -265,7 +271,7 @@ class GenMacro(val c: blackbox.Context) {
           case _ => c.abort(fieldName.pos, "Only string literals supported")
         }
       case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
-        if (!from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
+        if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(to.tpe)
         disassembleSelector(other, from.tpe, prism :: selector)
       case _: Ident => selector
@@ -476,6 +482,6 @@ class GenMacro(val c: blackbox.Context) {
     constructors
       .find(_.isPrimaryConstructor)
       .orElse(constructors.headOption)
-      .getOrElse(fail(s"class ${tpe.typeSymbol.name.decodedName} has no public constructors"))
+      .getOrElse(fail(s"class ${tpe.typeSymbol.name} has no public constructors"))
   }
 }
