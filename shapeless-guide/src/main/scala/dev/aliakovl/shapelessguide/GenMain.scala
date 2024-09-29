@@ -103,9 +103,9 @@ object GenMain extends App {
 
   Gen
     .custom[Opt[Clazz]]
-    .excludeInner(_.when[Maybe[Clazz]].value.when[A])
-    .excludeInner(_.when[Maybe[Clazz]].value.when[B])
-    .excludeInner(_.when[Noth[Clazz]])
+    .exclude(_.when[Maybe[Clazz]].value.when[A])
+    .exclude(_.when[Maybe[Clazz]].value.when[B])
+    .exclude(_.when[Noth[Clazz]])
     .make
     .many[List](10000)
     .map(_.count {
@@ -124,7 +124,7 @@ object GenMain extends App {
   Gen
     .custom[Wrapper[Lol]]
     .specify(_.when[Wrapper[LolA]])(Gen.apply{_ => print("LolA!\n"); WrapperImpl(3)})
-    .excludeInner(_.when[Wrapper[LolB]])
+    .exclude(_.when[Wrapper[LolB]])
     .make
     .many[List](10)
     .tap(println)
@@ -195,7 +195,7 @@ object GenMain extends App {
   Gen
     .custom[Option[Either[String, Int]]]
     .specifyConst(_.when[Some[Right[String, Int]]].value.value)(4)
-    .excludeInner(_.when[Some[Left[String, Int]]])
+    .exclude(_.when[Some[Left[String, Int]]])
     .make
     .many[List](100)
     .map(_.mkString("\n"))

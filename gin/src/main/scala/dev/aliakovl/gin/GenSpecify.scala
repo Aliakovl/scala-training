@@ -15,10 +15,7 @@ final class GenSpecify[A] private[gin] {
   def useDefault[P](selector: A => P): GenSpecify[A] = ???
 
   @compileTimeOnly("Illegal reference to dev.aliakovl.gin.GenSpecify.exclude, try call dev.aliakovl.gin.GenSpecify.make at the end")
-  def exclude[B <: A]: GenSpecify[A] = ???
-
-  @compileTimeOnly("Illegal reference to dev.aliakovl.gin.GenSpecify.excludeInner, try call dev.aliakovl.gin.GenSpecify.make at the end")
-  def excludeInner[P](selector: A => P): GenSpecify[A] = ???
+  def exclude[P](selector: A => P): GenSpecify[A] = ???
 
   def make: Gen[A] = macro GenMacro.makeImpl[A]
 }

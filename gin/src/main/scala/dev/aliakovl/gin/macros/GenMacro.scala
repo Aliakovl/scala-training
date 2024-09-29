@@ -173,12 +173,12 @@ class GenMacro(val c: blackbox.Context) {
   sealed trait Method {
     def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen]
   }
-  case class ExcludeInnerMethod(selector: Selector) extends Method {
+  case class ExcludeMethod(selector: Selector) extends Method {
     override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
 
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Nil => State.pure(Excluded)
-      case Lens(fromType, field, toType) :: Nil => fail(s"wft?")
+      case Lens(fromType, field, toType) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with field $field")
       case Prism(toType) :: tail =>
         if (tpe =:= toType) {
           toSpecifiedGen(toType)
@@ -213,18 +213,6 @@ class GenMacro(val c: blackbox.Context) {
             }.map(_.toMap)
           }
         }.map(SpecifiedCaseClass(tpe, _))
-    }
-  }
-  case class ExcludeMethod(excludedType: c.Type) extends Method {
-    override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = {
-      if (!tpe.typeSymbol.asClass.isSealed || !tpe.typeSymbol.isAbstract) fail(s"type $tpe is not abstract sealed")
-      val subtypes = subTypesOf(tpe)
-      State.traverse(subtypes.filterNot(_ <:< excludedType)) { subtype =>
-        State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
-          .map { name =>
-            subtype -> NotSpecified(name)
-          }
-      }.map(_.toMap).map(SpecifiedSealedTrait)
     }
   }
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
@@ -302,12 +290,9 @@ class GenMacro(val c: blackbox.Context) {
         }
         val method = SpecifyMethod(selector, DefaultArg(None))
         disassembleTree(other, method +: methods)
-      case q"$other.exclude[$tpeTree]" =>
-        val method = ExcludeMethod(tpeTree.tpe)
-        disassembleTree(other, method +: methods)
-      case q"$other.excludeInner[$tpe](($_) => $selectorTree)" =>
+      case q"$other.exclude[$tpe](($_) => $selectorTree)" =>
         val selector = disassembleSelector(selectorTree, tpe.tpe)
-        val method = ExcludeInnerMethod(selector)
+        val method = ExcludeMethod(selector)
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
       case _ => c.abort(tree.pos, "Unsupported syntax.")
