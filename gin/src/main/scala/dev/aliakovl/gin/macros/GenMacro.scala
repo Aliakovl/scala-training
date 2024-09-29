@@ -52,12 +52,8 @@ class GenMacro(val c: blackbox.Context) {
       .flatMap(initValues[A])
       .run(initVars[A])
 
-    val l = genTree[A](variables, values)
-
-    println(l)
-
     c.Expr[Gen[A]] {
-      l
+      genTree[A](variables, values)
     }
   }
 
