@@ -47,7 +47,8 @@ class GenMacro(val c: blackbox.Context) {
       }
       .map { genOpt =>
         val termName = TermName(c.freshName())
-        genOpt.map(specifiedTree(termName)).map(toGen(termName))
+        genOpt.map(flatSpecifiedGen).map(_.map(weakTypeOf[A] -> _)).map(SpecifiedSealedTrait)
+          .map(specifiedTree(termName)).map(toGen(termName))
       }
       .flatMap(initValues[A])
       .run(initVars[A])
@@ -80,7 +81,7 @@ class GenMacro(val c: blackbox.Context) {
       case tp -> SealedTrait(subclasses) =>
         if (subclasses.isEmpty) fail(s"Type ${tp.typeSymbol.name} does not have constructors")
         val termName = TermName(c.freshName())
-        val value = toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
+        val value = toGen(termName)(constructCases(termName)(subclasses.toList){ name => callApply(Ident(name))(termName) })
         lazyVal(tp, value)
     }
 
@@ -189,7 +190,7 @@ class GenMacro(val c: blackbox.Context) {
                   subtype -> NotSpecified(name)
                 }
             }
-          }.map(_.toMap).map(SpecifiedSealedTrait)
+          }.map(_.toList).map(SpecifiedSealedTrait)
         }
       case Lens(fromType, field, toType) :: tail =>
         State.sequence {
@@ -229,7 +230,7 @@ class GenMacro(val c: blackbox.Context) {
                   subtype -> NotSpecified(name)
                 }
             }
-          }.map(_.toMap).map(SpecifiedSealedTrait)
+          }.map(_.toList).map(SpecifiedSealedTrait)
         }
       case Lens(fromType, field, toType) :: tail =>
         State.sequence {
@@ -318,18 +319,18 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   sealed trait SpecifiedGen
-  case class SpecifiedCaseClass(sym: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
-  case class SpecifiedSealedTrait(subclasses: Map[c.Type, SpecifiedGen]) extends SpecifiedGen
+  case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
+  case class SpecifiedSealedTrait(subtypes: List[(c.Type, SpecifiedGen)]) extends SpecifiedGen
   case class Specified(tree: Arg) extends SpecifiedGen
   case class NotSpecifiedImplicit(tree: c.Tree) extends SpecifiedGen
-  case class NotSpecified(tree: c.TermName) extends SpecifiedGen
+  case class NotSpecified(variable: c.TermName) extends SpecifiedGen
   case object Excluded extends SpecifiedGen
 
   def usedVariables(gen: SpecifiedGen): Set[c.TermName] = gen match {
     case SpecifiedCaseClass(_, fields) => fields.flatten.flatMap { case (name, field) =>
       usedVariables(field) + name
     }.toSet
-    case SpecifiedSealedTrait(subclasses) => subclasses.values.toSet.flatMap(usedVariables)
+    case SpecifiedSealedTrait(subtypes) => subtypes.map(_._2).toSet.flatMap(usedVariables)
     case NotSpecified(tree) => Set(tree)
     case _ => Set.empty
   }
@@ -370,9 +371,9 @@ class GenMacro(val c: blackbox.Context) {
       }
       SpecifiedCaseClass(rightClass, fields)
     case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
-      SpecifiedSealedTrait(join(leftSubclasses, rightSubclasses).map { case (key, (left, right)) =>
+      SpecifiedSealedTrait(join(leftSubclasses.toMap, rightSubclasses.toMap).map { case (key, (left, right)) =>
         key -> mergeSpecifications(left, right)
-      })
+      }.toList)
     case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
       SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
         subclass -> mergeSpecifications(leftSpecified, right)
@@ -419,6 +420,23 @@ class GenMacro(val c: blackbox.Context) {
     case _ => fail("unreachable")
   }
 
+  def flatSpecifiedGen(gen: SpecifiedGen): List[SpecifiedGen] = gen match {
+    case SpecifiedCaseClass(tpe, fields) =>
+      val a: List[List[List[(c.TermName, SpecifiedGen)]]] = fields.map(_.map { case (key, value) =>
+        flatSpecifiedGen(value).map(key -> _)
+      }.toList)
+      a.map(_.sequence.map(_.toMap)).sequence.map(SpecifiedCaseClass(tpe, _))
+    case SpecifiedSealedTrait(subtypes) =>
+      val cases = subtypes.filterNot(_._2 == Excluded)
+      if (cases.isEmpty) fail("All subtypes was excluded")
+      cases.map(_._2).flatMap {
+        case SpecifiedSealedTrait(subtypes_) => subtypes_.map(_._2).flatMap(flatSpecifiedGen)
+        case x => flatSpecifiedGen(x)
+      }
+    case Excluded => List.empty
+    case x => List(x)
+  }
+
   def isAbstractSealed(sym: c.Symbol): Boolean = {
     sym.isAbstract && sym.isClass && sym.asClass.isSealed
   }
@@ -449,7 +467,7 @@ class GenMacro(val c: blackbox.Context) {
     constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
   }
 
-  def constructCases[T](termName: TermName)(subclasses: Map[c.Type, T])(f: T => c.Tree): c.Tree = {
+  def constructCases[T](termName: TermName)(subclasses: List[(c.Type, T)])(f: T => c.Tree): c.Tree = {
     val cases = subclasses.toList.sortBy(_._1.typeSymbol.fullName).map(_._2)
     q"$termName.nextInt(${cases.size}) match { case ..${cases.zipWithIndex.map {
       case value -> index => cq"$index => ${f(value)}"
