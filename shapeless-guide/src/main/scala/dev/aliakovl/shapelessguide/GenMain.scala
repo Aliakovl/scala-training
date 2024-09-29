@@ -103,15 +103,14 @@ object GenMain extends App {
 
   Gen
     .custom[Opt[Clazz]]
-    .specify(_.when[Maybe[Clazz]])(
-      Gen.custom[Clazz].exclude[A].make.map(Maybe(_))
-    )
-    .exclude[Noth[Clazz]]
+    .exclude(_.when[Maybe[Clazz]].value.when[A])
+    .exclude(_.when[Maybe[Clazz]].value.when[B])
+    .exclude(_.when[Noth[Clazz]])
     .make
     .many[List](10000)
     .map(_.count {
       case Maybe(A()) => false
-      case Maybe(B()) => true
+      case Maybe(B()) => false
       case Maybe(C()) => true
       case Noth()     => false
     })
@@ -125,7 +124,7 @@ object GenMain extends App {
   Gen
     .custom[Wrapper[Lol]]
     .specify(_.when[Wrapper[LolA]])(Gen.apply{_ => print("LolA!\n"); WrapperImpl(3)})
-    .exclude[Wrapper[LolB]]
+    .exclude(_.when[Wrapper[LolB]])
     .make
     .many[List](10)
     .tap(println)
@@ -195,13 +194,13 @@ object GenMain extends App {
 
   Gen
     .custom[Option[Either[String, Int]]]
-    .specifyConst(_.when[Some[Left[String, Int]]])(Some(Left("left")))
     .specifyConst(_.when[Some[Right[String, Int]]].value.value)(4)
-    .exclude[Some[Left[String, Int]]]
+    .exclude(_.when[Some[Left[String, Int]]])
     .make
     .many[List](100)
     .map(_.mkString("\n"))
     .tap(println)
     .runWithSeed(123)
+
 
 }

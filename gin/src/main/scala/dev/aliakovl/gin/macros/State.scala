@@ -24,6 +24,12 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     (s2, (a, b))
   }
 
+  def flatTap[B](f: A => State[S, B]): State[S, A] = State { s =>
+    val (s1, a) = run(s)
+    val (s2, _) = f(a).run(s1)
+    (s2, a)
+  }
+
   def modifyState[T](to: S => T)(from: T => S): State[T, A] = State { t =>
     val (s, a) = run(from(t))
     (to(s), a)
@@ -33,6 +39,7 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
 private[macros] object State {
   def apply[S, A](f: S => (S, A)): State[S, A] = new State[S, A](f)
   def pure[S, A](a: A): State[S, A] = State(s => (s, a))
+  def unit[S]: State[S, Unit] = State(s => (s, ()))
   def get[S]: State[S, S] = State(s => (s, s))
   def modify[S](f: S => S): State[S, Unit] = State(s => (f(s), ()))
   def modifyFirst[S, T](f: S => S): State[(S, T), Unit] =
@@ -64,6 +71,8 @@ private[macros] object State {
 
   def sequence[S, A](ta: Option[State[S, A]]): State[S, Option[A]] =
     ta.fold[State[S, Option[A]]](State.pure(None))(_.map(Some(_)))
+
+  def traverse[S, A, B](ta: Option[A])(f: A => State[S, B]): State[S, Option[B]] = sequence(ta.map(f))
 
   def traverse[S, A, B](ta: Set[A])(
       f: A => State[S, B]

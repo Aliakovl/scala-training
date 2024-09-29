@@ -141,7 +141,7 @@ object Main {
       .custom[MyClass]
       .specifyConst(_.when[MyClass1])(MyClass1())
       .specifyConst(_.when[J])(new J(";lkjewflkqjhefw"))
-      .exclude[MyClass3]
+      .exclude(_.when[MyClass3])
       .make
       .many[List](10)
       .map(_.mkString("\t"))
@@ -165,8 +165,8 @@ object Main {
 
     Gen
       .custom[Either[String, MyClass]]
-      .exclude[Right[String, MyClass1]]
-      .exclude[Left[String, MyClass]]
+      .exclude(_.when[Right[String, MyClass1]])
+      .exclude(_.when[Left[String, MyClass]])
       .useDefault(_.when[Right[String, MyClass2]].value.mc2field)
       .specifyConst(_.when[Right[String, J]].value)(new J("ahefjkl"))
       .make
@@ -184,7 +184,7 @@ object Main {
 
     Gen
       .custom[Option[Clazz]]
-      .exclude[None.type]
+      .exclude(_.when[None.type])
       .make
       .many[List](10000)
       .map(_.count {
@@ -198,17 +198,15 @@ object Main {
 
     Gen
       .custom[Clazz]
-      .exclude[A]
+      .exclude(_.when[A])
       .make
       .tap(println)
       .run()
 
     Gen
       .custom[Opt[Clazz]]
-      .specify(_.when[Maybe[Clazz]])(
-        Gen.custom[Clazz].exclude[A].make.map(Maybe(_))
-      )
-      .exclude[Noth[Clazz]]
+      .exclude(_.when[Maybe[Clazz]].value.when[A])
+      .exclude(_.when[Noth[Clazz]])
       .make
       .many[List](10000)
       .map(_.count {

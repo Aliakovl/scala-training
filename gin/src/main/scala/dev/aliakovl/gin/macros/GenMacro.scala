@@ -36,12 +36,19 @@ class GenMacro(val c: blackbox.Context) {
   def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
     val (variables, values) = State.sequence {
         Option.when(weakTypeOf[A].typeSymbol.isClass) {
-          val termName = TermName(c.freshName())
           mergeMethods[A](disassembleTree(c.prefix.tree))
-            .map(_.map(specifiedTree(termName)).map(toGen(termName)))
         }
       }
       .map(_.flatten)
+      .flatTap { genOpt =>
+        State.traverse(genOpt) { gen =>
+          State.modify[Variables](deleteUnused(gen, _))
+        }
+      }
+      .map { genOpt =>
+        val termName = TermName(c.freshName())
+        genOpt.map(specifiedTree(termName)).map(toGen(termName))
+      }
       .flatMap(initValues[A])
       .run(initVars[A])
 
@@ -160,18 +167,48 @@ class GenMacro(val c: blackbox.Context) {
   case class Prism(toType: c.Type) extends Optic
 
   sealed trait Method {
-    def toSpecifiedGen(classSymbol: c.Type): VarsState[SpecifiedGen]
+    def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen]
   }
-  case class ExcludeMethod(excludedType: c.Type) extends Method {
-    override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = {
-      if (!tpe.typeSymbol.asClass.isSealed || !tpe.typeSymbol.isAbstract) fail(s"type $tpe is not abstract sealed")
-      val subtypes = subTypesOf(tpe)
-      State.traverse(subtypes.filterNot(_ <:< excludedType)) { subtype =>
-        State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
-          .map { name =>
-            subtype -> NotSpecified(name)
+  case class ExcludeMethod(selector: Selector) extends Method {
+    override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
+
+    private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
+      case Nil => State.pure(Excluded)
+      case Lens(fromType, field, toType) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with field $field")
+      case Prism(toType) :: tail =>
+        if (tpe =:= toType) {
+          toSpecifiedGen(toType)
+        } else {
+          val subtypes = subTypesOf(tpe)
+          State.traverse(subtypes) { subtype =>
+            if (subtype <:< toType) {
+              toSpecifiedGen(toType, tail).map(subtype -> _)
+            } else {
+              State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
+                .map { name =>
+                  subtype -> NotSpecified(name)
+                }
+            }
+          }.map(_.toMap).map(SpecifiedSealedTrait)
+        }
+      case Lens(fromType, field, toType) :: tail =>
+        State.sequence {
+          val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(tpe), fromType)
+          if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
+          allParams.map { params =>
+            State.traverse(params) { param =>
+              val termName = param.name.toTermName
+              if (param.asTerm.name == field) {
+                toSpecifiedGen(toType, tail).map(termName -> _)
+              } else {
+                val paramType = param.info
+                State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
+                  param.name.toTermName -> NotSpecified(name)
+                }
+              }
+            }.map(_.toMap)
           }
-      }.map(_.toMap).map(SpecifiedSealedTrait)
+        }.map(SpecifiedCaseClass(tpe, _))
     }
   }
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
@@ -249,8 +286,9 @@ class GenMacro(val c: blackbox.Context) {
         }
         val method = SpecifyMethod(selector, DefaultArg(None))
         disassembleTree(other, method +: methods)
-      case q"$other.exclude[$tpeTree]" =>
-        val method = ExcludeMethod(tpeTree.tpe)
+      case q"$other.exclude[$tpe](($_) => $selectorTree)" =>
+        val selector = disassembleSelector(selectorTree, tpe.tpe)
+        val method = ExcludeMethod(selector)
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
       case _ => c.abort(tree.pos, "Unsupported syntax.")
@@ -285,6 +323,24 @@ class GenMacro(val c: blackbox.Context) {
   case class Specified(tree: Arg) extends SpecifiedGen
   case class NotSpecifiedImplicit(tree: c.Tree) extends SpecifiedGen
   case class NotSpecified(tree: c.TermName) extends SpecifiedGen
+  case object Excluded extends SpecifiedGen
+
+  def usedVariables(gen: SpecifiedGen): Set[c.TermName] = gen match {
+    case SpecifiedCaseClass(_, fields) => fields.flatten.flatMap { case (name, field) =>
+      usedVariables(field) + name
+    }.toSet
+    case SpecifiedSealedTrait(subclasses) => subclasses.values.toSet.flatMap(usedVariables)
+    case NotSpecified(tree) => Set(tree)
+    case _ => Set.empty
+  }
+
+  def deleteUnused[A: WeakTypeTag](gen: SpecifiedGen, variables: Variables): Variables = {
+    val tpeA = weakTypeOf[A]
+    val used = usedVariables(gen)
+    variables.filter { case (tpe, name) =>
+      used.contains(name) || tpe == tpeA
+    }
+  }
 
   def mergeMethods[A: WeakTypeTag](methods: Methods): VarsState[Option[SpecifiedGen]] = {
     State.traverse(methods)(_.toSpecifiedGen(weakTypeOf[A])).map { list =>
@@ -336,6 +392,8 @@ class GenMacro(val c: blackbox.Context) {
     case (_: NotSpecified | _: NotSpecifiedImplicit, _: NotSpecified | _: NotSpecifiedImplicit) => right
     case (_: NotSpecified | _: NotSpecifiedImplicit, _: Specified) => right
     case (_: Specified, _: NotSpecified | _: NotSpecifiedImplicit) => left
+    case (Excluded, _: NotSpecified | _: NotSpecifiedImplicit) => Excluded
+    case (_: NotSpecified | _: NotSpecifiedImplicit, Excluded) => Excluded
     case _ => fail(s"Some specifications conflict")
   }
 
@@ -351,8 +409,9 @@ class GenMacro(val c: blackbox.Context) {
       }
       construct(classSymbol, args)
     case SpecifiedSealedTrait(subclasses) =>
-      if (subclasses.isEmpty) fail("All subtypes was excluded")
-      constructCases(termName)(subclasses)(specifiedTree(termName))
+      val cases = subclasses.filterNot(_._2 == Excluded)
+      if (cases.isEmpty) fail("All subtypes was excluded")
+      constructCases(termName)(cases)(specifiedTree(termName))
     case Specified(GenArg(tree)) => callApply(tree)(termName)
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))(termName)
