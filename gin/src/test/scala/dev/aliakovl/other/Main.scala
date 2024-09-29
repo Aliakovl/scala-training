@@ -13,7 +13,7 @@ object Main {
 
   sealed trait SubClass extends MyClass
   case class One() extends SubClass
-s
+
   val gens = Seq[Gen[Any]](
     Gen.random[Map[String, List[Option[MyClass]]]],
     Gen.random[String].many[List](3),

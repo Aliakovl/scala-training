@@ -348,9 +348,7 @@ class GenMacro(val c: blackbox.Context) {
         case (Some(left), right) => Some(mergeSpecifications(left, right))
         case (None, value) => Some(value)
       }
-    }.map{t => t.map(usedVariables).foreach(println) ; t}.zip {
-      State.get[Variables].map(println)
-    }.map(_._1)
+    }
   }
 
   def join[K, A, B](left: Map[K, A], right: Map[K, B]): Map[K, (A, B)] = {
