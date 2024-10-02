@@ -174,10 +174,10 @@ class GenMacro(val c: blackbox.Context) {
 
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Nil => State.pure(Excluded)
-      case Lens(fromType, field, toType) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with field $field")
+      case Lens(_, field, _) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with field $field")
       case Prism(toType) :: tail =>
         if (tpe =:= toType) {
-          toSpecifiedGen(toType)
+          toSpecifiedGen(toType, tail)
         } else {
           val subtypes = subTypesOf(tpe)
           State.traverse(subtypes) { subtype =>
@@ -451,9 +451,12 @@ class GenMacro(val c: blackbox.Context) {
 
   def constructCases[T](termName: TermName)(subclasses: Map[c.Type, T])(f: T => c.Tree): c.Tree = {
     val cases = subclasses.toList.sortBy(_._1.typeSymbol.fullName).map(_._2)
-    q"$termName.nextInt(${cases.size}) match { case ..${cases.zipWithIndex.map {
-      case value -> index => cq"$index => ${f(value)}"
-    }} }"
+    cases match {
+      case singleCase :: Nil => f(singleCase)
+      case _ => q"$termName.nextInt(${cases.size}) match { case ..${cases.zipWithIndex.map {
+        case value -> index => cq"$index => ${f(value)}"
+      }} }"
+    }
   }
 
   def subTypesOf(parent: c.Type): Set[c.Type] = {
@@ -466,12 +469,16 @@ class GenMacro(val c: blackbox.Context) {
       }
     }
 
-    concreteChildren.flatMap(subclassAllTypes(_, parent)) ++ abstractChildren.flatMap(subclassAllTypes(_, parent)).flatMap { child =>
-      val childClass = child.typeSymbol.asClass
-      if (childClass.isSealed) {
-        subTypesOf(child)
-      } else {
-        fail(s"child $child of $parent is not sealed")
+    if (abstractChildren.isEmpty && concreteChildren.isEmpty) {
+      subclassAllTypes(parent.typeSymbol, parent).toSet
+    } else {
+      concreteChildren.flatMap(subclassAllTypes(_, parent)) ++ abstractChildren.flatMap(subclassAllTypes(_, parent)).flatMap { child =>
+        val childClass = child.typeSymbol.asClass
+        if (childClass.isSealed) {
+          subTypesOf(child)
+        } else {
+          fail(s"child $child of $parent is not sealed")
+        }
       }
     }
   }
