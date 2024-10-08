@@ -176,13 +176,16 @@ class GenMacro(val c: blackbox.Context) {
       case Lens(_, field, _) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with field $field")
       case Prism(toType) :: tail =>
         if (tpe =:= toType) {
+          tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
+            if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+          }
           toSpecifiedGen(toType, tail)
         } else {
           val subtypes = subTypesOf(tpe)
           State.traverse(subtypes) { subtype =>
             if (subtype.typeConstructor =:= toType.typeConstructor) {
               subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-                if (!(s =:= t)) fail(s"${toType} mast not be deeply narrow, fix: $t -> $s")
+                if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
               }
               toSpecifiedGen(toType, tail).map(subtype -> _)
             } else {
@@ -218,14 +221,17 @@ class GenMacro(val c: blackbox.Context) {
 
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Prism(toType) :: tail =>
-        if (tpe =:= toType) {
+        if (tpe.typeConstructor =:= toType.typeConstructor) {
+          tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
+            if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+          }
           toSpecifiedGen(toType, tail)
         } else {
           val subtypes = subTypesOf(tpe)
           State.traverse(subtypes) { subtype =>
             if (subtype.typeConstructor =:= toType.typeConstructor) {
               subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-                if (!(s =:= t)) fail(s"${toType} mast not be deeply narrow, fix: $t -> $s")
+                if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
               }
               toSpecifiedGen(toType, tail).map(subtype -> _)
             } else {
@@ -319,12 +325,11 @@ class GenMacro(val c: blackbox.Context) {
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(to.tpe)
         disassembleSelector(other, from.tpe, prism :: selector)
-      case q"$module.$_[..$from]($other).whenK[$to]" if module.symbol == ginModule =>
-        if (other.tpe.typeSymbol.isAbstract && !other.tpe.typeSymbol.asClass.isSealed) c.abort(to.pos ,s"${other.tpe} is not sealed")
-        val toType = subclassType(to.tpe, other.tpe, from.map(_.tpe).tail)
-        val fromType = subclassType(from.head.tpe, other.tpe, from.map(_.tpe).tail)
+      case q"$_[$from]($other).$name[$to](..$_)" if name.toString.startsWith("when") =>
+        if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
+        val toType = subclassType(to.symbol, from.tpe)
         val prism = Prism(toType)
-        disassembleSelector(other, fromType, prism :: selector)
+        disassembleSelector(other, from.tpe, prism :: selector)
       case _: Ident => selector
       case tree => c.abort(tree.pos, "Unsupported path element.")
     }

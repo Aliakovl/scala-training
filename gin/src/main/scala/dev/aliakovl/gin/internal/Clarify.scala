@@ -15,7 +15,7 @@ object Clarify1 {
     Clarify1[G[T], F, F[T]]
   }
 
-  implicit def clarify1erg[F[LL] <: G[LL, R], G[_, _],  T, R]: Aux[G[T, R], F, F[T]] = {
+  implicit def clarify21[F[LL] <: G[LL, R], G[_, _],  T, R]: Aux[G[T, R], F, F[T]] = {
     Clarify1[G[T, R], F, F[T]]
   }
 }

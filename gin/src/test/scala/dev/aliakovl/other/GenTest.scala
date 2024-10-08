@@ -90,24 +90,24 @@ object GenTest {
       .make,
     Gen
       .custom[Lst[String]]
-      .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(
+      .specify(_.when1[Cons].tail.when1[Cons].head)(
         Gen.uglyString(10)
       )
       .make,
     Gen
       .custom[Lst[String]]
-      .specifyConst(_.when[Cons[String]].head)("kek")
-      .specifyConst(_.when[Cons[String]].tail.when[Cons[String]].head)(
+      .specifyConst(_.when1[Cons].head)("kek")
+      .specifyConst(_.when1[Cons].tail.when1[Cons].head)(
         "lol"
       )
       .make
       .many[List](10),
     Gen
       .custom[Lst[String]]
-      .specify(_.when[Cons[String]].head)(
+      .specify(_.when1[Cons].head)(
         Gen.random[String].map(_.toUpperCase)
       )
-      .specify(_.when[Cons[String]].tail)(Gen.random[Lst[String]])
+      .specify(_.when1[Cons].tail)(Gen.random[Lst[String]])
       .make
       .many[List](10)
       .map(_.mkString(", ")),

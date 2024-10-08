@@ -31,14 +31,14 @@ object Main {
     println(
       Gen
         .custom[Option[Int]]
-        .specifyConst(_.when[Some[Int]].value)(-1)
+        .specifyConst(_.when1[Some].value)(-1)
         .make
         .run()
     )
 
     Gen
       .custom[Either[String, Int]]
-      .specifyConst(_.when[Right[String, Int]].value)(3)
+      .specifyConst(_.when2[Right].value)(3)
       .make
       .run()
 
@@ -54,14 +54,14 @@ object Main {
 
     val b = List
       .fill(10000)(
-        Gen.custom[Option[Int]].specifyConst(_.when[Some[Int]].value)(1).make
+        Gen.custom[Option[Int]].specifyConst(_.when1[Some].value)(1).make
       )
       .sequence
       .map(_.flatten.sum)
 
     Gen
       .custom[List[Int]]
-      .specifyConst(_.when[::[Int]].arg("next"))(List(12341234, 12341234))
+      .specifyConst(_.when1[::].arg("next"))(List(12341234, 12341234))
       .make
       .tap(println)
       .runWithSeed(41234)
@@ -158,7 +158,7 @@ object Main {
 
     Gen
       .custom[Option[MyClass]]
-      .specifyConst(_.when[Option[MyClass1]])(None)
+      .specifyConst(_.when1[Option])(None)
       .make
       .many[List](10)
       .tap(println)
@@ -166,17 +166,17 @@ object Main {
 
     Gen
       .custom[Option[String]]
-      .specifyConst(_.when[Option[String]])(None)
+      .specifyConst(_.when1[Option])(None)
       .make
       .tap(println)
       .run()
 
     Gen
       .custom[Either[String, MyClass]]
-      .exclude(_.when[Right[String, MyClass]].value.when[MyClass1])
-      .exclude(_.when[Left[String, MyClass]])
-      .useDefault(_.when[Right[String, MyClass]].value.when[MyClass2].mc2field)
-      .specifyConst(_.when[Right[String, MyClass]].value.when[J])(new J("ahefjkl"))
+      .exclude(_.when2[Right].value.when[MyClass1])
+      .exclude(_.when2[Left])
+      .useDefault(_.when2[Right].value.when[MyClass2].mc2field)
+      .specifyConst(_.when2[Right].value.when[J])(new J("ahefjkl"))
       .make
       .tap(println)
       .run()
@@ -225,34 +225,5 @@ object Main {
       })
       .tap(println)
       .run()
-
-    trait Fwef
-    case class Fweqweff[A]() extends Fwef
-
-    type PEither[A] = Either[String, A]
-    type REither[A] = Right[String, A]
-    type LEither[A] = Left[A, Int]
-
-    val qwef: Int = Option(234).when1[Some].value
-
-    val qweffd = (Right[String, Int](123): Either[String, Int]).when1[REither].value
-
-    val fwfef = (Left[String, Int]("wef"): Either[String, Int]).when1[LEither].value
-
-    val qewfwqf = (Right[String, Int](12341234): Either[String, Int]).when2[Right].value
-
-    val wefweqf: Maybe[Int] = (Maybe(234): Opt[Int]).when1[Maybe]
-
-    implicitly[Clarify2[Either[String, String], Right]]
-
-    println(qwef, qweffd, fwfef, qewfwqf, wefweqf)
-
-
-    (Ior.Left("left"): Ior[String, Int]).when1[Ior.Left]
-
-    (Ior.Right(1234): Ior[String, Int]).when1[Ior.Right]
-
-    (Ior.Both("wef", 324): Ior[String, Int]).when2[Ior.Both]
-
   }
 }
