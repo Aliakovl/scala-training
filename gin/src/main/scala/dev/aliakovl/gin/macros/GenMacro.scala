@@ -1,6 +1,5 @@
 package dev.aliakovl.gin.macros
 
-import cats.implicits.toTraverseOps
 import dev.aliakovl.gin
 import dev.aliakovl.gin.Gen
 
@@ -181,7 +180,10 @@ class GenMacro(val c: blackbox.Context) {
         } else {
           val subtypes = subTypesOf(tpe)
           State.traverse(subtypes) { subtype =>
-            if (subtype <:< toType) {
+            if (subtype.typeConstructor =:= toType.typeConstructor) {
+              subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
+                if (!(s =:= t)) fail(s"${toType} mast not be deeply narrow, fix: $t -> $s")
+              }
               toSpecifiedGen(toType, tail).map(subtype -> _)
             } else {
               State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
@@ -221,7 +223,10 @@ class GenMacro(val c: blackbox.Context) {
         } else {
           val subtypes = subTypesOf(tpe)
           State.traverse(subtypes) { subtype =>
-            if (subtype <:< toType) {
+            if (subtype.typeConstructor =:= toType.typeConstructor) {
+              subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
+                if (!(s =:= t)) fail(s"${toType} mast not be deeply narrow, fix: $t -> $s")
+              }
               toSpecifiedGen(toType, tail).map(subtype -> _)
             } else {
               State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
@@ -312,6 +317,12 @@ class GenMacro(val c: blackbox.Context) {
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(to.tpe)
         disassembleSelector(other, from.tpe, prism :: selector)
+      case q"$module.$_[..$from]($other).whenK[$to]" if module.symbol == ginModule =>
+        if (other.tpe.typeSymbol.isAbstract && !other.tpe.typeSymbol.asClass.isSealed) c.abort(to.pos ,s"${other.tpe} is not sealed")
+        val toType = subclassType(to.tpe, other.tpe, from.map(_.tpe).tail)
+        val fromType = subclassType(from.head.tpe, other.tpe, from.map(_.tpe).tail)
+        val prism = Prism(toType)
+        disassembleSelector(other, fromType, prism :: selector)
       case _: Ident => selector
       case tree => c.abort(tree.pos, "Unsupported path element.")
     }
@@ -459,9 +470,14 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def subTypesOf(parent: c.Type): Set[c.Type] = {
-    val (abstractChildren, concreteChildren) = parent.typeSymbol.asClass.knownDirectSubclasses.tapEach(_.info)
-      .partition(_.isAbstract)
+  def subTypesOf(parent: c.Type): Set[c.Type] =
+    subclassesOf(parent.typeSymbol.asClass).map(subclassType(_, parent))
+
+  def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
+    val (abstractChildren, concreteChildren) =
+      parent.knownDirectSubclasses
+        .tapEach(_.info)
+        .partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
       if (!child.asClass.isFinal && !child.asClass.isCaseClass) {
@@ -469,46 +485,36 @@ class GenMacro(val c: blackbox.Context) {
       }
     }
 
-    if (abstractChildren.isEmpty && concreteChildren.isEmpty) {
-      subclassAllTypes(parent.typeSymbol, parent).toSet
-    } else {
-      concreteChildren.flatMap(subclassAllTypes(_, parent)) ++ abstractChildren.flatMap(subclassAllTypes(_, parent)).flatMap { child =>
-        val childClass = child.typeSymbol.asClass
-        if (childClass.isSealed) {
-          subTypesOf(child)
-        } else {
-          fail(s"child $child of $parent is not sealed")
-        }
+    concreteChildren ++ abstractChildren.flatMap { child =>
+      val childClass = child.asClass
+      if (childClass.isSealed) {
+        subclassesOf(childClass)
+      } else {
+        fail(s"child $child of $parent is not sealed")
       }
     }
   }
 
-  def subclassAllTypes(subclass: c.Symbol, parent: c.Type): Seq[c.Type] = {
+  def subclassType(subclass: c.Symbol, parent: c.Type): c.Type = {
     val sEta = subclass.asType.toType.etaExpand
-    val subclassTypeArgs = sEta.baseType(parent.typeSymbol).typeArgs.map(_.typeSymbol)
-    if (parent.typeArgs.isEmpty) {
-      Seq(sEta)
-    } else {
-      val allCases = subclassTypeArgs.zip(parent.typeArgs).map { case (sym, tpe) =>
-        if (sym.asType.isCovariant && tpe.typeSymbol.isClass) {
-          val subTypes = subTypesOf(tpe).toList
-          if (subTypes.nonEmpty) {
-            subTypes
-          } else {
-            List(tpe)
-          }
-        } else {
-          List(tpe)
-        }
-      }.sequence
+    sEta.finalResultType.substituteTypes(
+      from = sEta
+        .baseType(parent.typeSymbol)
+        .typeArgs
+        .map(_.typeSymbol),
+      to = parent.typeArgs
+    )
+  }
 
-      allCases.map { typeArgs =>
-        sEta.finalResultType.substituteTypes(
-          from = subclassTypeArgs,
-          to = typeArgs
-        )
-      }
-    }
+  def subclassType(subclass: c.Type, parent: c.Type, typeArgs: List[c.Type]): c.Type = {
+    val sEta = subclass.etaExpand
+    sEta.finalResultType.substituteTypes(
+      from = sEta
+        .baseType(parent.typeSymbol)
+        .typeArgs
+        .map(_.typeSymbol),
+      to = typeArgs
+    )
   }
 
   def defaults(companion: c.Symbol)(params: List[List[c.Symbol]]): Map[c.Symbol, c.Tree] = {
