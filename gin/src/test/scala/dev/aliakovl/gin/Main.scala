@@ -1,8 +1,10 @@
 package dev.aliakovl.gin
 
+import cats.data.Ior
 import cats.syntax.all._
 import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
+import dev.aliakovl.gin.internal.{Clarify1, Clarify2}
 import dev.aliakovl.other._
 
 import java.util.UUID
@@ -223,6 +225,34 @@ object Main {
       })
       .tap(println)
       .run()
+
+    trait Fwef
+    case class Fweqweff[A]() extends Fwef
+
+    type PEither[A] = Either[String, A]
+    type REither[A] = Right[String, A]
+    type LEither[A] = Left[A, Int]
+
+    val qwef: Int = Option(234).when1[Some].value
+
+    val qweffd = (Right[String, Int](123): Either[String, Int]).when1[REither].value
+
+    val fwfef = (Left[String, Int]("wef"): Either[String, Int]).when1[LEither].value
+
+    val qewfwqf = (Right[String, Int](12341234): Either[String, Int]).when2[Right].value
+
+    val wefweqf: Maybe[Int] = (Maybe(234): Opt[Int]).when1[Maybe]
+
+    implicitly[Clarify2[Either[String, String], Right]]
+
+    println(qwef, qweffd, fwfef, qewfwqf, wefweqf)
+
+
+    (Ior.Left("left"): Ior[String, Int]).when1[Ior.Left]
+
+    (Ior.Right(1234): Ior[String, Int]).when1[Ior.Right]
+
+    (Ior.Both("wef", 324): Ior[String, Int]).when2[Ior.Both]
 
   }
 }

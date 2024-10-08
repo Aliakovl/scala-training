@@ -62,7 +62,7 @@ object GenMain extends App {
   case class TypeClassLol[A <: Int](l: List[A]) extends TypeClass[List]
 
   Gen.custom[Opt[Int]]
-    .specifyConst(_.whenK[Maybe].value)(34)
+    .specifyConst(_.when1[Maybe].value)(34)
     .make
     .many[List](10)
     .map(_.mkString("\n"))
@@ -70,7 +70,7 @@ object GenMain extends App {
     .run()
 
   Gen.custom[Option[Int]]
-    .specifyConst(_.whenK[Some].value)(34)
+    .specifyConst(_.when1[Some].value)(34)
     .make
     .many[List](10)
     .map(_.mkString("\n"))
@@ -79,7 +79,7 @@ object GenMain extends App {
 
   Gen
     .custom[Talk]
-    .specifyConst(_.mc.whenK[Some].value.when[MyClass2])(
+    .specifyConst(_.mc.when1[Some].value.when[MyClass2])(
       MyClass2(lst = Cons(6, Cons(6, Cons(6, LNil))))()
     )
     .make
@@ -90,7 +90,7 @@ object GenMain extends App {
 
   Gen
     .custom[Talk]
-    .specifyConst(_.mc.whenK[Some].value.when[MyClass2])(
+    .specifyConst(_.mc.when1[Some].value.when[MyClass2])(
       MyClass2(Cons(6, Cons(6, Cons(6, LNil))))()
     )
     .make
@@ -102,9 +102,9 @@ object GenMain extends App {
 
   Gen
     .custom[Opt[Clazz]]
-    .exclude(_.whenK[Maybe].value.when[A])
-    .exclude(_.whenK[Maybe].value.when[B])
-    .exclude(_.whenK[Noth])
+    .exclude(_.when1[Maybe].value.when[A])
+    .exclude(_.when1[Maybe].value.when[B])
+    .exclude(_.when1[Noth])
     .make
     .many[List](10000)
     .map(_.count {
@@ -193,8 +193,8 @@ object GenMain extends App {
 
   Gen
     .custom[Option[Either[String, Int]]]
-    .specifyConst(_.whenK[Some].value.when[Right[String, Int]].value)(4)
-    .exclude(_.whenK[Some].value.when[Left[String, Int]])
+    .specifyConst(_.when1[Some].value.when[Right[String, Int]].value)(4)
+    .exclude(_.when1[Some].value.when[Left[String, Int]])
     .make
     .many[List](100)
     .map(_.mkString("\n"))
@@ -209,7 +209,7 @@ object GenMain extends App {
 
   Gen
     .custom[BigType[Int, Option[Colour]]]
-        .exclude(_.b.whenK[Some].value.when[Red])
+        .exclude(_.b.when1[Some].value.when[Red])
     .make
     .many[List](10000)
     .map(_.count {
@@ -229,9 +229,9 @@ object GenMain extends App {
   Gen
     .custom[Option[Either[String, Int]]]
     .specifyConst(
-      _.whenK[Some].value.when[Right[String, Int]].value
+      _.when1[Some].value.when2[Right].value
     )(4)
-    .exclude(_.whenK[Some].value.when[Left[String, Int]])
+    .exclude(_.when1[Some].value.when[Left[String, Int]])
     .make
     .many[List](2)
     .map(_.mkString("\n"))
