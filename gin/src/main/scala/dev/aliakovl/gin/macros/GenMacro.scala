@@ -325,7 +325,7 @@ class GenMacro(val c: blackbox.Context) {
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(to.tpe)
         disassembleSelector(other, from.tpe, prism :: selector)
-      case q"$_[$from]($other).$name[$to](..$_)" if name.toString.startsWith("when") =>
+      case q"$_[$from]($other).when[$to](..$_)" =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val toType = subclassType(to.symbol, from.tpe)
         val prism = Prism(toType)

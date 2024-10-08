@@ -31,14 +31,14 @@ object Main {
     println(
       Gen
         .custom[Option[Int]]
-        .specifyConst(_.when1[Some].value)(-1)
+        .specifyConst(_.when[Some].value)(-1)
         .make
         .run()
     )
 
     Gen
       .custom[Either[String, Int]]
-      .specifyConst(_.when2[Right].value)(3)
+      .specifyConst(_.when[Right].value)(3)
       .make
       .run()
 
@@ -54,14 +54,14 @@ object Main {
 
     val b = List
       .fill(10000)(
-        Gen.custom[Option[Int]].specifyConst(_.when1[Some].value)(1).make
+        Gen.custom[Option[Int]].specifyConst(_.when[Some].value)(1).make
       )
       .sequence
       .map(_.flatten.sum)
 
     Gen
       .custom[List[Int]]
-      .specifyConst(_.when1[::].arg("next"))(List(12341234, 12341234))
+      .specifyConst(_.when[::].arg("next"))(List(12341234, 12341234))
       .make
       .tap(println)
       .runWithSeed(41234)
@@ -158,7 +158,7 @@ object Main {
 
     Gen
       .custom[Option[MyClass]]
-      .specifyConst(_.when1[Option])(None)
+      .specifyConst(_.when[None.type])(None)
       .make
       .many[List](10)
       .tap(println)
@@ -166,17 +166,17 @@ object Main {
 
     Gen
       .custom[Option[String]]
-      .specifyConst(_.when1[Option])(None)
+      .specifyConst(_.when[Option])(None)
       .make
       .tap(println)
       .run()
 
     Gen
       .custom[Either[String, MyClass]]
-      .exclude(_.when2[Right].value.when[MyClass1])
-      .exclude(_.when2[Left])
-      .useDefault(_.when2[Right].value.when[MyClass2].mc2field)
-      .specifyConst(_.when2[Right].value.when[J])(new J("ahefjkl"))
+      .exclude(_.when[Right].value.when[MyClass1])
+      .exclude(_.when[({type LL[A] = Left[A, MyClass]})#LL])
+      .useDefault(_.when[Right].value.when[MyClass2].mc2field)
+      .specifyConst(_.when[Right].value.when[J])(new J("ahefjkl"))
       .make
       .tap(println)
       .run()

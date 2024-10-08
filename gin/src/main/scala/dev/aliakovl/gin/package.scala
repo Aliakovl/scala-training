@@ -14,10 +14,10 @@ package object gin {
     def arg[P](name: String): P = ???
 
     @compileTimeOnly("when1 can only be used inside specify")
-    def when1[F[_]](implicit ev: Clarify1[A, F]): ev.Out = ???
+    def when[F[_]](implicit ev: Clarify1[A, F]): ev.Out = ???
 
     @compileTimeOnly("when2 can only be used inside specify")
-    def when2[F[_, _]](implicit ev: Clarify2[A, F]): ev.Out = ???
+    def when[F[_, _]](implicit ev: Clarify2[A, F]): ev.Out = ???
   }
 
   implicit def widen[A, B >: A](ra: Gen[A]): Gen[B] = ra.widen[B]
