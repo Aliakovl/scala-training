@@ -1,6 +1,8 @@
 package dev.aliakovl.shapelessguide
 
-import dev.aliakovl.gin.{Gen, GenWhen}
+import dev.aliakovl.gin._
+
+import scala.language.existentials
 
 sealed trait Lst[+A]
 case object LNil extends Lst[Nothing]
@@ -55,20 +57,40 @@ object GenMain extends App {
   implicit val qweffw: Option[Long] = Some(3L)
   implicit val fqfqfqwef: Int = 1235414235
 
-  Gen
-    .custom[Talk]
-    .specifyConst(_.mc.when[Some[MyClass]].value.when[MyClass2])(
-      MyClass2(lst = Cons(6, Cons(6, Cons(6, LNil))))()
-    )
+  sealed trait TypeClass[+F[_]]
+  case class TypeClassInst[F[_]]() extends TypeClass[F]
+  case class TypeClassLol[A <: Int](l: List[A]) extends TypeClass[List]
+
+  Gen.custom[Opt[Int]]
+    .specifyConst(_.whenK[Maybe].value)(34)
     .make
-    .many[List](100)
+    .many[List](10)
+    .map(_.mkString("\n"))
+    .tap(println)
+    .run()
+
+  Gen.custom[Option[Int]]
+    .specifyConst(_.whenK[Some].value)(34)
+    .make
+    .many[List](10)
     .map(_.mkString("\n"))
     .tap(println)
     .run()
 
   Gen
     .custom[Talk]
-    .specifyConst(_.mc.when[Some[MyClass2]].value)(
+    .specifyConst(_.mc.whenK[Some].value.when[MyClass2])(
+      MyClass2(lst = Cons(6, Cons(6, Cons(6, LNil))))()
+    )
+    .make
+    .many[List](10)
+    .map(_.mkString("\n"))
+    .tap(println)
+    .run()
+
+  Gen
+    .custom[Talk]
+    .specifyConst(_.mc.whenK[Some].value.when[MyClass2])(
       MyClass2(Cons(6, Cons(6, Cons(6, LNil))))()
     )
     .make
@@ -79,33 +101,10 @@ object GenMain extends App {
     .run()
 
   Gen
-    .custom[Talk]
-    .specifyConst(_.mc.when[Some[MyClass2]])(
-      Some(MyClass2(Cons(6, Cons(6, Cons(6, LNil))))())
-    )
-    .make
-    .map(_.mc)
-    .many[List](100)
-    .map(_.mkString("\n"))
-    .tap(println)
-    .run()
-
-  Gen
-    .custom[Option[MyClass]]
-    .specifyConst(_.when[Some[MyClass2]])(
-      Some(MyClass2(Cons(6, Cons(6, Cons(6, LNil))))())
-    )
-    .make
-    .many[List](100)
-    .map(_.mkString("\n"))
-    .tap(println)
-    .run()
-
-  Gen
     .custom[Opt[Clazz]]
-    .exclude(_.when[Maybe[Clazz]].value.when[A])
-    .exclude(_.when[Maybe[Clazz]].value.when[B])
-    .exclude(_.when[Noth[Clazz]])
+    .exclude(_.whenK[Maybe].value.when[A])
+    .exclude(_.whenK[Maybe].value.when[B])
+    .exclude(_.whenK[Noth])
     .make
     .many[List](10000)
     .map(_.count {
@@ -194,13 +193,61 @@ object GenMain extends App {
 
   Gen
     .custom[Option[Either[String, Int]]]
-    .specifyConst(_.when[Some[Right[String, Int]]].value.value)(4)
-    .exclude(_.when[Some[Left[String, Int]]])
+    .specifyConst(_.whenK[Some].value.when[Right[String, Int]].value)(4)
+    .exclude(_.whenK[Some].value.when[Left[String, Int]])
     .make
     .many[List](100)
     .map(_.mkString("\n"))
     .tap(println)
     .runWithSeed(123)
 
+  sealed trait Colour
+  case class Blue() extends Colour
+  case class Red() extends Colour
+
+  case class BigType[A, B](a: A, b: B)
+
+  Gen
+    .custom[BigType[Int, Option[Colour]]]
+        .exclude(_.b.whenK[Some].value.when[Red])
+    .make
+    .many[List](10000)
+    .map(_.count {
+      case BigType(_, None) => true
+      case _ => false
+    })
+    .tap(println)
+    .run()
+
+  Gen.custom[List[Option[Int]]]
+    .make
+    .many[List](10)
+    .map(_.mkString("\n", "\n", "\n"))
+    .tap(println)
+    .run()
+
+  Gen
+    .custom[Option[Either[String, Int]]]
+    .specifyConst(
+      _.whenK[Some].value.when[Right[String, Int]].value
+    )(4)
+    .exclude(_.whenK[Some].value.when[Left[String, Int]])
+    .make
+    .many[List](2)
+    .map(_.mkString("\n"))
+    .tap(println)
+    .runWithSeed(123)
+
+  sealed trait MyEither[L, R]
+  case class MyLeft[L, R](value: L) extends MyEither[L, R]
+  case class MyRight[R, L](value: R) extends MyEither[L, R]
+
+  Gen.custom[MyEither[String, Int]]
+    .specifyConst(_.when[MyLeft[String, Int]].value)("wefwef")
+    .specifyConst(_.when[MyRight[Int, String]].value)(1234)
+    .make
+    .many[List](10)
+    .tap(println)
+    .run()
 
 }

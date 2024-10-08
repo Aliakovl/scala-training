@@ -12,5 +12,10 @@ package object gin {
     def arg[P](name: String): P = ???
   }
 
+  implicit final class GenWhenF[F[_], A](private val value: F[A]) extends AnyVal {
+    @compileTimeOnly("when can only be used inside specify")
+    def whenK[G[_] <: F[_]]: G[A] = ???
+  }
+
   implicit def widen[A, B >: A](ra: Gen[A]): Gen[B] = ra.widen[B]
 }

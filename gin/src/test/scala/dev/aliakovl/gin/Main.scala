@@ -34,6 +34,12 @@ object Main {
         .run()
     )
 
+    Gen
+      .custom[Either[String, Int]]
+      .specifyConst(_.when[Right[String, Int]].value)(3)
+      .make
+      .run()
+
     implicitly[Monad[Gen]].map(Gen.intGen)(_.toString).tap(println)
     implicitly[Functor[Gen]].map(Gen.intGen)(_.toString).tap(println)
 
@@ -165,10 +171,10 @@ object Main {
 
     Gen
       .custom[Either[String, MyClass]]
-      .exclude(_.when[Right[String, MyClass1]])
+      .exclude(_.when[Right[String, MyClass]].value.when[MyClass1])
       .exclude(_.when[Left[String, MyClass]])
-      .useDefault(_.when[Right[String, MyClass2]].value.mc2field)
-      .specifyConst(_.when[Right[String, J]].value)(new J("ahefjkl"))
+      .useDefault(_.when[Right[String, MyClass]].value.when[MyClass2].mc2field)
+      .specifyConst(_.when[Right[String, MyClass]].value.when[J])(new J("ahefjkl"))
       .make
       .tap(println)
       .run()
