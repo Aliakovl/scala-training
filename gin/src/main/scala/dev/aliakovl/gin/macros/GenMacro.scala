@@ -302,9 +302,7 @@ class GenMacro(val c: blackbox.Context) {
         val method = ExcludeMethod(selector)
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
-      case _ =>
-        println(show(tree))
-        c.abort(tree.pos, "Unsupported syntax.")
+      case _ => c.abort(tree.pos, "Unsupported syntax.")
     }
   }
 
