@@ -10,7 +10,7 @@ trait GenInstances {
   implicit val uuidGen: Gen[UUID] = Gen { random =>
     new UUID(
       (random.nextLong() & 0xffff0fff) | 0x00004000,
-      (random.nextLong() & 0x3fffffffffffffffL) | 8000000000000000L
+      (random.nextLong() & 0x3fffffffffffffffL) | 0x8000000000000000L
     )
   }
   implicit val stringGen: Gen[String] = Gen.alphanumeric(10)
@@ -38,7 +38,7 @@ trait GenInstances {
   implicit val localDateTimeGen: Gen[LocalDateTime] =
     Gen.make(LocalDateTime.now())
   implicit val yearMonthGen: Gen[YearMonth] = Gen.make(YearMonth.now())
-  implicit def defaultIterableGen2d[A: Gen, B: Gen]: Gen[Map[A, B]] = Gen
+  implicit def mapGen[A: Gen, B: Gen]: Gen[Map[A, B]] = Gen
     .between(0, 10)
     .flatMap(Gen.product[A, B](Gen.random[A], Gen.random[B]).toMap(_))
 }

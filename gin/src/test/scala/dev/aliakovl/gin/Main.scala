@@ -4,7 +4,6 @@ import cats.data.Ior
 import cats.syntax.all._
 import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
-import dev.aliakovl.gin.internal.{Clarify1, Clarify2}
 import dev.aliakovl.other._
 
 import java.util.UUID
@@ -223,6 +222,16 @@ object Main {
         case Maybe(C()) => true
         case Noth()     => false
       })
+      .tap(println)
+      .run()
+
+    Gen
+      .custom[Ior[String, Int]]
+      .specifyConst(_.when[Ior.Right].b)(2)
+      .specifyConst(_.when[Ior.Left].a)("two")
+      .exclude(_.when[Ior.Both])
+      .make
+      .many[List](10)
       .tap(println)
       .run()
   }
