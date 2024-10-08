@@ -165,184 +165,93 @@ class GenMacro(val c: blackbox.Context) {
   case class Lens(fromType: c.Type, field: c.TermName, toType: c.Type) extends Optic
   case class Prism(toType: c.Type) extends Optic
 
+  def focusWithPrism(tpe : c.Type, toType: c.Type)(next: VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
+    if (tpe.typeConstructor =:= toType.typeConstructor) {
+      tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
+        if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+      }
+      next
+    } else {
+      val subtypes = subTypesOf(tpe)
+      State.traverse(subtypes) { subtype =>
+        if (subtype.typeConstructor =:= toType.typeConstructor) {
+          subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
+            if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+          }
+          next.map(subtype -> _)
+        } else {
+          State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
+            .map { name =>
+              subtype -> NotSpecified(name)
+            }
+        }
+      }.map(_.toMap).map(SpecifiedSealedTrait)
+    }
+  }
+
+  def focusWithLens(tpe: c.Type, fromType: c.Type, field: c.TermName)(next: c.Symbol => VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
+    val allParams = paramListsOf(publicConstructor(tpe), fromType)
+    if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
+    State.sequence {
+      allParams.map { params =>
+        State.traverse(params) { param =>
+          val termName = param.name.toTermName
+          if (param.asTerm.name == field) {
+            next(param).map(termName -> _)
+          } else if (param.isImplicit) {
+            val impl = c.inferImplicitValue(param.info)
+            if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
+            State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
+          } else {
+            val paramType = param.info
+            State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
+              param.name.toTermName -> NotSpecified(name)
+            }
+          }
+        }.map(_.toMap)
+      }
+    }.map(SpecifiedCaseClass(tpe, _))
+  }
+
   sealed trait Method {
     def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen]
   }
+
   case class UseDefaultMethod(selector: Selector) extends Method {
     override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
 
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
-      case Prism(_) :: Nil => fail("Default value can be specified only for class constructor fields")
       case Lens(fromType, field, _) :: Nil =>
-        val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(tpe), fromType)
-        if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
+        val allParams = paramListsOf(publicConstructor(tpe), fromType)
         val defaultMap = defaults(tpe.typeSymbol.asClass.companion)(allParams)
-        State.sequence {
-          allParams.map { params =>
-            State.traverse(params) { param =>
-              val termName = param.name.toTermName
-              if (param.asTerm.name == field) {
-                defaultMap.get(param).fold(fail(s"$field does not have default argument")) { default =>
-                  State.pure[Variables, SpecifiedGen](Specified(DefaultArg(default))).map(termName -> _)
-                }
-              } else if (param.isImplicit) {
-                val impl = c.inferImplicitValue(param.info)
-                if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
-                State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
-              } else {
-                val paramType = param.info
-                State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
-                  param.name.toTermName -> NotSpecified(name)
-                }
-              }
-            }.map(_.toMap)
+        focusWithLens(tpe, fromType, field) { param =>
+          defaultMap.get(param).fold(fail(s"$field does not have default argument")) { default =>
+            State.pure(Specified(DefaultArg(default)))
           }
-        }.map(SpecifiedCaseClass(tpe, _))
-      case Prism(toType) :: tail => if (tpe.typeConstructor =:= toType.typeConstructor) {
-        tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-          if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
         }
-        toSpecifiedGen(toType, tail)
-      } else {
-        val subtypes = subTypesOf(tpe)
-        State.traverse(subtypes) { subtype =>
-          if (subtype.typeConstructor =:= toType.typeConstructor) {
-            subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-              if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
-            }
-            toSpecifiedGen(toType, tail).map(subtype -> _)
-          } else {
-            State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
-              .map { name =>
-                subtype -> NotSpecified(name)
-              }
-          }
-        }.map(_.toMap).map(SpecifiedSealedTrait)
-      }
-      case Lens(fromType, field, toType) :: tail => State.sequence {
-        val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(tpe), fromType)
-        if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
-        allParams.map { params =>
-          State.traverse(params) { param =>
-            val termName = param.name.toTermName
-            if (param.asTerm.name == field) {
-              toSpecifiedGen(toType, tail).map(termName -> _)
-            } else if (param.isImplicit) {
-              val impl = c.inferImplicitValue(param.info)
-              if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
-              State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
-            } else {
-              val paramType = param.info
-              State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
-                param.name.toTermName -> NotSpecified(name)
-              }
-            }
-          }.map(_.toMap)
-        }
-      }.map(SpecifiedCaseClass(tpe, _))
-      case Nil => fail("unreachable")
+      case Lens(fromType, field, toType) :: tail => focusWithLens(tpe, fromType, field)(_ => toSpecifiedGen(toType, tail))
+      case Prism(toType) :: tail => focusWithPrism(tpe, toType)(toSpecifiedGen(toType, tail))
+      case Nil => fail(s"Path in .useDefault(...) must end with constructor argument, not with .when[...]")
     }
   }
+
   case class ExcludeMethod(selector: Selector) extends Method {
     override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
 
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Nil => State.pure(Excluded)
-      case Lens(_, field, _) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with field $field")
-      case Prism(toType) :: tail =>
-        if (tpe =:= toType) {
-          tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-            if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
-          }
-          toSpecifiedGen(toType, tail)
-        } else {
-          val subtypes = subTypesOf(tpe)
-          State.traverse(subtypes) { subtype =>
-            if (subtype.typeConstructor =:= toType.typeConstructor) {
-              subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-                if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
-              }
-              toSpecifiedGen(toType, tail).map(subtype -> _)
-            } else {
-              State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
-                .map { name =>
-                  subtype -> NotSpecified(name)
-                }
-            }
-          }.map(_.toMap).map(SpecifiedSealedTrait)
-        }
-      case Lens(fromType, field, toType) :: tail =>
-        State.sequence {
-          val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(tpe), fromType)
-          if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
-          allParams.map { params =>
-            State.traverse(params) { param =>
-              val termName = param.name.toTermName
-              if (param.asTerm.name == field) {
-                toSpecifiedGen(toType, tail).map(termName -> _)
-              } else if (param.isImplicit) {
-                val impl = c.inferImplicitValue(param.info)
-                if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
-                State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
-              } else {
-                val paramType = param.info
-                State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
-                  param.name.toTermName -> NotSpecified(name)
-                }
-              }
-            }.map(_.toMap)
-          }
-        }.map(SpecifiedCaseClass(tpe, _))
+      case Lens(_, field, _) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with argument $field")
+      case Prism(toType) :: tail => focusWithPrism(tpe, toType)(toSpecifiedGen(toType, tail))
+      case Lens(fromType, field, toType) :: tail => focusWithLens(tpe, fromType, field)(_ => toSpecifiedGen(toType, tail))
     }
   }
+
   case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
     override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
 
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
-      case Prism(toType) :: tail =>
-        if (tpe.typeConstructor =:= toType.typeConstructor) {
-          tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-            if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
-          }
-          toSpecifiedGen(toType, tail)
-        } else {
-          val subtypes = subTypesOf(tpe)
-          State.traverse(subtypes) { subtype =>
-            if (subtype.typeConstructor =:= toType.typeConstructor) {
-              subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-                if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
-              }
-              toSpecifiedGen(toType, tail).map(subtype -> _)
-            } else {
-              State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
-                .map { name =>
-                  subtype -> NotSpecified(name)
-                }
-            }
-          }.map(_.toMap).map(SpecifiedSealedTrait)
-        }
-      case Lens(fromType, field, toType) :: tail =>
-        val allParams: List[List[c.Symbol]] = paramListsOf(publicConstructor(tpe), fromType)
-        if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
-        State.sequence {
-          allParams.map { params =>
-            State.traverse(params) { param =>
-              val termName = param.name.toTermName
-              if (param.asTerm.name == field) {
-                toSpecifiedGen(toType, tail).map(termName -> _)
-              } else if (param.isImplicit) {
-                val impl = c.inferImplicitValue(param.info)
-                if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
-                State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
-              } else {
-                val paramType = param.info
-                State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
-                  param.name.toTermName -> NotSpecified(name)
-                }
-              }
-            }.map(_.toMap)
-          }
-        }.map(SpecifiedCaseClass(tpe, _))
+      case Prism(toType) :: tail => focusWithPrism(tpe, toType)(toSpecifiedGen(toType, tail))
+      case Lens(fromType, field, toType) :: tail => focusWithLens(tpe, fromType, field)(_ => toSpecifiedGen(toType, tail))
       case Nil => State.pure(Specified(arg))
     }
   }
