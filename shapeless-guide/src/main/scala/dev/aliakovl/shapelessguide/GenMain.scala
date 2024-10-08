@@ -61,16 +61,18 @@ object GenMain extends App {
   case class TypeClassInst[F[_]]() extends TypeClass[F]
   case class TypeClassLol[A <: Int](l: List[A]) extends TypeClass[List]
 
-  Gen.custom[Opt[Int]]
-    .specifyConst(_.whenK[Maybe].value)(34)
+  Gen
+    .custom[Opt[Int]]
+    .specifyConst(_.when[Maybe].value)(34)
     .make
     .many[List](10)
     .map(_.mkString("\n"))
     .tap(println)
     .run()
 
-  Gen.custom[Option[Int]]
-    .specifyConst(_.whenK[Some].value)(34)
+  Gen
+    .custom[Option[Int]]
+    .specifyConst(_.when[Some].value)(34)
     .make
     .many[List](10)
     .map(_.mkString("\n"))
@@ -79,7 +81,7 @@ object GenMain extends App {
 
   Gen
     .custom[Talk]
-    .specifyConst(_.mc.whenK[Some].value.when[MyClass2])(
+    .specifyConst(_.mc.when[Some].value.when[MyClass2])(
       MyClass2(lst = Cons(6, Cons(6, Cons(6, LNil))))()
     )
     .make
@@ -90,7 +92,7 @@ object GenMain extends App {
 
   Gen
     .custom[Talk]
-    .specifyConst(_.mc.whenK[Some].value.when[MyClass2])(
+    .specifyConst(_.mc.when[Some].value.when[MyClass2])(
       MyClass2(Cons(6, Cons(6, Cons(6, LNil))))()
     )
     .make
@@ -102,9 +104,9 @@ object GenMain extends App {
 
   Gen
     .custom[Opt[Clazz]]
-    .exclude(_.whenK[Maybe].value.when[A])
-    .exclude(_.whenK[Maybe].value.when[B])
-    .exclude(_.whenK[Noth])
+    .exclude(_.when[Maybe].value.when[A])
+    .exclude(_.when[Maybe].value.when[B])
+    .exclude(_.when[Noth])
     .make
     .many[List](10000)
     .map(_.count {
@@ -121,10 +123,12 @@ object GenMain extends App {
   case class LolB() extends Lol
 
   Gen
-    .custom[Wrapper[Lol]]
-    .specify(_.when[Wrapper[LolA]])(Gen.apply{_ => print("LolA!\n"); WrapperImpl(3)})
-    .exclude(_.when[Wrapper[LolB]])
-    .make
+    .oneOfGen(
+      Gen.apply { _ =>
+        print("LolA!\n"); WrapperImpl[LolA](3)
+      },
+      Gen.custom[Wrapper[LolB]].make
+    )
     .many[List](10)
     .tap(println)
     .run()
@@ -142,7 +146,7 @@ object GenMain extends App {
     .make
     .many[List](10000)
     .map(_.count {
-      case Noth() => true
+      case Noth()       => true
       case Maybe(value) => false
     })
     .tap(println)
@@ -187,14 +191,17 @@ object GenMain extends App {
 
   wef.run()
 
-  Gen.custom[Option[Int]]
-    .specifyConst(_.when[Some[Int]].when[Some[Int]].when[Some[Int]].when[Some[Int]].value)(3)
+  Gen
+    .custom[Option[Int]]
+    .specifyConst(
+      _.when[Some[Int]].when[Some].when[Some[Int]].when[Some].value
+    )(3)
     .make
 
   Gen
     .custom[Option[Either[String, Int]]]
-    .specifyConst(_.whenK[Some].value.when[Right[String, Int]].value)(4)
-    .exclude(_.whenK[Some].value.when[Left[String, Int]])
+    .specifyConst(_.when[Some].value.when[Right].value)(4)
+    .exclude(_.when[Some].value.when[Left])
     .make
     .many[List](100)
     .map(_.mkString("\n"))
@@ -209,17 +216,18 @@ object GenMain extends App {
 
   Gen
     .custom[BigType[Int, Option[Colour]]]
-        .exclude(_.b.whenK[Some].value.when[Red])
+    .exclude(_.b.when[Some].value.when[Red])
     .make
     .many[List](10000)
     .map(_.count {
       case BigType(_, None) => true
-      case _ => false
+      case _                => false
     })
     .tap(println)
     .run()
 
-  Gen.custom[List[Option[Int]]]
+  Gen
+    .custom[List[Option[Int]]]
     .make
     .many[List](10)
     .map(_.mkString("\n", "\n", "\n"))
@@ -229,9 +237,9 @@ object GenMain extends App {
   Gen
     .custom[Option[Either[String, Int]]]
     .specifyConst(
-      _.whenK[Some].value.when[Right[String, Int]].value
+      _.when[Some].value.when[Right].value
     )(4)
-    .exclude(_.whenK[Some].value.when[Left[String, Int]])
+    .exclude(_.when[Some].value.when[Left])
     .make
     .many[List](2)
     .map(_.mkString("\n"))
@@ -242,9 +250,10 @@ object GenMain extends App {
   case class MyLeft[L, R](value: L) extends MyEither[L, R]
   case class MyRight[R, L](value: R) extends MyEither[L, R]
 
-  Gen.custom[MyEither[String, Int]]
-    .specifyConst(_.when[MyLeft[String, Int]].value)("wefwef")
-    .specifyConst(_.when[MyRight[Int, String]].value)(1234)
+  Gen
+    .custom[MyEither[String, Int]]
+    .specifyConst(_.when[MyLeft].value)("wefwef")
+    .specifyConst(_.when[MyRight].value)(123434334)
     .make
     .many[List](10)
     .tap(println)

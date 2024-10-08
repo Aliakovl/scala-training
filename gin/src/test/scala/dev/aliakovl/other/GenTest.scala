@@ -86,28 +86,28 @@ object GenTest {
     Gen.custom[G].specify(_.int)(Gen.oneOf(1, 5)).make,
     Gen
       .custom[List[String]]
-      .specifyConst(_.when[::[String]].head)("wefwefef")
+      .specifyConst(_.when[::].head)("wefwefef")
       .make,
     Gen
       .custom[Lst[String]]
-      .specify(_.when[Cons[String]].tail.when[Cons[String]].head)(
+      .specify(_.when[Cons].tail.when[Cons].head)(
         Gen.uglyString(10)
       )
       .make,
     Gen
       .custom[Lst[String]]
-      .specifyConst(_.when[Cons[String]].head)("kek")
-      .specifyConst(_.when[Cons[String]].tail.when[Cons[String]].head)(
+      .specifyConst(_.when[Cons].head)("kek")
+      .specifyConst(_.when[Cons].tail.when[Cons].head)(
         "lol"
       )
       .make
       .many[List](10),
     Gen
       .custom[Lst[String]]
-      .specify(_.when[Cons[String]].head)(
+      .specify(_.when[Cons].head)(
         Gen.random[String].map(_.toUpperCase)
       )
-      .specify(_.when[Cons[String]].tail)(Gen.random[Lst[String]])
+      .specify(_.when[Cons].tail)(Gen.random[Lst[String]])
       .make
       .many[List](10)
       .map(_.mkString(", ")),
@@ -221,6 +221,6 @@ object GenTest {
         }
         .foreach(println)
     )
-    .runWithSeed(11)
+    .run()
 
 }

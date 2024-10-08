@@ -1,5 +1,6 @@
 package dev.aliakovl.gin
 
+import cats.data.Ior
 import cats.syntax.all._
 import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.{Functor, Monad}
@@ -22,22 +23,24 @@ object Main {
   implicit val intGen: Gen[Int] = Gen.const(1)
 
   def main(args: Array[String]): Unit = {
-    println(
-      Gen.custom[(Int, String)].make.run()
-    )
+    Gen
+      .custom[(Int, String)]
+      .make
+      .tap(println)
+      .run()
 
-    println(
-      Gen
-        .custom[Option[Int]]
-        .specifyConst(_.when[Some[Int]].value)(-1)
-        .make
-        .run()
-    )
+    Gen
+      .custom[Option[Int]]
+      .specifyConst(_.when[Some].value)(-1)
+      .make
+      .tap(println)
+      .run()
 
     Gen
       .custom[Either[String, Int]]
-      .specifyConst(_.when[Right[String, Int]].value)(3)
+      .specifyConst(_.when[Right].value)(3)
       .make
+      .tap(println)
       .run()
 
     implicitly[Monad[Gen]].map(Gen.intGen)(_.toString).tap(println)
@@ -52,14 +55,14 @@ object Main {
 
     val b = List
       .fill(10000)(
-        Gen.custom[Option[Int]].specifyConst(_.when[Some[Int]].value)(1).make
+        Gen.custom[Option[Int]].specifyConst(_.when[Some].value)(1).make
       )
       .sequence
       .map(_.flatten.sum)
 
     Gen
       .custom[List[Int]]
-      .specifyConst(_.when[::[Int]].arg("next"))(List(12341234, 12341234))
+      .specifyConst(_.when[::].arg("next"))(List(12341234, 12341234))
       .make
       .tap(println)
       .runWithSeed(41234)
@@ -120,12 +123,10 @@ object Main {
       .random[UUID] tap println runWithSeed 123
 
     val t: Gen[Seq[UUID => String => Email]] = Gen
-      .function {
-        id: UUID =>
-          Gen.function {
-            content: String =>
-              Gen.fromFunction(Email(id, _, _, content))
-          }
+      .function { id: UUID =>
+        Gen.function { content: String =>
+          Gen.fromFunction(Email(id, _, _, content))
+        }
       }
       .many[Seq](10)
 
@@ -156,7 +157,7 @@ object Main {
 
     Gen
       .custom[Option[MyClass]]
-      .specifyConst(_.when[Option[MyClass1]])(None)
+      .specifyConst(_.when[None.type])(None)
       .make
       .many[List](10)
       .tap(println)
@@ -164,17 +165,17 @@ object Main {
 
     Gen
       .custom[Option[String]]
-      .specifyConst(_.when[Option[String]])(None)
+      .specifyConst(_.when[Option])(None)
       .make
       .tap(println)
       .run()
 
     Gen
       .custom[Either[String, MyClass]]
-      .exclude(_.when[Right[String, MyClass]].value.when[MyClass1])
-      .exclude(_.when[Left[String, MyClass]])
-      .useDefault(_.when[Right[String, MyClass]].value.when[MyClass2].mc2field)
-      .specifyConst(_.when[Right[String, MyClass]].value.when[J])(new J("ahefjkl"))
+      .exclude(_.when[Right].value.when[MyClass1])
+      .exclude(_.when[({ type LL[A] = Left[A, MyClass] })#LL])
+      .useDefault(_.when[Right].value.when[MyClass2].mc2field)
+      .specifyConst(_.when[Right].value.when[J])(new J("ahefjkl"))
       .make
       .tap(println)
       .run()
@@ -224,5 +225,14 @@ object Main {
       .tap(println)
       .run()
 
+    Gen
+      .custom[Ior[String, Int]]
+      .specifyConst(_.when[Ior.Right].b)(2)
+      .specifyConst(_.when[Ior.Left].a)("two")
+      .exclude(_.when[Ior.Both])
+      .make
+      .many[List](10)
+      .tap(println)
+      .run()
   }
 }
