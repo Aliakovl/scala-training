@@ -86,7 +86,7 @@ object GenTest {
     Gen.custom[G].specify(_.int)(Gen.oneOf(1, 5)).make,
     Gen
       .custom[List[String]]
-      .specifyConst(_.when[::[String]].head)("wefwefef")
+      .specifyConst(_.when[::].head)("wefwefef")
       .make,
     Gen
       .custom[Lst[String]]
@@ -221,6 +221,6 @@ object GenTest {
         }
         .foreach(println)
     )
-    .runWithSeed(11)
+    .run()
 
 }

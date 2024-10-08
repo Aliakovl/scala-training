@@ -23,22 +23,24 @@ object Main {
   implicit val intGen: Gen[Int] = Gen.const(1)
 
   def main(args: Array[String]): Unit = {
-    println(
-      Gen.custom[(Int, String)].make.run()
-    )
+    Gen
+      .custom[(Int, String)]
+      .make
+      .tap(println)
+      .run()
 
-    println(
-      Gen
-        .custom[Option[Int]]
-        .specifyConst(_.when[Some].value)(-1)
-        .make
-        .run()
-    )
+    Gen
+      .custom[Option[Int]]
+      .specifyConst(_.when[Some].value)(-1)
+      .make
+      .tap(println)
+      .run()
 
     Gen
       .custom[Either[String, Int]]
       .specifyConst(_.when[Right].value)(3)
       .make
+      .tap(println)
       .run()
 
     implicitly[Monad[Gen]].map(Gen.intGen)(_.toString).tap(println)
@@ -121,12 +123,10 @@ object Main {
       .random[UUID] tap println runWithSeed 123
 
     val t: Gen[Seq[UUID => String => Email]] = Gen
-      .function {
-        id: UUID =>
-          Gen.function {
-            content: String =>
-              Gen.fromFunction(Email(id, _, _, content))
-          }
+      .function { id: UUID =>
+        Gen.function { content: String =>
+          Gen.fromFunction(Email(id, _, _, content))
+        }
       }
       .many[Seq](10)
 
@@ -173,7 +173,7 @@ object Main {
     Gen
       .custom[Either[String, MyClass]]
       .exclude(_.when[Right].value.when[MyClass1])
-      .exclude(_.when[({type LL[A] = Left[A, MyClass]})#LL])
+      .exclude(_.when[({ type LL[A] = Left[A, MyClass] })#LL])
       .useDefault(_.when[Right].value.when[MyClass2].mc2field)
       .specifyConst(_.when[Right].value.when[J])(new J("ahefjkl"))
       .make
