@@ -2,6 +2,7 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.internal._
 
+import scala.annotation.compileTimeOnly
 import scala.collection.Factory
 import scala.language.implicitConversions
 import scala.util.Random
@@ -56,7 +57,8 @@ object Gen
 
   def random[A](implicit inst: Gen[A]): Gen[A] = inst
 
-  def custom[A]: GenSpecify[A] = new GenSpecify[A]
+  @compileTimeOnly("Illegal reference to dev.aliakovl.gin.Gen.custom, try to call .make at the end")
+  def custom[A]: GenSpecify[A] = ???
 
   def fromFunction[In](in: In)(implicit
       constructor: FunctionConstructor[In]
