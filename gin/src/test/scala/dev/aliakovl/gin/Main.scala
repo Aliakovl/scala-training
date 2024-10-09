@@ -234,5 +234,7 @@ object Main {
       .many[List](10)
       .tap(println)
       .run()
+
+    Gen.custom[(Int, String)]
   }
 }
