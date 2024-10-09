@@ -123,7 +123,7 @@ class GenMacro(val c: blackbox.Context) {
         }
       }.map(CaseClass)
     } else {
-      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try provide it implicitly")
+      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
     }
   }
 
