@@ -235,6 +235,5 @@ object Main {
       .tap(println)
       .run()
 
-    Gen.custom[(Int, String)]
   }
 }
