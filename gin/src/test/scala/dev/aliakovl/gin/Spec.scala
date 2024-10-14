@@ -141,12 +141,80 @@ class Spec extends AnyWordSpec with Matchers {
 
       "path contains wrong parameter" in {
         """
+          |Gen.custom[Option[Int]]
+          |  .specifyConst(_.when[Some[Int]].get)(10)
+          |  .make
+          |""".stripMargin shouldNot compile
+
+        Gen
+          .custom[Option[Int]]
+          .specifyConst(_.when[Some[Int]].arg("value"))(10)
+          .make
+          .many[List](100)
+          .run() should contain only (Some(10), None)
+
+        """
           |Gen
-          |  .custom[Either[Int, Boolean]]
-          |  .specifyConst(_.when[Right].isRight)(true)
+          |  .custom[Option[Int]]
+          |  .specifyConst(_.when[Some[Int]].arg("wrongParam"))(10)
           |  .make
           |""".stripMargin shouldNot compile
       }
+
+      "non literal string provided to .arg(...)" in {
+        val value: String = "value"
+
+        """
+          |Gen
+          |  .custom[Option[Int]]
+          |  .specifyConst(_.when[Some[Int]].arg(value))(10)
+          |  .make
+          |""".stripMargin shouldNot compile
+      }
+
+      "double specification" in {
+        """
+          |Gen
+          |  .custom[Option[Int]]
+          |  .specifyConst(_.when[Some[Int]])(Some(0))
+          |  .specify(_.when[Some[Int]])(Gen.const(Some(1)))
+          |  .make
+          |""".stripMargin shouldNot compile
+
+        """
+          |Gen
+          |  .custom[Option[Int]]
+          |  .specifyConst(_.when[Some[Int]].value)(0)
+          |  .specify(_.when[Some[Int]].value)(Gen.const(1))
+          |  .make
+          |""".stripMargin shouldNot compile
+
+        """
+          |Gen
+          |  .custom[Option[Int]]
+          |  .specifyConst(_.when[Some[Int]])(Some(0))
+          |  .specify(_.when[Some[Int]].value)(Gen.const(1))
+          |  .make
+          |""".stripMargin shouldNot compile
+
+        """
+          |Gen
+          |  .custom[Option[Int]]
+          |  .exclude(_.when[Some[Int]])
+          |  .specify(_.when[Some[Int]].value)(Gen.const(1))
+          |  .make
+          |""".stripMargin shouldNot compile
+
+        """
+          |Gen
+          |  .custom[Option[Int]]
+          |  .specify(_.when[Some[Int]].value)(Gen.const(1))
+          |  .exclude(_.when[Some[Int]])
+          |  .make
+          |""".stripMargin shouldNot compile
+
+      }
+
     }
 
     "compile" when {
