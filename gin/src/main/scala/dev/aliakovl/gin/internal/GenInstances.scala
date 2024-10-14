@@ -40,4 +40,8 @@ trait GenInstances {
   implicit def mapGen[A: Gen, B: Gen]: Gen[Map[A, B]] = Gen
     .between(0, 10)
     .flatMap(Gen.product[A, B](Gen.random[A], Gen.random[B]).toMap(_))
+  implicit def enumerationGen[E <: Enumeration: ValueOf]: Gen[E#Value] = Gen { random =>
+    val enumeration = valueOf[E]
+    enumeration(random.nextInt(enumeration.maxId))
+  }
 }
