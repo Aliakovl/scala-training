@@ -1,7 +1,5 @@
-package dev.aliakovl.gin.macros
-
-import dev.aliakovl.gin
-import dev.aliakovl.gin.Gen
+package dev.aliakovl.gin
+package macros
 
 import scala.annotation.tailrec
 import scala.reflect.macros.blackbox
@@ -15,7 +13,7 @@ class GenMacro(val c: blackbox.Context) {
   type VState = (Variables, Values)
   type FullState[A] = State[VState, A]
 
-  val genSymbol = symbolOf[gin.Gen.type].asClass.module
+  val genSymbol = symbolOf[Gen.type].asClass.module
   val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
   def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)

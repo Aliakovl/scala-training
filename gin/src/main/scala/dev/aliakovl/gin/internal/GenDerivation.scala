@@ -1,6 +1,6 @@
-package dev.aliakovl.gin.internal
+package dev.aliakovl.gin
+package internal
 
-import dev.aliakovl.gin.Gen
 import dev.aliakovl.gin.macros.GenMacro
 
 import language.experimental.macros

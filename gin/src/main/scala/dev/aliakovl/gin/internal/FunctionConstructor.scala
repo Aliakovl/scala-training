@@ -1,6 +1,5 @@
-package dev.aliakovl.gin.internal
-
-import dev.aliakovl.gin.Gen
+package dev.aliakovl.gin
+package internal
 
 trait FunctionConstructor[In] {
   type Out
