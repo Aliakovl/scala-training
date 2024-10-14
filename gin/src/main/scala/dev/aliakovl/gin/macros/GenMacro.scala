@@ -168,7 +168,7 @@ class GenMacro(val c: blackbox.Context) {
   def focusWithPrism(tpe : c.Type, toType: c.Type)(next: VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
     if (tpe.typeConstructor =:= toType.typeConstructor) {
       tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-        if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+        if (!(s =:= t)) fail(s"$toType type parameters must not be narrowed, fix: $t -> $s")
       }
       next
     } else {
@@ -176,7 +176,7 @@ class GenMacro(val c: blackbox.Context) {
       State.traverse(subtypes) { subtype =>
         if (subtype.typeConstructor =:= toType.typeConstructor) {
           subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-            if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+            if (!(s =:= t)) fail(s"$toType type parameters must not be narrowed, fix: $t -> $s")
           }
           next.map(subtype -> _)
         } else {
@@ -223,7 +223,7 @@ class GenMacro(val c: blackbox.Context) {
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Lens(fromType, field, _) :: Nil =>
         val allParams = paramListsOf(publicConstructor(tpe), fromType)
-        val defaultMap = defaults(tpe.typeSymbol.asClass.companion)(allParams)
+        val defaultMap = defaults(patchedCompanionSymbolOf(tpe.typeSymbol))(allParams)
         focusWithLens(tpe, fromType, field) { param =>
           defaultMap.get(param).fold(fail(s"$field does not have default argument")) { default =>
             State.pure(Specified(DefaultArg(default)))
@@ -346,12 +346,6 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def join[K, A, B](left: Map[K, A], right: Map[K, B]): Map[K, (A, B)] = {
-    (left.keySet & right.keySet).map { key =>
-      key -> (left(key), right(key))
-    }.toMap
-  }
-
   def mergeSpecifications(
     left: SpecifiedGen,
     right: SpecifiedGen
@@ -365,8 +359,8 @@ class GenMacro(val c: blackbox.Context) {
       }
       SpecifiedCaseClass(rightClass, fields)
     case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
-      SpecifiedSealedTrait(join(leftSubclasses, rightSubclasses).map { case (key, (left, right)) =>
-        key -> mergeSpecifications(left, right)
+      SpecifiedSealedTrait(leftSubclasses.map { case (key, left) =>
+        key -> mergeSpecifications(left, rightSubclasses(key))
       })
     case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
       SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
@@ -411,6 +405,7 @@ class GenMacro(val c: blackbox.Context) {
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))(termName)
     case NotSpecifiedImplicit(tree)   => tree
+    case Excluded => fail("All subtypes was excluded")
     case _ => fail("unreachable")
   }
 
@@ -464,7 +459,7 @@ class GenMacro(val c: blackbox.Context) {
         .partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
-      if (!child.asClass.isFinal && !child.asClass.isCaseClass) {
+      if (!child.asClass.isFinal && !child.asClass.isCaseClass && !child.isModuleClass) {
         fail(s"child $child of $parent is neither final nor a case class")
       }
     }
@@ -518,15 +513,15 @@ class GenMacro(val c: blackbox.Context) {
     }.toMap
   }
 
-  def paramListsOf(method: c.Symbol, tpe: c.Type): List[List[c.universe.Symbol]] = {
+  def paramListsOf(method: c.Symbol, tpe: c.Type): List[List[c.Symbol]] = {
     method.asMethod.infoIn(tpe).paramLists
   }
 
-  def notImplicitParamLists(params: List[List[c.universe.Symbol]]): List[List[c.universe.Symbol]] = {
+  def notImplicitParamLists(params: List[List[c.Symbol]]): List[List[c.Symbol]] = {
     params.filterNot(_.headOption.exists(_.isImplicit))
   }
 
-  def isPhantomConstructor(constructor: Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
+  def isPhantomConstructor(constructor: c.Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
 
   def publicConstructor(tpe: c.Type): MethodSymbol = {
     val members = tpe.members
@@ -539,5 +534,48 @@ class GenMacro(val c: blackbox.Context) {
       .find(_.isPrimaryConstructor)
       .orElse(constructors.headOption)
       .getOrElse(fail(s"class ${tpe.typeSymbol.name} has no public constructors"))
+  }
+
+  // https://github.com/scalamacros/paradise/blob/c14c634923313dd03f4f483be3d7782a9b56de0e/plugin/src/main/scala/org/scalamacros/paradise/typechecker/Namers.scala#L568-L613
+  def patchedCompanionSymbolOf(original: c.Symbol): c.Symbol = {
+
+    val global = c.universe.asInstanceOf[scala.tools.nsc.Global]
+    val typer = c.asInstanceOf[scala.reflect.macros.runtime.Context].callsiteTyper.asInstanceOf[global.analyzer.Typer]
+    val ctx = typer.context
+    val owner = original.owner
+
+    import global.analyzer.Context
+
+    original.companion orElse {
+      import global._
+      implicit class PatchedContext(ctx: Context) {
+        trait PatchedLookupResult { def suchThat(criterion: Symbol => Boolean): Symbol }
+        def patchedLookup(name: Name, expectedOwner: Symbol) = new PatchedLookupResult {
+          override def suchThat(criterion: Symbol => Boolean): Symbol = {
+            var res: Symbol = NoSymbol
+            var ctx = PatchedContext.this.ctx
+            while (res == NoSymbol && ctx.outer != ctx) {
+              val s = {
+                val lookupResult = ctx.scope.lookupAll(name).filter(criterion).toList
+                lookupResult match {
+                  case Nil => NoSymbol
+                  case List(unique) => unique
+                  case _ => abort(s"unexpected multiple results for a companion symbol lookup for $original#{$original.id}")
+                }
+              }
+              if (s != NoSymbol && s.owner == expectedOwner)
+                res = s
+              else
+                ctx = ctx.outer
+            }
+            res
+          }
+        }
+      }
+      ctx.patchedLookup(original.asInstanceOf[global.Symbol].name.companionName, owner.asInstanceOf[global.Symbol]).suchThat(sym =>
+        (original.isTerm || sym.hasModuleFlag) &&
+          (sym isCoDefinedWith original.asInstanceOf[global.Symbol])
+      ).asInstanceOf[c.Symbol]
+    }
   }
 }
