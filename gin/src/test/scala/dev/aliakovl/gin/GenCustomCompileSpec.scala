@@ -3,7 +3,7 @@ package dev.aliakovl.gin
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
-class Spec extends AnyWordSpec with Matchers {
+class GenCustomCompileSpec extends AnyWordSpec with Matchers {
   "Gen.custom" should {
     "not compile" when {
       "trait is not sealed" in {
