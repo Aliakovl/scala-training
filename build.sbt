@@ -1,4 +1,6 @@
 ThisBuild / scalaVersion := "3.3.3"
+ThisBuild / publishMavenStyle := true
+ThisBuild / pomIncludeRepository := { _ => false }
 
 lazy val `scala-training` = (project in file("."))
   .aggregate(
@@ -137,8 +139,6 @@ lazy val gin = (project in file("./gin"))
     versionScheme := Some("early-semver"),
     homepage := Some(url("https://github.com/Aliakovl/gin")),
     licenses := List(License.Apache2),
-    publishMavenStyle := true,
-    pomIncludeRepository := { _ => false },
     credentials += Credentials(
       "GitHub Package Registry",
       "maven.pkg.github.com",
