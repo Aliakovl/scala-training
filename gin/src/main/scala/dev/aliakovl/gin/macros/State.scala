@@ -1,4 +1,5 @@
-package dev.aliakovl.gin.macros
+package dev.aliakovl.gin
+package macros
 
 import scala.collection.BuildFrom
 
