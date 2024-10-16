@@ -132,6 +132,20 @@ lazy val `shapeless-guide` = (project in file("./shapeless-guide"))
 lazy val gin = (project in file("./gin"))
   .settings(
     name := "gin",
+    version := System.getenv("GIN_VERSION"),
+    organization := "dev.aliakovl",
+    versionScheme := Some("early-semver"),
+    homepage := Some(url("https://github.com/Aliakovl/gin")),
+    licenses := List(License.Apache2),
+    publishMavenStyle := true,
+    pomIncludeRepository := { _ => false },
+    credentials += Credentials(
+      "GitHub Package Registry",
+      "maven.pkg.github.com",
+      "Aliakovl",
+      System.getenv("GITHUB_TOKEN")
+    ),
+    publishTo := Some("GitHub Aliakovl Apache Maven Packages" at "https://maven.pkg.github.com/Aliakovl/gin"),
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
