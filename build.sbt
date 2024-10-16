@@ -1,6 +1,6 @@
 ThisBuild / scalaVersion := "3.3.3"
+ThisBuild / pomIncludeRepository := ( _ => false )
 ThisBuild / publishMavenStyle := true
-ThisBuild / pomIncludeRepository := { _ => false }
 
 lazy val `scala-training` = (project in file("."))
   .aggregate(
