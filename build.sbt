@@ -137,7 +137,7 @@ lazy val gin = (project in file("./gin"))
     version := Option(System.getenv("GIN_VERSION")).getOrElse("0.1.0-SNAPSHOT"),
     organization := "dev.aliakovl",
     versionScheme := Some("early-semver"),
-    homepage := Some(url("https://github.com/Aliakovl/gin")),
+    homepage := Some(url("https://github.com/Aliakovl/scala-training")),
     licenses := List(License.Apache2),
     credentials += Credentials(
       "GitHub Package Registry",
@@ -145,7 +145,7 @@ lazy val gin = (project in file("./gin"))
       "Aliakovl",
       Option(System.getenv("GITHUB_TOKEN")).getOrElse("none")
     ),
-    publishTo := Some("GitHub Aliakovl Apache Maven Packages" at "https://maven.pkg.github.com/Aliakovl/gin"),
+    publishTo := Some("GitHub Aliakovl Apache Maven Packages" at "https://maven.pkg.github.com/Aliakovl/scala-training"),
     scalaVersion := "2.13.13",
     libraryDependencies ++= Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
