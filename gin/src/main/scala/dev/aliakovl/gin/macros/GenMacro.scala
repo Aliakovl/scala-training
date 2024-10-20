@@ -166,15 +166,15 @@ class GenMacro(val c: blackbox.Context) {
   def focusWithPrism(tpe : c.Type, toType: c.Type)(next: VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
     if (tpe.typeConstructor =:= toType.typeConstructor) {
       tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-        if (!(s =:= t)) fail(s"$toType type parameters must not be narrowed, fix: $t -> $s")
+        if (!(s =:= t)) fail(s"$toType type arguments must not be narrowed, fix: $t -> $s")
       }
       next
     } else {
       val subtypes = subTypesOf(tpe)
       State.traverse(subtypes) { subtype =>
         if (subtype.typeConstructor <:< toType.typeConstructor) {
-          subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-            if (!(s =:= t)) fail(s"$toType type parameters must not be narrowed, fix: $t -> $s")
+          if (!(subtype <:< toType)) {
+            fail(s"$toType type arguments must not be narrowed")
           }
           next.map(subtype -> _)
         } else {
