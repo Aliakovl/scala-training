@@ -12,8 +12,8 @@ class ExcludeSpec extends AnyFlatSpec with Matchers {
       .custom[A]
       .exclude(_.when[B])
       .make
-  ) { all =>
-    all should not contain a[B]
+  ) { elements =>
+    no(elements) shouldBe a[B]
   }
 
   it should "exclude case class" in TestCase(
@@ -21,8 +21,8 @@ class ExcludeSpec extends AnyFlatSpec with Matchers {
       .custom[A]
       .exclude(_.when[C])
       .make
-  ) { all =>
-    all should not contain a[C]
+  ) { elements =>
+    no(elements) shouldBe a[C]
   }
 
   it should "exclude case object" in TestCase(
@@ -30,8 +30,8 @@ class ExcludeSpec extends AnyFlatSpec with Matchers {
       .custom[A]
       .exclude(_.when[D.type])
       .make
-  ) { all =>
-    all should not contain a[D.type]
+  ) { elements =>
+    no(elements) shouldBe a[D.type]
   }
 
   it should "exclude object" in TestCase(
@@ -39,8 +39,8 @@ class ExcludeSpec extends AnyFlatSpec with Matchers {
       .custom[A]
       .exclude(_.when[E.type])
       .make
-  ) { all =>
-    all should not contain an[E.type]
+  ) { elements =>
+    no(elements) shouldBe an[E.type]
   }
 
   it should "exclude sealed trait" in TestCase(
@@ -48,8 +48,8 @@ class ExcludeSpec extends AnyFlatSpec with Matchers {
       .custom[A]
       .exclude(_.when[F])
       .make
-  ) { all =>
-    all should not contain an[F]
+  ) { elements =>
+    no(elements) shouldBe an[F]
   }
 
   it should "exclude deeper class" in TestCase(
@@ -57,8 +57,8 @@ class ExcludeSpec extends AnyFlatSpec with Matchers {
       .custom[A]
       .exclude(_.when[F1])
       .make
-  ) { all =>
-    all should not contain an[F1]
+  ) { elements =>
+    no(elements) shouldBe an[F1]
   }
 
   it should "exclude sealed abstract class" in TestCase(
@@ -66,8 +66,8 @@ class ExcludeSpec extends AnyFlatSpec with Matchers {
       .custom[A]
       .exclude(_.when[G])
       .make
-  ) { all =>
-    all should not contain a[G]
+  ) { elements =>
+    no(elements) shouldBe a[G]
   }
 }
 
@@ -81,5 +81,4 @@ object ExcludeSpec {
   final class F1 extends F
   sealed abstract class G extends A
   final class G1 extends G
-
 }
