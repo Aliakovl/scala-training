@@ -8,9 +8,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
   behavior of "custom"
 
   it should "generate all concrete children" in TestCase(
-    Gen
-      .custom[A]
-      .make
+    Gen.custom[A].make
   ) { elements =>
     atLeast(1, elements) shouldBe a[B]
     atLeast(1, elements) shouldBe a[C]
@@ -23,9 +21,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
   it should "generate values with generator from implicit scope" in TestCase {
     implicit val aGen: Gen[A] = Gen.one[A].of[C, F, D.type]
 
-    Gen
-      .custom[Option[A]]
-      .make
+    Gen.custom[Option[A]].make
   } { elements =>
     val definedElements = elements.flatten
 
@@ -42,15 +38,41 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
     implicit val nameGen: Gen[String] = Gen.const("sample-name")
     implicit val ageGen: Gen[Int] = Gen.const(21)
 
-    Gen
-      .custom[Person]
-      .make
+    Gen.custom[Person].make
   } { elements =>
-    all(elements) should have (
-      'name ("sample-name"),
-      'age (21)
+    all(elements) should have(
+      'name("sample-name"),
+      'age(21)
     )
   }
+
+  it should "generate class with multiple parameter lists" in TestCase {
+    implicit val aGen: Gen[A] = Gen.const(D)
+    implicit val strGen: Gen[String] = Gen.const("second-value")
+    implicit val personGen: Gen[Person] = Gen.const(new Person("weirdo", -2))
+
+    Gen.custom[WierdClass].make
+  } { elements =>
+    all(elements) should have(
+      'a(D),
+      'str("second-value"),
+      'name("weirdo"),
+      'age(-2)
+    )
+  }
+
+  it should "generate class with implicit parameter got from implicit scope" in TestCase {
+    implicit val value: Gen[String] = Gen.const("value")
+    implicit val impl: String = "implicit"
+
+    Gen.custom[ClassWithImplicit].make
+  } { elements =>
+    all(elements) should have(
+      'value("value"),
+      'impl("implicit")
+    )
+  }
+
 }
 
 object GenCustomSpec {
@@ -67,5 +89,17 @@ object GenCustomSpec {
   class Person(name: String, age: Int) {
     def getName: String = name
     def getAge: Int = age
+  }
+
+  class WierdClass(a: A, str: String)(person: Person) {
+    def getA: A = a
+    def getStr: String = str
+    def getName: String = person.getName
+    def getAge: Int = person.getAge
+  }
+
+  class ClassWithImplicit(value: String)(implicit impl: String) {
+    def getValue: String = value
+    def getImpl: String = impl
   }
 }
