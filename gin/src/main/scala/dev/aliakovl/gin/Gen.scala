@@ -2,6 +2,7 @@ package dev.aliakovl.gin
 
 import dev.aliakovl.gin.internal._
 
+import scala.annotation.compileTimeOnly
 import scala.collection.Factory
 import scala.language.implicitConversions
 import scala.util.Random
@@ -24,7 +25,7 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
     f(unsafeRun(random)).unsafeRun(random)
   }
 
-  def tap[U](f: A => U): Gen[A] = Gen { random =>
+  def tap(f: A => Any): Gen[A] = Gen { random =>
     val r = unsafeRun(random); f(r); r
   }
 
@@ -56,7 +57,8 @@ object Gen
 
   def random[A](implicit inst: Gen[A]): Gen[A] = inst
 
-  def custom[A]: GenSpecify[A] = new GenSpecify[A]
+  @compileTimeOnly("Illegal reference to dev.aliakovl.gin.Gen.custom, try to call .make after it")
+  def custom[A]: GenCustom[A] = ???
 
   def fromFunction[In](in: In)(implicit
       constructor: FunctionConstructor[In]
@@ -84,11 +86,5 @@ object Gen
 
   def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = apply {
     _.between(minInclusive, maxExclusive)
-  }
-
-  def enumeration[E <: Enumeration](
-      en: E
-  ): Gen[E#Value] = Gen { random =>
-    en(random.nextInt(en.maxId))
   }
 }

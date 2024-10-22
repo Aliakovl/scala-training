@@ -234,5 +234,23 @@ object Main {
       .many[List](10)
       .tap(println)
       .run()
+
+    object Colours extends Enumeration {
+      type Colour = Value
+      val Blue: Colour = Value("blue-colour")
+      val Red: Colour = Value("red-colour")
+      val Green: Colour = Value("green-colour")
+    }
+
+    import Colours.Colour
+
+    Gen.random[Colour].many[List](10).tap(println).runWithSeed(141414)
+
+    Gen
+      .custom[Option[Colour]]
+      .make
+      .many[List](10)
+      .tap(println)
+      .runWithSeed(141414)
   }
 }

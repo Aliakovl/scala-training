@@ -1,8 +1,7 @@
-package dev.aliakovl.gin.internal
+package dev.aliakovl.gin
+package internal
 
 import cats.Monad
-import dev.aliakovl.gin.Gen
-
 
 abstract private[gin] class GenLowPriority {
   implicit val catsMonadForGen: Monad[Gen] = new Monad[Gen] {
