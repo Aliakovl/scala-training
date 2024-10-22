@@ -242,8 +242,6 @@ object Main {
       val Green: Colour = Value("green-colour")
     }
 
-    Gen.enumeration(Colours).many[List](10).tap(println).runWithSeed(141414)
-
     import Colours.Colour
 
     Gen.random[Colour].many[List](10).tap(println).runWithSeed(141414)

@@ -6,7 +6,7 @@ import scala.annotation.compileTimeOnly
 import scala.language.implicitConversions
 
 package object gin {
-  implicit final class GenWhen[A](private val value: A) extends AnyVal {
+  implicit final class GenCustomOps[A](private val value: A) extends AnyVal {
     @compileTimeOnly("when can only be used inside specify")
     def when[B <: A]: B = ???
 

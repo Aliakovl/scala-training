@@ -289,14 +289,14 @@ class GenMacro(val c: blackbox.Context) {
       case q"$other.$field" =>
         val lens = Lens(other.tpe, field, tpe)
         disassembleSelector(other, other.tpe, lens :: selector)
-      case q"$module.GenWhen[$from]($other).arg[$to]($fieldName)" if module.symbol == ginModule =>
+      case q"$module.GenCustomOps[$from]($other).arg[$to]($fieldName)" if module.symbol == ginModule =>
         fieldName match {
           case Literal(Constant(name: String)) =>
             val lens = Lens(other.tpe, TermName(name), tree.tpe)
             disassembleSelector(other, from.tpe, lens :: selector)
           case _ => c.abort(fieldName.pos, "Only string literals supported")
         }
-      case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
+      case q"$module.GenCustomOps[$from]($other).when[$to]" if module.symbol == ginModule =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(to.tpe)
         disassembleSelector(other, from.tpe, prism :: selector)
