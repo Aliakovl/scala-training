@@ -73,6 +73,73 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
     )
   }
 
+  it should "be possible to assign it to implicit value" in TestCase {
+    implicit val personGen: Gen[Person] = {
+      Gen.custom[Person].specifyConst(_.arg("age"))(123).make
+    }
+
+    Gen.random[Person]
+  } { elements =>
+    all(elements) should have(
+      'age(123)
+    )
+  }
+
+  it should "not use the same Gen[T] for inner parameters" in TestCase {
+    implicit val genList: Gen[List[Int]] = Gen.const(List(2))
+
+    Gen.custom[List[Int]].specifyConst(_.when[::[Int]].head)(1).make
+  } { elements =>
+    all(elements) should matchPattern {
+      case Nil           =>
+      case 1 :: 2 :: Nil =>
+    }
+  }
+
+  it should "use then same Gen[T] for recursive type implicitly" in TestCase {
+    implicit lazy val genList: Gen[List[Int]] =
+      Gen.custom[List[Int]].specifyConst(_.when[::[Int]].head)(1).make
+
+    Gen.random[List[Int]]
+  } { elements =>
+    all(elements) should (be (empty) or contain only 1)
+  }
+
+  it should "use then same Gen[T] for recursive type manually" in TestCase {
+    lazy val genList: Gen[List[Int]] =
+      Gen
+        .custom[List[Int]]
+        .specifyConst(_.when[::[Int]].head)(1)
+        .specify(_.when[::[Int]].arg("next"))(genList)
+        .make
+
+    genList
+  } { elements =>
+    all (elements) should (be (empty) or contain only 1)
+  }
+
+  ignore should "use implicit method to make Gen[T] with inner macro implicit" in TestCase {
+    implicit val numberGen: Gen[Int] = Gen.const(42)
+    implicit def optionGen[T: Gen]: Gen[Option[T]] = Gen.random[T].map(Some(_))
+
+    Gen.custom[ComplexClass].make
+  } { elements =>
+    all(elements) should matchPattern {
+      case ComplexClass(42, Some(_)) =>
+    }
+  }
+
+  it should "use implicit method to make Gen[T]" in TestCase {
+    implicit def intGen: Gen[Int] = Gen.const(42)
+    implicit def optionGen[T: Gen]: Gen[Option[T]] = Gen.random[T].map(Some(_))
+
+    Gen.random[Option[Int]]
+  } { elements =>
+    all(elements) should matchPattern {
+      case Some(42) =>
+    }
+  }
+
 }
 
 object GenCustomSpec {
@@ -102,4 +169,6 @@ object GenCustomSpec {
     def getValue: String = value
     def getImpl: String = impl
   }
+
+  case class ComplexClass(number: Int, a: Option[A])
 }

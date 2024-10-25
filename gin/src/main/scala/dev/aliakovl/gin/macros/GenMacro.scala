@@ -87,41 +87,46 @@ class GenMacro(val c: blackbox.Context) {
   def buildValue[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
     val sym = tpe.typeSymbol
     val genType = constructType[Gen](tpe)
-    val implicitValue = c.inferImplicitValue(genType, withMacrosDisabled = true)
-    if (implicitValue != EmptyTree && tpe != weakTypeOf[A]) {
-      State.pure(Refer(implicitValue))
-    } else if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-      State.pure(CaseObject)
-    } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
-      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
-    } else if (isAbstractSealed(sym)) {
-      val subtypes = subTypesOf(tpe)
-      State.traverse(subtypes) { subtype =>
-        for {
-          variables <- State.get[VState].map(_._1)
-          name <- variables.get(subtype).fold {
+    Option.when[c.Tree](tpe != weakTypeOf[A]) {
+      c.inferImplicitValue(genType, withMacrosDisabled = true)
+    }.flatMap { implicitValue =>
+      Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
+    }.fold[FullState[Value]] {
+      if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
+        State.pure(CaseObject)
+      } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
+        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
+      } else if (isAbstractSealed(sym)) {
+        val subtypes = subTypesOf(tpe)
+        State.traverse(subtypes) { subtype =>
+          for {
+            variables <- State.get[VState].map(_._1)
+            name <- variables.get(subtype).fold {
               val termName = c.freshName(subtype.typeSymbol.name).toTermName
               State.modifyFirst[Variables, Values](_.updated(subtype, termName)).zip(getOrElseCreateValue(subtype)).as(termName)
             }(State.pure)
-        } yield subtype -> name
-      }.map(_.toMap).map(SealedTrait)
-    } else if (isConcreteClass(sym)) {
-      State.sequence {
-        notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
-          State.traverse(params) { param =>
-            for {
-              variables <- State.get[VState].map(_._1)
-              paramType = param.info
-              name <- variables.get(paramType).fold {
+          } yield subtype -> name
+        }.map(_.toMap).map(SealedTrait)
+      } else if (isConcreteClass(sym)) {
+        State.sequence {
+          notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
+            State.traverse(params) { param =>
+              for {
+                variables <- State.get[VState].map(_._1)
+                paramType = param.info
+                name <- variables.get(paramType).fold {
                   val termName = c.freshName(paramType.typeSymbol.name).toTermName
                   State.modifyFirst[Variables, Values](_.updated(paramType, termName)).zip(getOrElseCreateValue(paramType)).as(termName)
                 }(State.pure)
-            } yield name
+              } yield name
+            }
           }
-        }
-      }.map(CaseClass)
-    } else {
-      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
+        }.map(CaseClass)
+      } else {
+        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
+      }
+    } { implicitValue =>
+      State.pure(Refer(implicitValue))
     }
   }
 
@@ -189,7 +194,7 @@ class GenMacro(val c: blackbox.Context) {
 
   def focusWithLens(tpe: c.Type, fromType: c.Type, field: c.TermName)(next: c.Symbol => VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
     val allParams = paramListsOf(publicConstructor(tpe), fromType)
-    if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
+    if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $tpe does not take $field argument")
     State.sequence {
       allParams.map { params =>
         State.traverse(params) { param =>
