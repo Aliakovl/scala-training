@@ -247,13 +247,22 @@ object GenMain extends App {
     .runWithSeed(123)
 
   sealed trait MyEither[L, R]
+  sealed trait MyMyEither[L, R] extends MyEither[L, R]
   case class MyLeft[L, R](value: L) extends MyEither[L, R]
-  case class MyRight[R, L](value: R) extends MyEither[L, R]
+  case class MyRight[R, L](value: R) extends MyMyEither[L, R]
 
   Gen
     .custom[MyEither[String, Int]]
-    .specifyConst(_.when[MyLeft].value)("wefwef")
-    .specifyConst(_.when[MyRight].value)(123434334)
+    .specifyConst(_.when[MyLeft[String, Int]].value)("wefwef")
+    .specifyConst(_.when[MyMyEither[String, Int]].when[MyRight[Int, String]].value)(123434334)
+    .make
+    .many[List](10)
+    .tap(println)
+    .run()
+
+  Gen
+    .custom[Either[String, Option[Int]]]
+    .specifyConst(_.when[Right[String, Option[Int]]].value.when[Some[Int]].value)(31234)
     .make
     .many[List](10)
     .tap(println)

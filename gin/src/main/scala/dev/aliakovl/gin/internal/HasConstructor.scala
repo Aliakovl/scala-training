@@ -1,4 +1,5 @@
-package dev.aliakovl.gin.internal
+package dev.aliakovl.gin
+package internal
 
 import scala.annotation.implicitNotFound
 

@@ -1,7 +1,5 @@
-package dev.aliakovl.gin.macros
-
-import dev.aliakovl.gin
-import dev.aliakovl.gin.Gen
+package dev.aliakovl.gin
+package macros
 
 import scala.annotation.tailrec
 import scala.reflect.macros.blackbox
@@ -15,7 +13,7 @@ class GenMacro(val c: blackbox.Context) {
   type VState = (Variables, Values)
   type FullState[A] = State[VState, A]
 
-  val genSymbol = symbolOf[gin.Gen.type].asClass.module
+  val genSymbol = symbolOf[Gen.type].asClass.module
   val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
   def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
@@ -89,41 +87,46 @@ class GenMacro(val c: blackbox.Context) {
   def buildValue[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
     val sym = tpe.typeSymbol
     val genType = constructType[Gen](tpe)
-    val implicitValue = c.inferImplicitValue(genType, withMacrosDisabled = true)
-    if (implicitValue != EmptyTree && tpe != weakTypeOf[A]) {
-      State.pure(Refer(implicitValue))
-    } else if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-      State.pure(CaseObject)
-    } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
-      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
-    } else if (isAbstractSealed(sym)) {
-      val subtypes = subTypesOf(tpe)
-      State.traverse(subtypes) { subtype =>
-        for {
-          variables <- State.get[VState].map(_._1)
-          name <- variables.get(subtype).fold {
+    Option.when[c.Tree](tpe != weakTypeOf[A]) {
+      c.inferImplicitValue(genType, withMacrosDisabled = true)
+    }.flatMap { implicitValue =>
+      Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
+    }.fold[FullState[Value]] {
+      if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
+        State.pure(CaseObject)
+      } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
+        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
+      } else if (isAbstractSealed(sym)) {
+        val subtypes = subTypesOf(tpe)
+        State.traverse(subtypes) { subtype =>
+          for {
+            variables <- State.get[VState].map(_._1)
+            name <- variables.get(subtype).fold {
               val termName = c.freshName(subtype.typeSymbol.name).toTermName
               State.modifyFirst[Variables, Values](_.updated(subtype, termName)).zip(getOrElseCreateValue(subtype)).as(termName)
             }(State.pure)
-        } yield subtype -> name
-      }.map(_.toMap).map(SealedTrait)
-    } else if (isConcreteClass(sym)) {
-      State.sequence {
-        notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
-          State.traverse(params) { param =>
-            for {
-              variables <- State.get[VState].map(_._1)
-              paramType = param.info
-              name <- variables.get(paramType).fold {
+          } yield subtype -> name
+        }.map(_.toMap).map(SealedTrait)
+      } else if (isConcreteClass(sym)) {
+        State.sequence {
+          notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
+            State.traverse(params) { param =>
+              for {
+                variables <- State.get[VState].map(_._1)
+                paramType = param.info
+                name <- variables.get(paramType).fold {
                   val termName = c.freshName(paramType.typeSymbol.name).toTermName
                   State.modifyFirst[Variables, Values](_.updated(paramType, termName)).zip(getOrElseCreateValue(paramType)).as(termName)
                 }(State.pure)
-            } yield name
+              } yield name
+            }
           }
-        }
-      }.map(CaseClass)
-    } else {
-      c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try provide it implicitly")
+        }.map(CaseClass)
+      } else {
+        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
+      }
+    } { implicitValue =>
+      State.pure(Refer(implicitValue))
     }
   }
 
@@ -168,15 +171,15 @@ class GenMacro(val c: blackbox.Context) {
   def focusWithPrism(tpe : c.Type, toType: c.Type)(next: VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
     if (tpe.typeConstructor =:= toType.typeConstructor) {
       tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-        if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+        if (!(s =:= t)) fail(s"$toType type arguments must not be narrowed, fix: $t -> $s")
       }
       next
     } else {
       val subtypes = subTypesOf(tpe)
       State.traverse(subtypes) { subtype =>
-        if (subtype.typeConstructor =:= toType.typeConstructor) {
-          subtype.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-            if (!(s =:= t)) fail(s"$toType mast not be deeply narrow, fix: $t -> $s")
+        if (subtype.typeConstructor <:< toType.typeConstructor) {
+          if (!(subtype <:< toType)) {
+            fail(s"$toType type arguments must not be narrowed")
           }
           next.map(subtype -> _)
         } else {
@@ -191,7 +194,7 @@ class GenMacro(val c: blackbox.Context) {
 
   def focusWithLens(tpe: c.Type, fromType: c.Type, field: c.TermName)(next: c.Symbol => VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
     val allParams = paramListsOf(publicConstructor(tpe), fromType)
-    if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $fromType does not take $field argument")
+    if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $tpe does not take $field argument")
     State.sequence {
       allParams.map { params =>
         State.traverse(params) { param =>
@@ -223,7 +226,7 @@ class GenMacro(val c: blackbox.Context) {
     private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
       case Lens(fromType, field, _) :: Nil =>
         val allParams = paramListsOf(publicConstructor(tpe), fromType)
-        val defaultMap = defaults(tpe.typeSymbol.asClass.companion)(allParams)
+        val defaultMap = defaults(patchedCompanionSymbolOf(tpe.typeSymbol))(allParams)
         focusWithLens(tpe, fromType, field) { param =>
           defaultMap.get(param).fold(fail(s"$field does not have default argument")) { default =>
             State.pure(Specified(DefaultArg(default)))
@@ -291,14 +294,14 @@ class GenMacro(val c: blackbox.Context) {
       case q"$other.$field" =>
         val lens = Lens(other.tpe, field, tpe)
         disassembleSelector(other, other.tpe, lens :: selector)
-      case q"$module.GenWhen[$from]($other).arg[$to]($fieldName)" if module.symbol == ginModule =>
+      case q"$module.GenCustomOps[$from]($other).arg[$to]($fieldName)" if module.symbol == ginModule =>
         fieldName match {
           case Literal(Constant(name: String)) =>
             val lens = Lens(other.tpe, TermName(name), tree.tpe)
             disassembleSelector(other, from.tpe, lens :: selector)
           case _ => c.abort(fieldName.pos, "Only string literals supported")
         }
-      case q"$module.GenWhen[$from]($other).when[$to]" if module.symbol == ginModule =>
+      case q"$module.GenCustomOps[$from]($other).when[$to]" if module.symbol == ginModule =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(to.tpe)
         disassembleSelector(other, from.tpe, prism :: selector)
@@ -346,12 +349,6 @@ class GenMacro(val c: blackbox.Context) {
     }
   }
 
-  def join[K, A, B](left: Map[K, A], right: Map[K, B]): Map[K, (A, B)] = {
-    (left.keySet & right.keySet).map { key =>
-      key -> (left(key), right(key))
-    }.toMap
-  }
-
   def mergeSpecifications(
     left: SpecifiedGen,
     right: SpecifiedGen
@@ -365,8 +362,8 @@ class GenMacro(val c: blackbox.Context) {
       }
       SpecifiedCaseClass(rightClass, fields)
     case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
-      SpecifiedSealedTrait(join(leftSubclasses, rightSubclasses).map { case (key, (left, right)) =>
-        key -> mergeSpecifications(left, right)
+      SpecifiedSealedTrait(leftSubclasses.map { case (key, left) =>
+        key -> mergeSpecifications(left, rightSubclasses(key))
       })
     case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
       SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
@@ -411,6 +408,7 @@ class GenMacro(val c: blackbox.Context) {
     case Specified(ConstArg(tree)) => tree
     case NotSpecified(tree)        => callApply(Ident(tree))(termName)
     case NotSpecifiedImplicit(tree)   => tree
+    case Excluded => fail("All subtypes was excluded")
     case _ => fail("unreachable")
   }
 
@@ -464,7 +462,7 @@ class GenMacro(val c: blackbox.Context) {
         .partition(_.isAbstract)
 
     concreteChildren.foreach { child =>
-      if (!child.asClass.isFinal && !child.asClass.isCaseClass) {
+      if (!child.asClass.isFinal && !child.asClass.isCaseClass && !child.isModuleClass) {
         fail(s"child $child of $parent is neither final nor a case class")
       }
     }
@@ -518,15 +516,15 @@ class GenMacro(val c: blackbox.Context) {
     }.toMap
   }
 
-  def paramListsOf(method: c.Symbol, tpe: c.Type): List[List[c.universe.Symbol]] = {
+  def paramListsOf(method: c.Symbol, tpe: c.Type): List[List[c.Symbol]] = {
     method.asMethod.infoIn(tpe).paramLists
   }
 
-  def notImplicitParamLists(params: List[List[c.universe.Symbol]]): List[List[c.universe.Symbol]] = {
+  def notImplicitParamLists(params: List[List[c.Symbol]]): List[List[c.Symbol]] = {
     params.filterNot(_.headOption.exists(_.isImplicit))
   }
 
-  def isPhantomConstructor(constructor: Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
+  def isPhantomConstructor(constructor: c.Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
 
   def publicConstructor(tpe: c.Type): MethodSymbol = {
     val members = tpe.members
@@ -539,5 +537,48 @@ class GenMacro(val c: blackbox.Context) {
       .find(_.isPrimaryConstructor)
       .orElse(constructors.headOption)
       .getOrElse(fail(s"class ${tpe.typeSymbol.name} has no public constructors"))
+  }
+
+  // https://github.com/scalamacros/paradise/blob/c14c634923313dd03f4f483be3d7782a9b56de0e/plugin/src/main/scala/org/scalamacros/paradise/typechecker/Namers.scala#L568-L613
+  def patchedCompanionSymbolOf(original: c.Symbol): c.Symbol = {
+
+    val global = c.universe.asInstanceOf[scala.tools.nsc.Global]
+    val typer = c.asInstanceOf[scala.reflect.macros.runtime.Context].callsiteTyper.asInstanceOf[global.analyzer.Typer]
+    val ctx = typer.context
+    val owner = original.owner
+
+    import global.analyzer.Context
+
+    original.companion orElse {
+      import global._
+      implicit class PatchedContext(ctx: Context) {
+        trait PatchedLookupResult { def suchThat(criterion: Symbol => Boolean): Symbol }
+        def patchedLookup(name: Name, expectedOwner: Symbol) = new PatchedLookupResult {
+          override def suchThat(criterion: Symbol => Boolean): Symbol = {
+            var res: Symbol = NoSymbol
+            var ctx = PatchedContext.this.ctx
+            while (res == NoSymbol && ctx.outer != ctx) {
+              val s = {
+                val lookupResult = ctx.scope.lookupAll(name).filter(criterion).toList
+                lookupResult match {
+                  case Nil => NoSymbol
+                  case List(unique) => unique
+                  case _ => abort(s"unexpected multiple results for a companion symbol lookup for $original#{$original.id}")
+                }
+              }
+              if (s != NoSymbol && s.owner == expectedOwner)
+                res = s
+              else
+                ctx = ctx.outer
+            }
+            res
+          }
+        }
+      }
+      ctx.patchedLookup(original.asInstanceOf[global.Symbol].name.companionName, owner.asInstanceOf[global.Symbol]).suchThat(sym =>
+        (original.isTerm || sym.hasModuleFlag) &&
+          (sym isCoDefinedWith original.asInstanceOf[global.Symbol])
+      ).asInstanceOf[c.Symbol]
+    }
   }
 }
