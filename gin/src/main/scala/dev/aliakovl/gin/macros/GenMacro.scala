@@ -88,7 +88,7 @@ class GenMacro(val c: blackbox.Context) {
     val sym = tpe.typeSymbol
     val genType = constructType[Gen](tpe)
     Option.when[c.Tree](tpe != weakTypeOf[A]) {
-      c.inferImplicitValue(genType, withMacrosDisabled = true)
+      c.inferImplicitValue(genType, withMacrosDisabled = false)
     }.flatMap { implicitValue =>
       Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
     }.fold[FullState[Value]] {
@@ -99,26 +99,13 @@ class GenMacro(val c: blackbox.Context) {
       } else if (isAbstractSealed(sym)) {
         val subtypes = subTypesOf(tpe)
         State.traverse(subtypes) { subtype =>
-          for {
-            variables <- State.get[VState].map(_._1)
-            name <- variables.get(subtype).fold {
-              val termName = c.freshName(subtype.typeSymbol.name).toTermName
-              State.modifyFirst[Variables, Values](_.updated(subtype, termName)).zip(getOrElseCreateValue(subtype)).as(termName)
-            }(State.pure)
-          } yield subtype -> name
+          getVariableName(subtype).map(subtype -> _)
         }.map(_.toMap).map(SealedTrait)
       } else if (isConcreteClass(sym)) {
         State.sequence {
           notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
             State.traverse(params) { param =>
-              for {
-                variables <- State.get[VState].map(_._1)
-                paramType = param.info
-                name <- variables.get(paramType).fold {
-                  val termName = c.freshName(paramType.typeSymbol.name).toTermName
-                  State.modifyFirst[Variables, Values](_.updated(paramType, termName)).zip(getOrElseCreateValue(paramType)).as(termName)
-                }(State.pure)
-              } yield name
+              getVariableName(param.info)
             }
           }
         }.map(CaseClass)
@@ -129,6 +116,14 @@ class GenMacro(val c: blackbox.Context) {
       State.pure(Refer(implicitValue))
     }
   }
+
+  def getVariableName(tpe: c.Type): FullState[TermName] = for {
+    variables <- State.get[VState].map(_._1)
+    name <- variables.get(tpe).fold {
+      val termName = c.freshName(tpe.typeSymbol.name).toTermName
+      State.modifyFirst[Variables, Values](_.updated(tpe, termName)).zip(getOrElseCreateValue(tpe)).as(termName)
+    }(State.pure)
+  } yield name
 
   def getOrElseCreateValue[A: WeakTypeTag](tpe: c.Type): FullState[Value] = {
     State.get[VState].map(_._2).flatMap { values =>
