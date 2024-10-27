@@ -2,15 +2,17 @@ package dev.aliakovl.gin
 package macros
 
 import scala.annotation.tailrec
-import scala.reflect.macros.blackbox
+import scala.reflect.macros.whitebox
 
 object GenMacro {
 
-  def makeImpl[A: c.WeakTypeTag](c: blackbox.Context): c.Expr[Gen[A]] = {
+  def materializeImpl[A: c.WeakTypeTag](c: whitebox.Context): c.Tree = Stack.withContext(c) { stack =>
     import c.universe._
 
-    type Variables = Map[c.Type, c.TermName]
-    type Values = Map[c.Type, Value]
+    val isMain = stack.isEmpty
+
+    type Variables = Map[Type, TermName]
+    type Values = Map[Type, Value]
     type VarsState[T] = State[Variables, T]
     type VState = (Variables, Values)
     type FullState[T] = State[VState, T]
@@ -20,9 +22,14 @@ object GenMacro {
 
     def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
 
-    def initVars: Variables = Map(
-      weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
-    )
+    def initVars: Variables = {
+      val v = stack.top[VState]().map(_._1).getOrElse(Map.empty)
+      if (v.contains(weakTypeOf[A])) {
+        v
+      } else {
+        v + (weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName)
+      }
+    }
 
     sealed trait Value
     case class Refer(value: c.Tree) extends Value
@@ -36,7 +43,7 @@ object GenMacro {
       }
 
       val declaration = values.map {
-        case tp -> Refer(value) => lazyVal(tp, c.untypecheck(value.duplicate))
+        case tp -> Refer(value) => lazyVal(tp, value)
         case tp -> CaseObject => lazyVal(tp, constValueOf(tp))
         case tp -> CaseClass(fields) =>
           val termName = TermName(c.freshName())
@@ -51,40 +58,50 @@ object GenMacro {
           lazyVal(tp, value)
       }
 
-      q"{..$declaration; ${variables(weakTypeOf[A])}}"
+      if (isMain) {
+        q"{..$declaration; ${variables(weakTypeOf[A])}}"
+      } else {
+        q""
+      }
     }
 
     def buildValue(tpe: c.Type): FullState[Value] = {
       val sym = tpe.typeSymbol
       val genType = constructType[Gen](tpe)
-      Option.when[c.Tree](tpe != weakTypeOf[A]) {
-        // state
-        c.inferImplicitValue(genType, withMacrosDisabled = true)
-      }.flatMap { implicitValue =>
-        Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
-      }.fold[FullState[Value]] {
-        if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-          State.pure(CaseObject)
-        } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
-          c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
-        } else if (isAbstractSealed(sym)) {
-          val subtypes = subTypesOf(tpe)
-          State.traverse(subtypes) { subtype =>
-            getVariableName(subtype).map(subtype -> _)
-          }.map(_.toMap).map(SealedTrait)
-        } else if (isConcreteClass(sym)) {
-          State.sequence {
-            notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
-              State.traverse(params) { param =>
-                getVariableName(param.info)
-              }
-            }
-          }.map(CaseClass)
-        } else {
-          c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
+
+      val resImpl: FullState[Option[c.Tree]] = stack.withState[c.Tree] {
+        Option.when[c.Tree](tpe != weakTypeOf[A]) {
+          c.inferImplicitValue(genType, withMacrosDisabled = false)
+        }.flatMap { implicitValue =>
+          Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
         }
-      } { implicitValue =>
-        State.pure(Refer(implicitValue))
+      }.asInstanceOf[FullState[Option[c.Tree]]]
+
+      resImpl.flatMap { s =>
+        s.fold[FullState[Value]] {
+          if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
+            State.pure(CaseObject)
+          } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
+            c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
+          } else if (isAbstractSealed(sym)) {
+            val subtypes = subTypesOf(tpe)
+            State.traverse(subtypes) { subtype =>
+              getVariableName(subtype).map(subtype -> _)
+            }.map(_.toMap).map(SealedTrait)
+          } else if (isConcreteClass(sym)) {
+            State.sequence {
+              notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
+                State.traverse(params) { param =>
+                  getVariableName(param.info)
+                }
+              }
+            }.map(CaseClass)
+          } else {
+            c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
+          }
+        } { implicitValue =>
+          State.pure(Refer(c.untypecheck(implicitValue).duplicate))
+        }
       }
     }
 
@@ -102,8 +119,10 @@ object GenMacro {
           case Some(value) => State.pure(value)
           case None =>
             for {
+              _ <- State.get[VState].map(stack.set(_))
               value <- buildValue(tpe)
               _ <- State.modifySecond[Variables, Values](_.updated(tpe, value))
+              _ <- State.get[VState].map(stack.set(_))
             } yield value
         }
       }
@@ -113,18 +132,22 @@ object GenMacro {
       tree.fold {
           getOrElseCreateValue(weakTypeOf[A]).flatMap { value =>
             State.modifySecond[Variables, Values](_.updated(weakTypeOf[A], value))
+          }.flatMap { v =>
+            State.get[VState].map(stack.set(_)).as(v)
           }
         } { value =>
           for {
             _ <- State.modifySecond[Variables, Values](
-              _.updated(weakTypeOf[A], Refer(value))
+              _.updated(weakTypeOf[A], Refer(c.untypecheck(value).duplicate))
             )
+            _ <- State.get[VState].map(stack.set(_))
             variables <- State.get[VState].map(_._1)
-            _ <- State.traverse(variables.keySet - weakTypeOf[A])(getOrElseCreateValue)
+            values <- State.get[VState].map(_._2)
+            _ <- State.traverse(variables.keySet -- values.keySet)(getOrElseCreateValue)
           } yield ()
         }
         .flatMap(_ => State.get[VState].map(_._2))
-        .modifyState(_._1)((_, Map.empty))
+        .modifyState(_._1)((_, stack.top[VState]().map(_._2).getOrElse(Map.empty)))
     }
 
     type Methods = List[Method]
@@ -537,8 +560,6 @@ object GenMacro {
 
     val (variables, values) = State.sequence {
         Option.when(weakTypeOf[A].typeSymbol.isClass) {
-          println(s"prefix ${c.prefix.tree}")
-          println(s"macro ${c.macroApplication}")
           mergeMethods(disassembleTree(c.prefix.tree))
         }
       }
@@ -555,8 +576,6 @@ object GenMacro {
       .flatMap(initValues)
       .run(initVars)
 
-    c.Expr[Gen[A]] {
-      genTree(variables, values)
-    }
+    genTree(variables, values)
   }
 }
