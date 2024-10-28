@@ -9,6 +9,8 @@ object GenMacro {
   def materializeImpl[A: c.WeakTypeTag](c: whitebox.Context): c.Tree = Stack.withContext(c) { stack =>
     import c.universe._
 
+    val weakType = weakTypeOf[A]
+
     val isMain = stack.isEmpty
 
     type Variables = Map[Type, TermName]
@@ -24,10 +26,10 @@ object GenMacro {
 
     def initVars: Variables = {
       val v = stack.top[VState]().map(_._1).getOrElse(Map.empty)
-      if (v.contains(weakTypeOf[A])) {
+      if (v.contains(weakType)) {
         v
       } else {
-        v + (weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName)
+        v + (weakType -> c.freshName(weakType.typeSymbol.name).toTermName)
       }
     }
 
@@ -37,29 +39,29 @@ object GenMacro {
     case object CaseObject extends Value
     case class SealedTrait(subclasses: Map[c.Type, c.TermName]) extends Value
 
+    def declaration(tp: c.Type, value: Value): c.Tree = value match {
+      case Refer(value) => value
+      case CaseObject => constValueOf(tp)
+      case CaseClass(fields) =>
+        val termName = TermName(c.freshName())
+        val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
+        construct(tp, args)
+        val value = toGen(termName)(construct(tp, args))
+        value
+      case SealedTrait(subclasses) =>
+        if (subclasses.isEmpty) fail(s"Type ${tp.typeSymbol.name} does not have constructors")
+        val termName = TermName(c.freshName())
+        val value = toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
+        value
+    }
+
     def genTree(variables: Variables, values: Values): c.Tree = {
       def lazyVal(tpe: c.Type, value: c.Tree): c.Tree = {
         q"lazy val ${variables(tpe)}: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
       }
 
-      val declaration = values.map {
-        case tp -> Refer(value) => lazyVal(tp, value)
-        case tp -> CaseObject => lazyVal(tp, constValueOf(tp))
-        case tp -> CaseClass(fields) =>
-          val termName = TermName(c.freshName())
-          val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
-          construct(tp, args)
-          val value = toGen(termName)(construct(tp, args))
-          lazyVal(tp, value)
-        case tp -> SealedTrait(subclasses) =>
-          if (subclasses.isEmpty) fail(s"Type ${tp.typeSymbol.name} does not have constructors")
-          val termName = TermName(c.freshName())
-          val value = toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
-          lazyVal(tp, value)
-      }
-
       if (isMain) {
-        q"{..$declaration; ${variables(weakTypeOf[A])}}"
+        q"{..${values.map{ case (k, v) => lazyVal(k, declaration(k, v)) }}; ${variables(weakType)}}"
       } else {
         q""
       }
@@ -70,7 +72,7 @@ object GenMacro {
       val genType = constructType[Gen](tpe)
 
       val resImpl: FullState[Option[c.Tree]] = stack.withState[c.Tree] {
-        Option.when[c.Tree](tpe != weakTypeOf[A]) {
+        Option.when[c.Tree](tpe != weakType) {
           c.inferImplicitValue(genType, withMacrosDisabled = false)
         }.flatMap { implicitValue =>
           Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
@@ -130,15 +132,15 @@ object GenMacro {
 
     def initValues(tree: Option[c.Tree]): VarsState[Values] = {
       tree.fold {
-          getOrElseCreateValue(weakTypeOf[A]).flatMap { value =>
-            State.modifySecond[Variables, Values](_.updated(weakTypeOf[A], value))
+          getOrElseCreateValue(weakType).flatMap { value =>
+            State.modifySecond[Variables, Values](_.updated(weakType, value))
           }.flatMap { v =>
             State.get[VState].map(stack.set(_)).as(v)
           }
         } { value =>
           for {
             _ <- State.modifySecond[Variables, Values](
-              _.updated(weakTypeOf[A], Refer(c.untypecheck(value).duplicate))
+              _.updated(weakType, Refer(c.untypecheck(value).duplicate))
             )
             _ <- State.get[VState].map(stack.set(_))
             variables <- State.get[VState].map(_._1)
@@ -322,7 +324,7 @@ object GenMacro {
     }
 
     def deleteUnused(gen: SpecifiedGen, variables: Variables): Variables = {
-      val tpeA = weakTypeOf[A]
+      val tpeA = weakType
       val used = usedVariables(gen)
       variables.filter { case (tpe, name) =>
         used.contains(name) || tpe == tpeA
@@ -330,7 +332,7 @@ object GenMacro {
     }
 
     def mergeMethods(methods: Methods): VarsState[Option[SpecifiedGen]] = {
-      State.traverse(methods)(_.toSpecifiedGen(weakTypeOf[A])).map { list =>
+      State.traverse(methods)(_.toSpecifiedGen(weakType)).map { list =>
         list.foldLeft[Option[SpecifiedGen]](None) {
           case (Some(left), right) => Some(mergeSpecifications(left, right))
           case (None, value) => Some(value)
@@ -559,7 +561,7 @@ object GenMacro {
     }
 
     val (variables, values) = State.sequence {
-        Option.when(weakTypeOf[A].typeSymbol.isClass) {
+        Option.when(weakType.typeSymbol.isClass) {
           mergeMethods(disassembleTree(c.prefix.tree))
         }
       }
