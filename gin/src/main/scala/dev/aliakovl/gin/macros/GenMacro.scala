@@ -56,7 +56,8 @@ class GenMacro(val c: whitebox.Context) {
   case object CaseObject extends Value
   case class SealedTrait(subclasses: Map[c.Type, c.TermName]) extends Value
 
-  def block[A: c.WeakTypeTag](statements: List[c.Expr[Any]], expr: c.Expr[A]): c.Expr[A] = c.Expr[A](q"..$statements; $expr")
+  def block[A: c.WeakTypeTag](statements: List[c.Expr[Any]], expr: c.Expr[A]): c.Expr[A] =
+    c.Expr[A](q"..$statements; $expr")
 
   def genTree[A: c.WeakTypeTag](variables: Variables, values: Values): c.Expr[Gen[A]] = {
     def lazyVal(variable: c.TermName, tpe: c.Type, value: c.Tree): c.Expr[Any] = c.Expr[Any] {
@@ -78,8 +79,7 @@ class GenMacro(val c: whitebox.Context) {
     }
 
     val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
-      val value = values(tpe)
-      lazyVal(variable, tpe, declaration(tpe, value))
+      lazyVal(variable, tpe, declaration(tpe, values(tpe)))
     }.toList
 
     block(declarations, c.Expr[Gen[A]](Ident(variables(weakTypeOf[A]))))
