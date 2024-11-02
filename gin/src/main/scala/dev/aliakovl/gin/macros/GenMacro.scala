@@ -2,32 +2,15 @@ package dev.aliakovl.gin
 package macros
 
 import scala.annotation.tailrec
-import scala.reflect.macros.blackbox
+import scala.reflect.macros.whitebox
 
-class GenMacro(val c: blackbox.Context) {
+class GenMacro(val c: whitebox.Context) {
   import c.universe._
-
-  type Variables = Map[c.Type, c.TermName]
-  type Values = Map[c.Type, Value]
-  type VarsState[A] = State[Variables, A]
-  type VState = (Variables, Values)
-  type FullState[A] = State[VState, A]
-
-  val genSymbol = symbolOf[Gen.type].asClass.module
-  val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
-
-  def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
-
-  def initVars[A: c.WeakTypeTag]: Variables = Map(
-    weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
-  )
 
   def materializeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
     val (variables, values) = initValues[A](None).run(initVars[A])
 
-    c.Expr[Gen[A]] {
-      genTree[A](variables, values)
-    }
+    genTree[A](variables, values)
   }
 
   def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = {
@@ -49,10 +32,23 @@ class GenMacro(val c: blackbox.Context) {
       .flatMap(initValues[A])
       .run(initVars[A])
 
-    c.Expr[Gen[A]] {
-      genTree[A](variables, values)
-    }
+    genTree[A](variables, values)
   }
+
+  type Variables = Map[c.Type, c.TermName]
+  type Values = Map[c.Type, Value]
+  type VarsState[A] = State[Variables, A]
+  type VState = (Variables, Values)
+  type FullState[A] = State[VState, A]
+
+  val genSymbol = symbolOf[Gen.type].asClass.module
+  val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
+
+  def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
+
+  def initVars[A: c.WeakTypeTag]: Variables = Map(
+    weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
+  )
 
   sealed trait Value
   case class Refer(value: c.Tree) extends Value
@@ -60,28 +56,33 @@ class GenMacro(val c: blackbox.Context) {
   case object CaseObject extends Value
   case class SealedTrait(subclasses: Map[c.Type, c.TermName]) extends Value
 
-  def genTree[A: c.WeakTypeTag](variables: Variables, values: Values): c.Tree = {
-    def lazyVal(tpe: c.Type, value: c.Tree): c.Tree = {
-      q"lazy val ${variables(tpe)}: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
+  def block[A: c.WeakTypeTag](statements: List[c.Expr[Any]], expr: c.Expr[A]): c.Expr[A] = c.Expr[A](q"..$statements; $expr")
+
+  def genTree[A: c.WeakTypeTag](variables: Variables, values: Values): c.Expr[Gen[A]] = {
+    def lazyVal(variable: c.TermName, tpe: c.Type, value: c.Tree): c.Expr[Any] = c.Expr[Any] {
+      q"lazy val $variable: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
     }
 
-    val declaration = values.map {
-      case tp -> Refer(value) => lazyVal(tp, value)
-      case tp -> CaseObject => lazyVal(tp, constValueOf(tp))
-      case tp -> CaseClass(fields) =>
+    def declaration(tpe: c.Type, value: Value): c.Tree = value match {
+      case Refer(value) => value
+      case CaseObject => constValueOf(tpe)
+      case CaseClass(fields) =>
         val termName = TermName(c.freshName())
         val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
-        construct(tp, args)
-        val value = toGen(termName)(construct(tp, args))
-        lazyVal(tp, value)
-      case tp -> SealedTrait(subclasses) =>
-        if (subclasses.isEmpty) fail(s"Type ${tp.typeSymbol.name} does not have constructors")
+        construct(tpe, args)
+        toGen(termName)(construct(tpe, args))
+      case SealedTrait(subclasses) =>
+        if (subclasses.isEmpty) fail(s"Type ${tpe.typeSymbol.name} does not have constructors")
         val termName = TermName(c.freshName())
-        val value = toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
-        lazyVal(tp, value)
+        toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
     }
 
-    q"{..$declaration; ${variables(weakTypeOf[A])}}"
+    val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
+      val value = values(tpe)
+      lazyVal(variable, tpe, declaration(tpe, value))
+    }.toList
+
+    block(declarations, c.Expr[Gen[A]](Ident(variables(weakTypeOf[A]))))
   }
 
   def buildValue[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
