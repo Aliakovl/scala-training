@@ -267,20 +267,20 @@ class GenMacro(val c: blackbox.Context) {
   @tailrec
   final def disassembleTree[A: c.WeakTypeTag](tree: c.Tree, methods: Methods = List.empty): Methods = {
     tree match {
-      case q"$other.specify[$tpe](($_) => $selectorTree)($arg)" =>
-        val selector = disassembleSelector(selectorTree, tpe.tpe)
+      case q"$other.specify[$_](($_) => $selectorTree)($arg)" =>
+        val selector = disassembleSelector(selectorTree)
         val method = SpecifyMethod(selector, GenArg(arg))
         disassembleTree(other, method +: methods)
-      case q"$other.specifyConst[$tpe](($_) => $selectorTree)($arg)" =>
-        val selector = disassembleSelector(selectorTree, tpe.tpe)
+      case q"$other.specifyConst[$_](($_) => $selectorTree)($arg)" =>
+        val selector = disassembleSelector(selectorTree)
         val method = SpecifyMethod(selector, ConstArg(arg))
         disassembleTree(other, method +: methods)
-      case q"$other.useDefault[$tpe](($_) => $selectorTree)" =>
-        val selector = disassembleSelector(selectorTree, tpe.tpe)
+      case q"$other.useDefault[$_](($_) => $selectorTree)" =>
+        val selector = disassembleSelector(selectorTree)
         val method = UseDefaultMethod(selector)
         disassembleTree(other, method +: methods)
-      case q"$other.exclude[$tpe](($_) => $selectorTree)" =>
-        val selector = disassembleSelector(selectorTree, tpe.tpe)
+      case q"$other.exclude[$_](($_) => $selectorTree)" =>
+        val selector = disassembleSelector(selectorTree)
         val method = ExcludeMethod(selector)
         disassembleTree(other, method +: methods)
       case q"$module.custom[$_]" if module.symbol == genSymbol => methods
@@ -289,27 +289,27 @@ class GenMacro(val c: blackbox.Context) {
   }
 
   @tailrec
-  final def disassembleSelector(tree: c.Tree, tpe: c.Type, selector: Selector = List.empty): Selector = {
+  final def disassembleSelector(tree: c.Tree, selector: Selector = List.empty): Selector = {
     tree match {
       case q"$other.$field" =>
-        val lens = Lens(other.tpe, field, tpe)
-        disassembleSelector(other, other.tpe, lens :: selector)
-      case q"$module.GenCustomOps[$from]($other).arg[$to]($fieldName)" if module.symbol == ginModule =>
+        val lens = Lens(other.tpe.dealias, field, tree.tpe.widen.dealias)
+        disassembleSelector(other, lens :: selector)
+      case q"$module.GenCustomOps[$_]($other).arg[$_]($fieldName)" if module.symbol == ginModule =>
         fieldName match {
           case Literal(Constant(name: String)) =>
-            val lens = Lens(other.tpe, TermName(name), tree.tpe)
-            disassembleSelector(other, from.tpe, lens :: selector)
+            val lens = Lens(other.tpe.dealias, TermName(name), tree.tpe.widen.dealias)
+            disassembleSelector(other, lens :: selector)
           case _ => c.abort(fieldName.pos, "Only string literals supported")
         }
       case q"$module.GenCustomOps[$from]($other).when[$to]" if module.symbol == ginModule =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val prism = Prism(to.tpe)
-        disassembleSelector(other, from.tpe, prism :: selector)
+        disassembleSelector(other, prism :: selector)
       case q"$_[$from]($other).when[$to](..$_)" =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos ,s"$from is not sealed")
         val toType = subclassType(to.symbol, from.tpe)
         val prism = Prism(toType)
-        disassembleSelector(other, from.tpe, prism :: selector)
+        disassembleSelector(other, prism :: selector)
       case _: Ident => selector
       case tree => c.abort(tree.pos, "Unsupported path element.")
     }
