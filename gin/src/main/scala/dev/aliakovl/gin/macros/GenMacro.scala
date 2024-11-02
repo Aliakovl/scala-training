@@ -66,7 +66,7 @@ class GenMacro(val c: blackbox.Context) {
     }
 
     val declaration = values.map {
-      case tp -> Refer(value) => lazyVal(tp, c.untypecheck(value.duplicate))
+      case tp -> Refer(value) => lazyVal(tp, value)
       case tp -> CaseObject => lazyVal(tp, constValueOf(tp))
       case tp -> CaseClass(fields) =>
         val termName = TermName(c.freshName())
@@ -151,7 +151,7 @@ class GenMacro(val c: blackbox.Context) {
       } { value =>
         for {
           _ <- State.modifySecond[Variables, Values](
-            _.updated(weakTypeOf[A], Refer(value))
+            _.updated(weakTypeOf[A], Refer(c.untypecheck(value.duplicate)))
           )
           variables <- State.get[VState].map(_._1)
           _ <- State.traverse(variables.keySet - weakTypeOf[A])(getOrElseCreateValue)
