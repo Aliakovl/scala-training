@@ -14,6 +14,11 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     f(a).run(s1)
   }
 
+  def flatMapW[F, B](ff: A => State[(S, F), B]): State[(S, F), B] = State { case (s, f) =>
+    val (s1, a) = run(s)
+    ff(a).run((s1, f))
+  }
+
   def as[B](b: B): State[S, B] = State { s =>
     val (s1, _) = run(s)
     (s1, b)
@@ -35,6 +40,8 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     val (s, a) = run(from(t))
     (to(s), a)
   }
+
+  def eval(init: S): S = run(init)._1
 }
 
 private[macros] object State {
