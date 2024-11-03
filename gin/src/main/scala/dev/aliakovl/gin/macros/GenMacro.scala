@@ -36,7 +36,7 @@ class GenMacro(val c: whitebox.Context) {
   }
 
   type Variables = Map[c.Type, c.TermName]
-  type Values = Map[c.Type, Value]
+  type Values = Map[c.Type, c.Tree]
   type VarsState[A] = State[Variables, A]
   type VState = (Variables, Values)
   type FullState[A] = State[VState, A]
@@ -50,12 +50,6 @@ class GenMacro(val c: whitebox.Context) {
     weakTypeOf[A] -> c.freshName(weakTypeOf[A].typeSymbol.name).toTermName
   )
 
-  sealed trait Value
-  case class Refer(value: c.Tree) extends Value
-  case class CaseClass(fields: List[List[c.TermName]]) extends Value
-  case object CaseObject extends Value
-  case class SealedTrait(subclasses: Map[c.Type, c.TermName]) extends Value
-
   def block[A: c.WeakTypeTag](statements: List[c.Expr[Any]], expr: c.Expr[A]): c.Expr[A] =
     c.Expr[A](q"..$statements; $expr")
 
@@ -64,44 +58,34 @@ class GenMacro(val c: whitebox.Context) {
       q"lazy val $variable: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
     }
 
-    def declaration(tpe: c.Type, value: Value): c.Tree = value match {
-      case Refer(value) => value
-      case CaseObject => constValueOf(tpe)
-      case CaseClass(fields) =>
-        val termName = TermName(c.freshName())
-        val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
-        construct(tpe, args)
-        toGen(termName)(construct(tpe, args))
-      case SealedTrait(subclasses) =>
-        if (subclasses.isEmpty) fail(s"Type ${tpe.typeSymbol.name} does not have constructors")
-        val termName = TermName(c.freshName())
-        toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
-    }
-
     val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
-      lazyVal(variable, tpe, declaration(tpe, values(tpe)))
+      lazyVal(variable, tpe, values(tpe))
     }.toList
 
     block(declarations, c.Expr[Gen[A]](Ident(variables(weakTypeOf[A]))))
   }
 
-  def buildValue[A: c.WeakTypeTag](tpe: c.Type): FullState[Value] = {
+  def buildValue[A: c.WeakTypeTag](tpe: c.Type): FullState[c.Tree] = {
     val sym = tpe.typeSymbol
     val genType = constructType[Gen](tpe)
     Option.when[c.Tree](tpe != weakTypeOf[A]) {
       c.inferImplicitValue(genType, withMacrosDisabled = true)
     }.flatMap { implicitValue =>
       Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
-    }.fold[FullState[Value]] {
+    }.fold[FullState[c.Tree]] {
       if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-        State.pure(CaseObject)
+        State.pure(constValueOf(tpe))
       } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
       } else if (isAbstractSealed(sym)) {
         val subtypes = subTypesOf(tpe)
         State.traverse(subtypes) { subtype =>
           getVariableName(subtype).map(subtype -> _)
-        }.map(_.toMap).map(SealedTrait)
+        }.map(_.toMap).map { subclasses =>
+          if (subclasses.isEmpty) fail(s"Type ${tpe.typeSymbol.name} does not have constructors")
+          val termName = TermName(c.freshName())
+          toGen(termName)(constructCases(termName)(subclasses){ name => callApply(Ident(name))(termName) })
+        }
       } else if (isConcreteClass(sym)) {
         State.sequence {
           notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
@@ -109,12 +93,17 @@ class GenMacro(val c: whitebox.Context) {
               getVariableName(param.info)
             }
           }
-        }.map(CaseClass)
+        }.map { fields =>
+          val termName = TermName(c.freshName())
+          val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
+          construct(tpe, args)
+          toGen(termName)(construct(tpe, args))
+        }
       } else {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
       }
     } { implicitValue =>
-      State.pure(Refer(implicitValue))
+      State.pure(implicitValue)
     }
   }
 
@@ -126,7 +115,7 @@ class GenMacro(val c: whitebox.Context) {
     }(State.pure)
   } yield name
 
-  def getOrElseCreateValue[A: WeakTypeTag](tpe: c.Type): FullState[Value] = {
+  def getOrElseCreateValue[A: WeakTypeTag](tpe: c.Type): FullState[c.Tree] = {
     State.get[VState].map(_._2).flatMap { values =>
       values.get(tpe) match {
         case Some(value) => State.pure(value)
@@ -147,7 +136,7 @@ class GenMacro(val c: whitebox.Context) {
       } { value =>
         for {
           _ <- State.modifySecond[Variables, Values](
-            _.updated(weakTypeOf[A], Refer(c.untypecheck(value.duplicate)))
+            _.updated(weakTypeOf[A], c.untypecheck(value.duplicate))
           )
           variables <- State.get[VState].map(_._1)
           _ <- State.traverse(variables.keySet - weakTypeOf[A])(getOrElseCreateValue)
