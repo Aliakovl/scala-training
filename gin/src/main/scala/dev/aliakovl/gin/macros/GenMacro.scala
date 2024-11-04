@@ -97,17 +97,9 @@ object GenMacro {
         c.inferImplicitValue(genType)
       }.filterNot(_ == EmptyTree)
     }.map(_.getOrElse(fail(s"fail to find implicit ${tpe.typeSymbol.fullName}")))
-      .map(t => c.untypecheck(expandDeferred.transform(t))).zip {
-        for {
-          variables <- State.get[VState].map(_._1)
-          _ <- variables.get(tpe) match {
-            case Some(_) => State.unit[VState]
-            case None => State.modifyFirst[Variables, Values](_.updated(tpe, c.freshName(tpe.typeSymbol.name).toTermName))
-          }
-        } yield ()
-      }.map(_._1)
+      .map(t => c.untypecheck(expandDeferred.transform(t))).zip(createIfNotExists(tpe)).map(_._1)
 
-    def updateIfNotExists(tpe: c.Type, value: c.Tree): State[(Variables, Values), Unit] = {
+    def updateIfNotExists(tpe: c.Type, value: c.Tree): State[VState, Unit] = {
       for {
         values <- State.get[VState].map(_._2)
         _ <- if (values.contains(tpe)) {
@@ -118,10 +110,21 @@ object GenMacro {
       } yield ()
     }
 
+    def createIfNotExists(tpe: c.Type): State[VState, TermName] = {
+      for {
+        variables <- State.get[VState].map(_._1)
+        name <- variables.get(tpe) match {
+          case Some(value) => State.pure[VState, TermName](value)
+          case None =>
+            val name = c.freshName(tpe.typeSymbol.name).toTermName
+            State.modifyFirst[Variables, Values](_.updated(tpe, name)).as(name)
+        }
+      } yield name
+    }
+
     def getVariableName(tpe: c.Type): FullState[TermName] = for {
       variables <- State.get[VState].map(_._1)
       name <- State.pure(variables.get(tpe)).fallback {
-        // если уже есть tpe, что но нужно добавлять
         findImplicit(tpe).flatMap(s => updateIfNotExists(tpe, s)) *> State.get[VState].map(_._1).map(_.apply(tpe))
       }
     } yield name
@@ -132,9 +135,9 @@ object GenMacro {
           case Some(value) => State.pure(value)
           case None =>
             for {
-              value <- (State.modifyFirst[Variables, Values](_.updated(tpe, c.freshName(tpe.typeSymbol.name).toTermName)) *> buildValue(tpe))
+              value <- (createIfNotExists(tpe) *> buildValue(tpe))
                 .fallback(findImplicit(tpe))
-              _ <- State.modifySecond[Variables, Values](_.updated(tpe, value))
+              _ <- updateIfNotExists(tpe, value)
             } yield value
         }
       }
@@ -145,14 +148,12 @@ object GenMacro {
         getOrElseCreateValue(typeToGen).as(())
       } { value =>
         for {
-          _ <- State.modifySecond[Variables, Values](
-            _.updated(typeToGen, c.untypecheck(value.duplicate))
-          )
-          _ <- State.modifyFirst[Variables, Values](
-            _.updated(typeToGen, c.freshName(typeToGen.typeSymbol.name).toTermName)
-          )
+          _ <- updateIfNotExists(typeToGen, c.untypecheck(value.duplicate))
+          _ <- createIfNotExists(typeToGen)
           variables <- State.get[VState].map(_._1)
-          _ <- State.traverse(variables.keySet - typeToGen)(findImplicit)
+          _ <- State.traverse(variables.keySet - typeToGen) { tpe =>
+            findImplicit(tpe).flatMap(updateIfNotExists(tpe, _))
+          }
         } yield ()
       }
     }
