@@ -4,6 +4,8 @@ package macros
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 
+object Lazy { def apply[T](variable: String): T = ??? }
+
 object GenMacro {
   def makeImpl[A: c.WeakTypeTag](c: whitebox.Context): c.Expr[Gen[A]] = Stack.withContext[Gen[A]](c) { stack =>
     import c.universe._
@@ -12,6 +14,25 @@ object GenMacro {
     val typeToGen = weakTypeOf[A]
     val genSymbol = symbolOf[Gen.type].asClass.module
     val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
+
+    object DeferredRef {
+      private val symbol = symbolOf[Lazy.type].asClass.module
+
+      def apply(tpe: c.Type, variable: String): c.Tree =
+        q"$symbol.apply[$tpe]($variable)"
+
+      def unapply(tree: c.Tree): Option[String] = tree match {
+        case q"$module.apply[$_](${Literal(Constant(variable: String))})" if module.symbol == symbol => Some(variable)
+        case _ => None
+      }
+    }
+
+    val expandDeferred = new Transformer {
+      override def transform(tre: c.Tree): c.Tree = tre match {
+        case DeferredRef(variable) => q"${TermName(variable)}"
+        case _                   => super.transform(tre)
+      }
+    }
 
     def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
 
@@ -23,19 +44,27 @@ object GenMacro {
         q"lazy val $variable: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
       }
 
-      val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
-        lazyVal(variable, tpe, values(tpe))
-      }.toList
-
-      block(declarations, c.Expr[Gen[A]](Ident(variables(typeToGen))))
+      if (stack.depth > 1) {
+        val name = TermName(c.freshName())
+        c.Expr[Gen[A]](
+          q"""{
+            lazy val $name: ${weakTypeOf[Gen[A]]} = ${DeferredRef(weakTypeOf[Gen[A]], variables(typeToGen).decodedName.toString)}
+            $name
+            }""")
+      } else {
+        val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
+          lazyVal(variable, tpe, values(tpe))
+        }.toList
+        block(declarations, c.Expr[Gen[A]](Ident(variables(typeToGen))))
+      }
     }
 
-    def buildValue(tpe: c.Type): FullState[c.Tree] = {
+    def buildValue(tpe: c.Type): FullState[Option[c.Tree]] = {
       val sym = tpe.typeSymbol
       if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-        State.pure(constValueOf(tpe))
+        State.some(constValueOf(tpe))
       } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
-        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
+        State.none
       } else if (isAbstractSealed(sym)) {
         val subtypes = subTypesOf(tpe)
         State.traverse(subtypes) { subtype =>
@@ -43,7 +72,7 @@ object GenMacro {
         }.map(_.toMap).map { subclasses =>
           if (subclasses.isEmpty) fail(s"Type ${tpe.typeSymbol.name} does not have constructors")
           val termName = TermName(c.freshName())
-          toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
+          Some(toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) }))
         }
       } else if (isConcreteClass(sym)) {
         State.sequence {
@@ -55,31 +84,46 @@ object GenMacro {
         }.map { fields =>
           val termName = TermName(c.freshName())
           val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
-          construct(tpe, args)
-          toGen(termName)(construct(tpe, args))
+          Some(toGen(termName)(construct(tpe, args)))
         }
       } else {
-        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
+        State.none
       }
+    }
 
+    def findImplicit(tpe: c.Type): FullState[c.Tree] = stack.withState {
       val genType = constructType[Gen](tpe)
-      Option.when[c.Tree](tpe != typeToGen) {
-        c.inferImplicitValue(genType, withMacrosDisabled = true)
-      }.flatMap { implicitValue =>
-        Option.when[c.Tree](implicitValue != EmptyTree)(implicitValue)
-      }.fold[FullState[c.Tree]] {
-        ???
-      } { implicitValue =>
-        State.pure(implicitValue)
-      }
+      Option {
+        c.inferImplicitValue(genType)
+      }.filterNot(_ == EmptyTree)
+    }.map(_.getOrElse(fail(s"fail to find implicit ${tpe.typeSymbol.fullName}")))
+      .map(t => c.untypecheck(expandDeferred.transform(t))).zip {
+        for {
+          variables <- State.get[VState].map(_._1)
+          _ <- variables.get(tpe) match {
+            case Some(_) => State.unit[VState]
+            case None => State.modifyFirst[Variables, Values](_.updated(tpe, c.freshName(tpe.typeSymbol.name).toTermName))
+          }
+        } yield ()
+      }.map(_._1)
+
+    def updateIfNotExists(tpe: c.Type, value: c.Tree): State[(Variables, Values), Unit] = {
+      for {
+        values <- State.get[VState].map(_._2)
+        _ <- if (values.contains(tpe)) {
+          State.unit[VState]
+        } else {
+          State.modifySecond[Variables, Values](_.updated(tpe, value))
+        }
+      } yield ()
     }
 
     def getVariableName(tpe: c.Type): FullState[TermName] = for {
       variables <- State.get[VState].map(_._1)
-      name <- variables.get(tpe).fold {
-        val termName = c.freshName(tpe.typeSymbol.name).toTermName
-        State.modifyFirst[Variables, Values](_.updated(tpe, termName)).zip(getOrElseCreateValue(tpe)).as(termName)
-      }(State.pure)
+      name <- State.pure(variables.get(tpe)).fallback {
+        // если уже есть tpe, что но нужно добавлять
+        findImplicit(tpe).flatMap(s => updateIfNotExists(tpe, s)) *> State.get[VState].map(_._1).map(_.apply(tpe))
+      }
     } yield name
 
     def getOrElseCreateValue(tpe: c.Type): FullState[c.Tree] = {
@@ -88,7 +132,8 @@ object GenMacro {
           case Some(value) => State.pure(value)
           case None =>
             for {
-              value <- buildValue(tpe)
+              value <- (State.modifyFirst[Variables, Values](_.updated(tpe, c.freshName(tpe.typeSymbol.name).toTermName)) *> buildValue(tpe))
+                .fallback(findImplicit(tpe))
               _ <- State.modifySecond[Variables, Values](_.updated(tpe, value))
             } yield value
         }
@@ -97,9 +142,7 @@ object GenMacro {
 
     def initValues(tree: Option[c.Tree]): FullState[Unit] = {
       tree.fold {
-        getOrElseCreateValue(typeToGen).flatMap { value =>
-          State.modifySecond[Variables, Values](_.updated(typeToGen, value))
-        }
+        getOrElseCreateValue(typeToGen).as(())
       } { value =>
         for {
           _ <- State.modifySecond[Variables, Values](
@@ -109,7 +152,7 @@ object GenMacro {
             _.updated(typeToGen, c.freshName(typeToGen.typeSymbol.name).toTermName)
           )
           variables <- State.get[VState].map(_._1)
-          _ <- State.traverse(variables.keySet - typeToGen)(getOrElseCreateValue)
+          _ <- State.traverse(variables.keySet - typeToGen)(findImplicit)
         } yield ()
       }
     }
@@ -527,9 +570,16 @@ object GenMacro {
       }
     }
 
-    ff {
+    val isMake: Boolean = {
+      c.macroApplication match {
+        case q"$_.make" => true
+        case _ => false
+      }
+    }
+
+    withStateProvided {
       State.sequence {
-          Option.when(typeToGen.typeSymbol.isClass) {
+          Option.when(typeToGen.typeSymbol.isClass && isMake) {
             mergeMethods(disassembleTree(c.prefix.tree))
           }
         }
@@ -540,8 +590,10 @@ object GenMacro {
           }
         }
         .map { genOpt =>
-          val termName = TermName(c.freshName())
-          genOpt.map(specifiedTree(termName)).map(toGen(termName))
+          genOpt.map { gen =>
+            val termName = TermName(c.freshName())
+            toGen(termName)(specifiedTree(termName)(gen))
+          }
         }
         .flatMapW(initValues)
     }((genTree _).tupled)

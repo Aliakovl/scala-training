@@ -15,13 +15,22 @@ final class Stack[C <: whitebox.Context with Singleton] {
 
   def depth: Int = states.size
 
-  def push(state: VState): Unit = {
+  private def push(state: VState): Unit = {
     states = state :: states
   }
 
-  def top(): VState = states.head
+  private def top(): VState = states.head
 
-  def pull(): VState = {
+  private def pullWithTop(): VState = {
+    val top = states.head
+    states = states.tail match {
+      case _ :: tail => NonEmptyList(top, tail)
+      case Nil => states
+    }
+    top
+  }
+
+  private def pull(): VState = {
     val top = states.head
     states = states.tail match {
       case head :: tail => NonEmptyList(head, tail)
@@ -34,14 +43,24 @@ final class Stack[C <: whitebox.Context with Singleton] {
     push(state)
     val res = thunk match {
       case Some(value) =>
-        (top(), Some(value))
-      case none => (state, none)
+        val top = pullWithTop()
+        (top, Some(value))
+      case none =>
+        pull()
+        (state, none)
     }
-    pull()
     res
   }
 
-  def ff[A](s: FullState[Any])(f: VState => A): A = f(s.eval(top()))
+  def withStateProvided[A](s: => FullState[Any])(f: VState => A): A = {
+    val s1 = s.eval(top())
+    val res = f(s1)
+    if (states.tail.nonEmpty) {
+      pull()
+      push(s1)
+    }
+    res
+  }
 
 }
 
@@ -54,6 +73,8 @@ object Stack {
   def withContext[A](c: whitebox.Context)(f: Stack[c.type] => c.Expr[A]): c.Expr[A] = {
     val stack = threadLocalStack.get()
     try f(stack.asInstanceOf[Stack[c.type]])
-    finally if (stack.depth <= 1) threadLocalStack.remove()
+    finally if (stack.depth <= 1) {
+      threadLocalStack.remove()
+    }
   }
 }

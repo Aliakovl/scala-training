@@ -24,10 +24,16 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     (s1, b)
   }
 
-  def zip[B](other: State[S, B]): State[S, (A, B)] = State { s =>
+  def zip[B](other: => State[S, B]): State[S, (A, B)] = State { s =>
     val (s1, a) = run(s)
     val (s2, b) = other.run(s1)
     (s2, (a, b))
+  }
+
+  def *>[B](other: => State[S, B]): State[S, B] = State { s =>
+    val (s1, _) = run(s)
+    val (s2, b) = other.run(s1)
+    (s2, b)
   }
 
   def flatTap[B](f: A => State[S, B]): State[S, A] = State { s =>
@@ -36,9 +42,12 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     (s2, a)
   }
 
-  def modifyState[T](to: S => T)(from: T => S): State[T, A] = State { t =>
-    val (s, a) = run(from(t))
-    (to(s), a)
+  def fallback[B](f: => State[S, B])(implicit ev: A <:< Option[B]): State[S, B] = State { s =>
+    val (s1, a) = run(s)
+    ev(a) match {
+      case Some(value) => (s1, value)
+      case None => f.run(s)
+    }
   }
 
   def eval(init: S): S = run(init)._1
@@ -48,6 +57,8 @@ private[macros] object State {
   def apply[S, A](f: S => (S, A)): State[S, A] = new State[S, A](f)
   def pure[S, A](a: A): State[S, A] = State(s => (s, a))
   def unit[S]: State[S, Unit] = State(s => (s, ()))
+  def none[S, A]: State[S, Option[A]] = State(s => (s, None))
+  def some[S, A](a: A): State[S, Option[A]] = State(s => (s, Some(a)))
   def get[S]: State[S, S] = State(s => (s, s))
   def modify[S](f: S => S): State[S, Unit] = State(s => (f(s), ()))
   def modifyFirst[S, T](f: S => S): State[(S, T), Unit] =
