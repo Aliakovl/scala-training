@@ -96,7 +96,7 @@ object GenMacro {
       Option {
         c.inferImplicitValue(genType)
       }.filterNot(_ == EmptyTree)
-    }.map(_.getOrElse(fail(s"fail to find implicit ${tpe.typeSymbol.fullName}")))
+    }.map(_.getOrElse(fail(s"fail to find implicit $tpe")))
       .map(t => c.untypecheck(expandDeferred.transform(t))).zip(createIfNotExists(tpe)).map(_._1)
 
     def updateIfNotExists(tpe: c.Type, value: c.Tree): State[VState, Unit] = {

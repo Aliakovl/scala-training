@@ -1,7 +1,5 @@
 package dev.aliakovl.gin.macros
 
-import cats.data.NonEmptyList
-
 import scala.reflect.macros.whitebox
 
 final class Stack[C <: whitebox.Context with Singleton] {
@@ -11,9 +9,11 @@ final class Stack[C <: whitebox.Context with Singleton] {
   type VState = (Variables, Values)
   type FullState[A] = State[VState, A]
 
-  private var states: NonEmptyList[VState] = NonEmptyList.one((Map.empty, Map.empty))
+  private var states: List[VState] = List.empty
 
   def depth: Int = states.size
+
+  def get: List[VState] = states
 
   private def push(state: VState): Unit = {
     states = state :: states
@@ -23,20 +23,14 @@ final class Stack[C <: whitebox.Context with Singleton] {
 
   private def pullWithTop(): VState = {
     val top = states.head
-    states = states.tail match {
-      case _ :: tail => NonEmptyList(top, tail)
-      case Nil => states
-    }
+    pull()
+    pull()
+    push(top)
     top
   }
 
-  private def pull(): VState = {
-    val top = states.head
-    states = states.tail match {
-      case head :: tail => NonEmptyList(head, tail)
-      case Nil => states
-    }
-    top
+  private def pull(): Unit = {
+    states = states.drop(1)
   }
 
   def withState[A](thunk: => Option[A]): FullState[Option[A]] = State { state =>
@@ -53,13 +47,19 @@ final class Stack[C <: whitebox.Context with Singleton] {
   }
 
   def withStateProvided[A](s: => FullState[Any])(f: VState => A): A = {
-    val s1 = s.eval(top())
-    val res = f(s1)
-    if (states.tail.nonEmpty) {
+    if (states.isEmpty) {
+      states = (Map.empty: Variables, Map.empty: Values) :: states
+      val s1 = s.eval((Map.empty: Variables, Map.empty: Values))
+      val res = f(s1)
+      states = List.empty
+      res
+    } else {
+      val s1 = s.eval(top())
+      val res = f(s1)
       pull()
       push(s1)
+      res
     }
-    res
   }
 
 }
@@ -73,7 +73,7 @@ object Stack {
   def withContext[A](c: whitebox.Context)(f: Stack[c.type] => c.Expr[A]): c.Expr[A] = {
     val stack = threadLocalStack.get()
     try f(stack.asInstanceOf[Stack[c.type]])
-    finally if (stack.depth <= 1) {
+    finally if (stack.depth <= 0) {
       threadLocalStack.remove()
     }
   }
