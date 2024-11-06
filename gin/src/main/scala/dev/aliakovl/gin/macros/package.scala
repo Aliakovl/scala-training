@@ -4,10 +4,11 @@ import scala.reflect.macros.whitebox
 
 package object macros {
 
-  implicit class DebugOps[A](private val a: A) extends AnyVal {
+  implicit class DebugOps[A](private val value: A) extends AnyVal {
     def debug[C <: whitebox.Context](c: C): A = {
-      println(s"${DebugOps.next()}\t#${Thread.currentThread().getId}#${Thread.currentThread().getStackTrace()(2)}|${c.enclosingPosition} $a")
-      a
+      val message = s"${DebugOps.next()}\t#${Thread.currentThread().getId}#${Thread.currentThread().getStackTrace()(2)}: $value"
+      c.info(c.enclosingPosition, message, force = false)
+      value
     }
   }
 
@@ -20,5 +21,3 @@ package object macros {
     }
   }
 }
-
-

@@ -14,11 +14,6 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     f(a).run(s1)
   }
 
-  def flatMapW[F, B](ff: A => State[(S, F), B]): State[(S, F), B] = State { case (s, f) =>
-    val (s1, a) = run(s)
-    ff(a).run((s1, f))
-  }
-
   def as[B](b: B): State[S, B] = State { s =>
     val (s1, _) = run(s)
     (s1, b)
@@ -40,6 +35,13 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     val (s1, a) = run(s)
     val (s2, _) = f(a).run(s1)
     (s2, a)
+  }
+
+  def modifyState[T](implicit lens: Lens[T, S]): State[T, A] = State { t =>
+    val s = lens.get(t)
+    val (s1, a) = run(s)
+    val t1 = lens.set(t, s1)
+    (t1, a)
   }
 
   def fallback[B](f: => State[S, B])(implicit ev: A <:< Option[B]): State[S, B] = State { s =>

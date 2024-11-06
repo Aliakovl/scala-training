@@ -91,13 +91,16 @@ object GenMacro {
       }
     }
 
-    def findImplicit(tpe: c.Type): FullState[c.Tree] = stack.withState {
+    def findImplicit(tpe: c.Type): FullState[c.Tree] = {
       val genType = constructType[Gen](tpe)
-      Option {
-        c.inferImplicitValue(genType)
-      }.filterNot(_ == EmptyTree)
-    }.map(_.getOrElse(fail(s"fail to find implicit $tpe")))
-      .map(t => c.untypecheck(expandDeferred.transform(t))).zip(createIfNotExists(tpe)).map(_._1)
+      stack.withState {
+          Option(c.inferImplicitValue(genType))
+            .filterNot(_ == EmptyTree)
+            .toRight(s"fail to find implicit $tpe")
+        }
+        .map(x => x.fold(fail(_), identity))
+        .map(t => c.untypecheck(expandDeferred.transform(t))).zip(createIfNotExists(tpe)).map(_._1)
+    }
 
     def updateIfNotExists(tpe: c.Type, value: c.Tree): State[VState, Unit] = {
       for {
@@ -125,7 +128,7 @@ object GenMacro {
     def getVariableName(tpe: c.Type): FullState[TermName] = for {
       variables <- State.get[VState].map(_._1)
       name <- State.pure(variables.get(tpe)).fallback {
-        findImplicit(tpe).flatMap(s => updateIfNotExists(tpe, s)) *> State.get[VState].map(_._1).map(_.apply(tpe))
+        findImplicit(tpe).flatMap(updateIfNotExists(tpe, _)) *> State.get[VState].map(_._1).map(_.apply(tpe))
       }
     } yield name
 
@@ -596,7 +599,7 @@ object GenMacro {
             toGen(termName)(specifiedTree(termName)(gen))
           }
         }
-        .flatMapW(initValues)
+        .modifyState[VState].flatMap(initValues)
     }((genTree _).tupled)
   }
 }

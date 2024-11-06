@@ -19,7 +19,7 @@ final class Stack[C <: whitebox.Context with Singleton] {
     states = state :: states
   }
 
-  private def top(): VState = states.head
+  private def top(): Option[VState] = states.headOption
 
   private def pullWithTop(): VState = {
     val top = states.head
@@ -33,28 +33,27 @@ final class Stack[C <: whitebox.Context with Singleton] {
     states = states.drop(1)
   }
 
-  def withState[A](thunk: => Option[A]): FullState[Option[A]] = State { state =>
+  def withState[A](thunk: => Either[String, A]): FullState[Either[String, A]] = State { state =>
     push(state)
-    val res = thunk match {
-      case Some(value) =>
+    thunk match {
+      case success@Right(_) =>
         val top = pullWithTop()
-        (top, Some(value))
-      case none =>
+        (top, success)
+      case failure@Left(_) =>
         pull()
-        (state, none)
+        (state, failure)
     }
-    res
   }
 
   def withStateProvided[A](s: => FullState[Any])(f: VState => A): A = {
-    if (states.isEmpty) {
+    top().fold {
       states = (Map.empty: Variables, Map.empty: Values) :: states
       val s1 = s.eval((Map.empty: Variables, Map.empty: Values))
       val res = f(s1)
       states = List.empty
       res
-    } else {
-      val s1 = s.eval(top())
+    } { top =>
+      val s1 = s.eval(top)
       val res = f(s1)
       pull()
       push(s1)
