@@ -4,8 +4,6 @@ package macros
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 
-object Lazy { def apply[T](variable: String): T = ??? }
-
 object GenMacro {
   def makeImpl[A: c.WeakTypeTag](c: whitebox.Context): c.Expr[Gen[A]] = Stack.withContext[Gen[A]](c) { stack =>
     import c.universe._
@@ -27,7 +25,7 @@ object GenMacro {
       }
     }
 
-    val expandDeferred = new Transformer {
+    val pullOutLazyVariables = new Transformer {
       override def transform(tre: c.Tree): c.Tree = tre match {
         case LazyRef(variable) => Ident(TermName(variable))
         case _                   => super.transform(tre)
@@ -98,8 +96,8 @@ object GenMacro {
             .filterNot(_ == EmptyTree)
             .toRight(s"fail to find implicit $tpe")
         }
-        .map(x => x.fold(fail(_), identity))
-        .map(t => c.untypecheck(expandDeferred.transform(t))).zip(createIfNotExists(tpe)).map(_._1)
+        .map(_.fold(fail, identity))
+        .map(tree => c.untypecheck(pullOutLazyVariables.transform(tree))) <* createIfNotExists(tpe)
     }
 
     def updateIfNotExists(tpe: c.Type, value: c.Tree): State[VState, Unit] = {
@@ -601,4 +599,6 @@ object GenMacro {
         .modifyState[VState].flatMap(initValues)
     }((genTree _).tupled)
   }
+
+  object Lazy { def apply[T](variable: String): T = ??? }
 }

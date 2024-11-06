@@ -25,6 +25,12 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     (s2, (a, b))
   }
 
+  def <*[B](other: => State[S, B]): State[S, A] = State { s =>
+    val (s1, a) = run(s)
+    val (s2, _) = other.run(s1)
+    (s2, a)
+  }
+
   def *>[B](other: => State[S, B]): State[S, B] = State { s =>
     val (s1, _) = run(s)
     val (s2, b) = other.run(s1)
