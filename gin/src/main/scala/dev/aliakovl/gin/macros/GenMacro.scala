@@ -59,12 +59,12 @@ object GenMacro {
       }
     }
 
-    def buildValue(tpe: c.Type): FullState[Option[c.Tree]] = {
+    def buildValue(tpe: c.Type): FullState[c.Tree] = {
       val sym = tpe.typeSymbol
       if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-        State.some(constValueOf(tpe))
+        State.pure(constValueOf(tpe))
       } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
-        State.none
+        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
       } else if (isAbstractSealed(sym)) {
         val subtypes = subTypesOf(tpe)
         State.traverse(subtypes) { subtype =>
@@ -72,7 +72,7 @@ object GenMacro {
         }.map(_.toMap).map { subclasses =>
           if (subclasses.isEmpty) fail(s"Type ${tpe.typeSymbol.name} does not have constructors")
           val termName = TermName(c.freshName())
-          Some(toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) }))
+          toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
         }
       } else if (isConcreteClass(sym)) {
         State.sequence {
@@ -84,10 +84,10 @@ object GenMacro {
         }.map { fields =>
           val termName = TermName(c.freshName())
           val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
-          Some(toGen(termName)(construct(tpe, args)))
+          toGen(termName)(construct(tpe, args))
         }
       } else {
-        State.none
+        c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
       }
     }
 
@@ -135,8 +135,8 @@ object GenMacro {
           case Some(value) => State.pure(value)
           case None =>
             for {
-              value <- (createIfNotExists(tpe) *> buildValue(tpe))
-                .fallback(findImplicit(tpe))
+              _ <- createIfNotExists(tpe)
+              value <- buildValue(tpe)
               _ <- updateIfNotExists(tpe, value)
             } yield value
         }

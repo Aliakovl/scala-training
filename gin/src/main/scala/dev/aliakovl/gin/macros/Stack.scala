@@ -73,6 +73,11 @@ object Stack {
   def withContext[A](c: whitebox.Context)(f: Stack[c.type] => c.Expr[A]): c.Expr[A] = {
     val stack = threadLocalStack.get()
     try f(stack.asInstanceOf[Stack[c.type]])
+    catch {
+      case e: Throwable =>
+        stack.states = List.empty
+        throw e
+    }
     finally if (stack.depth <= 0) {
       threadLocalStack.remove()
     }

@@ -3,7 +3,7 @@ package internal
 
 import cats.Monad
 
-abstract private[gin] class GenLowPriority {
+trait GenLowPriority {
   implicit val catsMonadForGen: Monad[Gen] = new Monad[Gen] {
     override def pure[A](x: A): Gen[A] = Gen.const(x)
 
