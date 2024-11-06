@@ -15,7 +15,7 @@ object GenMacro {
     val genSymbol = symbolOf[Gen.type].asClass.module
     val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
-    object DeferredRef {
+    object LazyRef {
       private val symbol = symbolOf[Lazy.type].asClass.module
 
       def apply(tpe: c.Type, variable: String): c.Tree =
@@ -29,7 +29,7 @@ object GenMacro {
 
     val expandDeferred = new Transformer {
       override def transform(tre: c.Tree): c.Tree = tre match {
-        case DeferredRef(variable) => q"${TermName(variable)}"
+        case LazyRef(variable) => Ident(TermName(variable))
         case _                   => super.transform(tre)
       }
     }
@@ -44,11 +44,11 @@ object GenMacro {
         q"lazy val $variable: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
       }
 
-      if (stack.depth > 1) {
+      if (depth > 1) {
         val name = TermName(c.freshName())
         c.Expr[Gen[A]](
           q"""{
-            lazy val $name: ${weakTypeOf[Gen[A]]} = ${DeferredRef(weakTypeOf[Gen[A]], variables(typeToGen).decodedName.toString)}
+            lazy val $name: ${weakTypeOf[Gen[A]]} = ${LazyRef(weakTypeOf[Gen[A]], variables(typeToGen).decodedName.toString)}
             $name
             }""")
       } else {
@@ -93,7 +93,7 @@ object GenMacro {
 
     def findImplicit(tpe: c.Type): FullState[c.Tree] = {
       val genType = constructType[Gen](tpe)
-      stack.withState {
+      withState {
           Option(c.inferImplicitValue(genType))
             .filterNot(_ == EmptyTree)
             .toRight(s"fail to find implicit $tpe")
@@ -396,7 +396,6 @@ object GenMacro {
             case Specified(DefaultArg(value)) => q"$value(...$acc)"
             case other => specifiedTree(termName)(other)
           }.toList
-
           acc :+ params
         }
         construct(classSymbol, args)

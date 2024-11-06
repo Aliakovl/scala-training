@@ -9,11 +9,10 @@ final class Stack[C <: whitebox.Context with Singleton] {
   type VState = (Variables, Values)
   type FullState[A] = State[VState, A]
 
+  private val init: VState = (Map.empty, Map.empty)
   private var states: List[VState] = List.empty
 
   def depth: Int = states.size
-
-  def get: List[VState] = states
 
   private def push(state: VState): Unit = {
     states = state :: states
@@ -22,11 +21,12 @@ final class Stack[C <: whitebox.Context with Singleton] {
   private def top(): Option[VState] = states.headOption
 
   private def pullWithTop(): VState = {
-    val top = states.head
-    pull()
-    pull()
-    push(top)
-    top
+    top().fold(init) { top =>
+      pull()
+      pull()
+      push(top)
+      top
+    }
   }
 
   private def pull(): Unit = {
@@ -45,19 +45,22 @@ final class Stack[C <: whitebox.Context with Singleton] {
     }
   }
 
-  def withStateProvided[A](s: => FullState[Any])(f: VState => A): A = {
+  def withStateProvided[A](state: => FullState[Any])(f: VState => A): A = {
+    def evaluate(from: VState): (VState, A) = {
+      val to = state.eval(from)
+      (to, f(to))
+    }
+
     top().fold {
-      states = (Map.empty: Variables, Map.empty: Values) :: states
-      val s1 = s.eval((Map.empty: Variables, Map.empty: Values))
-      val res = f(s1)
+      states = init :: states
+      val value = evaluate(init)._2
       states = List.empty
-      res
-    } { top =>
-      val s1 = s.eval(top)
-      val res = f(s1)
+      value
+    } { state =>
+      val (newState, value) = evaluate(state)
       pull()
-      push(s1)
-      res
+      push(newState)
+      value
     }
   }
 
