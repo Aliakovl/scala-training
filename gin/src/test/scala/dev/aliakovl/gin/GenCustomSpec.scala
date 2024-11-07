@@ -118,7 +118,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
     all (elements) should (be (empty) or contain only 1)
   }
 
-  ignore should "use implicit method to make Gen[T] with inner macro implicit" in TestCase {
+  it should "use implicit method to make Gen[T] with inner macro implicit" in TestCase {
     implicit val numberGen: Gen[Int] = Gen.const(42)
     implicit def optionGen[T: Gen]: Gen[Option[T]] = Gen.random[T].map(Some(_))
 

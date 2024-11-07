@@ -10,7 +10,7 @@ import java.util.UUID
 import scala.util.Random
 
 case class User private (id: UUID, name: String) {
-  def this(myName: String) {
+  def this(myName: String) = {
     this(UUID.randomUUID(), myName)
   }
 }

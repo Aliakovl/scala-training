@@ -69,7 +69,7 @@ object GenTest {
 
   implicit val sec: Int = 1234
 
-  val gens = Seq[Gen[Any]](
+  val gens: Seq[Gen[Any]] = Seq[Gen[Any]](
     Gen.random[MyClass2],
     Gen.custom[MyClass2].make,
     Gen.custom[List[MyClass1]].make,

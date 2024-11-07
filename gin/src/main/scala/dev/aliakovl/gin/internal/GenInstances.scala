@@ -5,7 +5,7 @@ import java.time.temporal.ChronoUnit
 import java.time.{Instant, LocalDate, LocalDateTime, YearMonth}
 import java.util.UUID
 
-trait GenInstances {
+trait GenInstances extends GenDerivation {
   implicit val uuidGen: Gen[UUID] = Gen { random =>
     new UUID(
       (random.nextLong() & 0xffff0fff) | 0x00004000,

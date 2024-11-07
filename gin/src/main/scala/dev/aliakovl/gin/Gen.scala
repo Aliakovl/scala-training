@@ -45,7 +45,6 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
 
 object Gen
     extends GenLowPriority
-    with GenDerivation
     with GenInstances
     with GenOneOf {
 
@@ -80,11 +79,11 @@ object Gen
     Gen.charGen.many[LazyList](size).map(_.mkString)
   }
 
-  def alphanumeric(size: Int): Gen[String] = apply {
+  def alphanumeric(size: Int): Gen[String] = Gen {
     _.alphanumeric.take(size).mkString
   }
 
-  def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = apply {
+  def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = Gen {
     _.between(minInclusive, maxExclusive)
   }
 }
