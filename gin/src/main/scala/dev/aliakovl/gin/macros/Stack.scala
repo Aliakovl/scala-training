@@ -14,16 +14,6 @@ final class Stack[C <: whitebox.Context with Singleton] {
   private var states: List[VState] = List.empty
   private var error: Option[String] = None
 
-  def throwError(e: AbortMacroException): Nothing = {
-    error = Some(e.msg)
-    states = List.empty
-    throw e
-  }
-
-  def isEmpty: Boolean = states.isEmpty
-
-  def depth: Int = states.size
-
   private def push(state: VState): Unit = {
     states = state :: states
   }
@@ -42,6 +32,16 @@ final class Stack[C <: whitebox.Context with Singleton] {
   private def pop(): Unit = {
     states = states.drop(1)
   }
+
+  private def throwError(e: AbortMacroException): Nothing = {
+    error = Some(e.msg)
+    states = List.empty
+    throw e
+  }
+
+  def isEmpty: Boolean = states.isEmpty
+
+  def depth: Int = states.size
 
   def statefulSearch[A](thunk: => Either[String, A]): FullState[Either[String, A]] = State { state =>
     push(state)
@@ -73,7 +73,6 @@ final class Stack[C <: whitebox.Context with Singleton] {
       value
     }
   }
-
 }
 
 object Stack {
