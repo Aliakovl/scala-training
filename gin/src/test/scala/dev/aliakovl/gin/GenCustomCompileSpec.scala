@@ -72,7 +72,7 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
           |""".stripMargin shouldNot compile
       }
 
-      "could not find value for implicit parameter" in {
+      "it could not find value for implicit parameter" in {
         class A(implicit param: Int)
         class B(val value: Int)(implicit param: Int)
         "Gen.custom[A].make" shouldNot compile
@@ -81,7 +81,7 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
         "Gen.custom[Option[B]].make" shouldNot compile
       }
 
-      "param does not have default argument" in {
+      "parameter does not have default argument" in {
         case class A(param: Int)
         "Gen.custom[A].useDefault(_.param).make" shouldNot compile
         "Gen.custom[Option[A]].useDefault(_.when[Some[A]].value.param).make" shouldNot compile
@@ -94,7 +94,7 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
         "Gen.custom[Option[A]].useDefault(_.when[Some]).make" shouldNot compile
       }
 
-      "all concrete children is excluded" in {
+      "all concrete children are excluded" in {
         sealed trait A
         final class B extends A
         case class C() extends A
@@ -126,7 +126,7 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
           |""".stripMargin shouldNot compile
       }
 
-      "path in .exclude(...) ends with param" in {
+      "path in .exclude(...) ends with parameter" in {
         sealed trait A
         final class B extends A
         final class C extends A
@@ -172,7 +172,7 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
           |""".stripMargin shouldNot compile
       }
 
-      "double specification" in {
+      "specification doubles" in {
         """
           |Gen
           |  .custom[Option[Int]]
