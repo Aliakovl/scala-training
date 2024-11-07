@@ -2,6 +2,7 @@ package dev.aliakovl.gin.macros
 
 import scala.reflect.macros.runtime.AbortMacroException
 import scala.reflect.macros.whitebox
+import scala.util.control.NonFatal
 
 final class Stack[C <: whitebox.Context with Singleton] {
   type Variables = Map[C#Type, C#TermName]
@@ -33,8 +34,8 @@ final class Stack[C <: whitebox.Context with Singleton] {
     states = states.drop(1)
   }
 
-  private def throwError(e: AbortMacroException): Nothing = {
-    error = Some(e.msg)
+  private def throwError(e: Throwable): Nothing = {
+    error = Some(e.getMessage)
     states = List.empty
     throw e
   }
@@ -86,7 +87,9 @@ object Stack {
     val stack: Stack[c.type] = threadLocalStack.get().asInstanceOf[Stack[c.type]]
     try f(stack)
     catch {
-      case e: AbortMacroException => stack.throwError(e)
+      case e: Throwable =>
+        println(s"THIS: $e")
+        stack.throwError(e)
     } finally if (stack.isEmpty) {
       threadLocalStack.remove()
     }

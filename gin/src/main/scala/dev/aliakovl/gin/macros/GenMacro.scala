@@ -68,7 +68,7 @@ object GenMacro {
         State.traverse(subtypes) { subtype =>
           getVariableName(subtype).map(subtype -> _)
         }.map(_.toMap).map { subclasses =>
-          if (subclasses.isEmpty) fail(s"Type ${tpe.typeSymbol.name} does not have constructors")
+          if (subclasses.isEmpty) fail(s"Class ${tpe.typeSymbol.name} does not have constructors")
           val termName = TermName(c.freshName())
           toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
         }
@@ -94,7 +94,7 @@ object GenMacro {
       statefulSearch {
         Option(c.inferImplicitValue(genType))
           .filterNot(_ == EmptyTree)
-          .toRight(s"Fail to find implicit for type $tpe.")
+          .toRight(s"Fail to find implicit for type $tpe")
       }
         .map(_.fold(fail, identity))
         .map(tree => c.untypecheck(pullOutLazyVariables.transform(tree))) <* createIfNotExists(tpe)
@@ -169,7 +169,7 @@ object GenMacro {
     def focusWithPrism(tpe: c.Type, toType: c.Type)(next: VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
       if (tpe.typeConstructor =:= toType.typeConstructor) {
         tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-          if (!(s =:= t)) fail(s"$toType type arguments must not be narrowed, fix: $t -> $s")
+          if (!(s =:= t)) fail(s"Type arguments of $toType must not be narrowed, fix: $t -> $s")
         }
         next
       } else {
@@ -177,7 +177,7 @@ object GenMacro {
         State.traverse(subtypes) { subtype =>
           if (subtype.typeConstructor <:< toType.typeConstructor) {
             if (!(subtype <:< toType)) {
-              fail(s"$toType type arguments must not be narrowed")
+              fail(s"Type arguments of $toType must not be narrowed")
             }
             next.map(subtype -> _)
           } else {
@@ -201,7 +201,7 @@ object GenMacro {
               next(param).map(termName -> _)
             } else if (param.isImplicit) {
               val impl = c.inferImplicitValue(param.info)
-              if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
+              if (impl == EmptyTree) fail(s"Could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
               State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
             } else {
               val paramType = param.info
@@ -226,7 +226,7 @@ object GenMacro {
           val allParams = paramListsOf(publicConstructor(tpe), fromType)
           val defaultMap = defaults(patchedCompanionSymbolOf(tpe.typeSymbol))(allParams)
           focusWithLens(tpe, fromType, field) { param =>
-            defaultMap.get(param).fold(fail(s"$field does not have default argument")) { default =>
+            defaultMap.get(param).fold(fail(s"Constructor of $tpe parameter $field does not have default argument")) { default =>
               State.pure(Specified(DefaultArg(default)))
             }
           }
@@ -282,7 +282,7 @@ object GenMacro {
           val method = ExcludeMethod(selector)
           disassembleTree(other, method +: methods)
         case q"$module.custom[$_]" if module.symbol == genSymbol => methods
-        case _ => c.abort(tree.pos, "Unsupported syntax.")
+        case _ => c.abort(tree.pos, "Unsupported syntax")
       }
     }
 
@@ -300,16 +300,16 @@ object GenMacro {
             case _ => c.abort(fieldName.pos, "Only string literals supported")
           }
         case q"$module.GenCustomOps[$from]($other).when[$to]" if module.symbol == ginModule =>
-          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"$from is not sealed")
+          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
           val prism = Prism(to.tpe)
           disassembleSelector(other, prism :: selector)
         case q"$_[$from]($other).when[$to](..$_)" =>
-          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"$from is not sealed")
+          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
           val toType = subclassType(to.symbol, from.tpe)
           val prism = Prism(toType)
           disassembleSelector(other, prism :: selector)
         case _: Ident => selector
-        case tree => c.abort(tree.pos, "Unsupported path element.")
+        case tree => c.abort(tree.pos, "Unsupported path element")
       }
     }
 
@@ -406,7 +406,7 @@ object GenMacro {
       case NotSpecified(tree) => callApply(Ident(tree))(termName)
       case NotSpecifiedImplicit(tree) => tree
       case Excluded => fail("All subtypes was excluded")
-      case _ => fail("unreachable")
+      case _ => fail("Unreachable")
     }
 
     def isAbstractSealed(sym: c.Symbol): Boolean = {
@@ -460,7 +460,7 @@ object GenMacro {
 
       concreteChildren.foreach { child =>
         if (!child.asClass.isFinal && !child.asClass.isCaseClass && !child.isModuleClass) {
-          fail(s"child $child of $parent is neither final nor a case class")
+          fail(s"Child $child of $parent is neither final nor a case class")
         }
       }
 
@@ -469,7 +469,7 @@ object GenMacro {
         if (childClass.isSealed) {
           subclassesOf(childClass)
         } else {
-          fail(s"child $child of $parent is not sealed")
+          fail(s"Child $child of $parent is not sealed")
         }
       }
     }
@@ -522,7 +522,7 @@ object GenMacro {
       constructors
         .find(_.isPrimaryConstructor)
         .orElse(constructors.headOption)
-        .getOrElse(fail(s"class ${tpe.typeSymbol.name} has no public constructors"))
+        .getOrElse(fail(s"Class ${tpe.typeSymbol.name} has no public constructors"))
     }
 
     // https://github.com/scalamacros/paradise/blob/c14c634923313dd03f4f483be3d7782a9b56de0e/plugin/src/main/scala/org/scalamacros/paradise/typechecker/Namers.scala#L568-L613
