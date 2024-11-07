@@ -20,6 +20,8 @@ final class Stack[C <: whitebox.Context with Singleton] {
     throw e
   }
 
+  def isEmpty: Boolean = states.isEmpty
+
   def depth: Int = states.size
 
   private def push(state: VState): Unit = {
@@ -41,7 +43,7 @@ final class Stack[C <: whitebox.Context with Singleton] {
     states = states.drop(1)
   }
 
-  def withState[A](thunk: => Either[String, A]): FullState[Either[String, A]] = State { state =>
+  def statefulSearch[A](thunk: => Either[String, A]): FullState[Either[String, A]] = State { state =>
     push(state)
     thunk match {
       case Left(msg) =>
@@ -86,7 +88,7 @@ object Stack {
     try f(stack)
     catch {
       case e: AbortMacroException => stack.throwError(e)
-    } finally if (stack.depth <= 0) {
+    } finally if (stack.isEmpty) {
       threadLocalStack.remove()
     }
   }

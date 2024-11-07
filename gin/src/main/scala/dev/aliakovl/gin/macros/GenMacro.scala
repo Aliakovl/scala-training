@@ -91,7 +91,7 @@ object GenMacro {
 
     def findImplicit(tpe: c.Type): FullState[c.Tree] = {
       val genType = constructType[Gen](tpe)
-      withState {
+      statefulSearch {
         Option(c.inferImplicitValue(genType))
           .filterNot(_ == EmptyTree)
           .toRight(s"Fail to find implicit for type $tpe.")
