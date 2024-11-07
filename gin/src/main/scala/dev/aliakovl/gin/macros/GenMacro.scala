@@ -34,6 +34,8 @@ object GenMacro {
 
     def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
 
+    def withName[T](body: c.TermName => T): T = body(TermName(c.freshName()))
+
     def block[T](statements: List[c.Expr[Any]], expr: c.Expr[T]): c.Expr[T] =
       c.Expr[T](q"..$statements; $expr")
 
@@ -43,12 +45,12 @@ object GenMacro {
       }
 
       if (depth > 1) {
-        val name = TermName(c.freshName())
-        c.Expr[Gen[A]](
-          q"""{
+        withName { name =>
+          c.Expr[Gen[A]](q"""{
             lazy val $name: ${weakTypeOf[Gen[A]]} = ${LazyRef(weakTypeOf[Gen[A]], variables(typeToGen).decodedName.toString)}
             $name
-            }""")
+          }""")
+        }
       } else {
         val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
           lazyVal(variable, tpe, values(tpe))
@@ -69,8 +71,9 @@ object GenMacro {
           getVariableName(subtype).map(subtype -> _)
         }.map(_.toMap).map { subclasses =>
           if (subclasses.isEmpty) fail(s"Class ${tpe.typeSymbol.name} does not have constructors")
-          val termName = TermName(c.freshName())
-          toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
+          withName { termName =>
+            toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
+          }
         }
       } else if (isConcreteClass(sym)) {
         State.sequence {
@@ -80,9 +83,10 @@ object GenMacro {
             }
           }
         }.map { fields =>
-          val termName = TermName(c.freshName())
-          val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
-          toGen(termName)(construct(tpe, args))
+          withName { termName =>
+            val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
+            toGen(termName)(construct(tpe, args))
+          }
         }
       } else {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
@@ -111,11 +115,11 @@ object GenMacro {
       } yield ()
     }
 
-    def createIfNotExists(tpe: c.Type): State[VState, TermName] = {
+    def createIfNotExists(tpe: c.Type): State[VState, c.TermName] = {
       for {
         variables <- State.get[VState].map(_._1)
         name <- variables.get(tpe) match {
-          case Some(value) => State.pure[VState, TermName](value)
+          case Some(value) => State.pure[VState, c.TermName](value)
           case None =>
             val name = c.freshName(tpe.typeSymbol.name).toTermName
             State.modifyFirst[Variables, Values](_.updated(tpe, name)).as(name)
@@ -314,11 +318,11 @@ object GenMacro {
     }
 
     sealed trait SpecifiedGen
-    case class SpecifiedCaseClass(sym: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
+    case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
     case class SpecifiedSealedTrait(subclasses: Map[c.Type, SpecifiedGen]) extends SpecifiedGen
     case class Specified(tree: Arg) extends SpecifiedGen
     case class NotSpecifiedImplicit(tree: c.Tree) extends SpecifiedGen
-    case class NotSpecified(tree: c.TermName) extends SpecifiedGen
+    case class NotSpecified(name: c.TermName) extends SpecifiedGen
     case object Excluded extends SpecifiedGen
 
     def usedVariables(gen: SpecifiedGen): Set[c.TermName] = gen match {
@@ -387,7 +391,7 @@ object GenMacro {
       case _ => fail(s"Some specifications conflict")
     }
 
-    def specifiedTree(termName: TermName)(gen: SpecifiedGen): c.Tree = gen match {
+    def specifiedTree(termName: c.TermName)(gen: SpecifiedGen): c.Tree = gen match {
       case SpecifiedCaseClass(classSymbol, fields) =>
         val args = fields.foldLeft(List.empty[List[c.Tree]]) { case (acc, next) =>
           val params = next.values.map {
@@ -403,7 +407,7 @@ object GenMacro {
         constructCases(termName)(cases)(specifiedTree(termName))
       case Specified(GenArg(tree)) => callApply(tree)(termName)
       case Specified(ConstArg(tree)) => tree
-      case NotSpecified(tree) => callApply(Ident(tree))(termName)
+      case NotSpecified(name) => callApply(Ident(name))(termName)
       case NotSpecifiedImplicit(tree) => tree
       case Excluded => fail("All subtypes was excluded")
       case _ => fail("Unreachable")
@@ -417,14 +421,14 @@ object GenMacro {
       sym.isClass && !sym.isAbstract
     }
 
-    def toGen(termName: TermName)(tree: c.Tree): c.Tree = {
+    def toGen(termName: c.TermName)(tree: c.Tree): c.Tree = {
       val f: c.Tree = Function(ValDef(Modifiers(Flag.PARAM), termName, TypeTree(), EmptyTree) :: Nil, tree)
       q"_root_.dev.aliakovl.gin.Gen.apply($f)"
     }
 
     def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.const($tree)"
 
-    def callApply(tree: c.Tree)(termName: TermName): c.Tree = q"$tree.apply(${Ident(termName)})"
+    def callApply(tree: c.Tree)(termName: c.TermName): c.Tree = q"$tree.apply(${Ident(termName)})"
 
     def constValueOf(tpe: c.Type): c.Tree = toConst(q"_root_.scala.Predef.valueOf[$tpe]")
 
@@ -437,13 +441,13 @@ object GenMacro {
       constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
     }
 
-    def constructCases[T](termName: TermName)(subclasses: Map[c.Type, T])(f: T => c.Tree): c.Tree = {
+    def constructCases[T](termName: c.TermName)(subclasses: Map[c.Type, T])(toTree: T => c.Tree): c.Tree = {
       val cases = subclasses.toList.sortBy(_._1.typeSymbol.fullName).map(_._2)
       cases match {
-        case singleCase :: Nil => f(singleCase)
+        case singleCase :: Nil => toTree(singleCase)
         case _ => q"$termName.nextInt(${cases.size}) match { case ..${
           cases.zipWithIndex.map {
-            case value -> index => cq"$index => ${f(value)}"
+            case value -> index => cq"$index => ${toTree(value)}"
           }
         } }"
       }
@@ -592,13 +596,16 @@ object GenMacro {
         }
         .map { genOpt =>
           genOpt.map { gen =>
-            val termName = TermName(c.freshName())
-            toGen(termName)(specifiedTree(termName)(gen))
+            withName { termName =>
+              toGen(termName)(specifiedTree(termName)(gen))
+            }
           }
         }
         .modifyState[VState].flatMap(initValues)
     }((genTree _).tupled)
   }
 
-  object Lazy { def apply[T](variable: String): T = ??? }
+  object Lazy {
+    def apply[T](variable: String): T = ???
+  }
 }
