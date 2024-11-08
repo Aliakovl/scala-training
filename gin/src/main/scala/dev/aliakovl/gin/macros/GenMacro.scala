@@ -575,17 +575,10 @@ object GenMacro {
       }
     }
 
-    val isMake: Boolean = {
-      c.macroApplication match {
-        case q"$_.make" => true
-        case _ => false
-      }
-    }
-
-    withStateProvided {
+    def make(prefix: c.Tree): FullState[Unit] = {
       State.sequence {
-          Option.when(typeToGen.typeSymbol.isClass && isMake) {
-            mergeMethods(disassembleTree(c.prefix.tree))
+          Option.when(typeToGen.typeSymbol.isClass) {
+            mergeMethods(disassembleTree(prefix))
           }
         }
         .map(_.flatten)
@@ -602,6 +595,15 @@ object GenMacro {
           }
         }
         .modifyState[VState].flatMap(initValues)
+    }
+
+    def materialize(): FullState[Unit] = initValues(None)
+
+    withStateProvided {
+      c.macroApplication match {
+        case q"$_.materialize[$_]" => materialize()
+        case q"$prefix.make" => make(prefix)
+      }
     }((genTree _).tupled)
   }
 
