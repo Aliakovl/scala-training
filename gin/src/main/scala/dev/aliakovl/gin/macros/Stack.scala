@@ -2,7 +2,7 @@ package dev.aliakovl.gin.macros
 
 import scala.reflect.macros.whitebox
 
-final class Stack[C <: whitebox.Context with Singleton] {
+private[macros] final class Stack[C <: whitebox.Context with Singleton] {
   type Variables = Map[C#Type, C#TermName]
   type Values = Map[C#Type, C#Tree]
   type VarsState[A] = State[Variables, A]
@@ -74,7 +74,7 @@ final class Stack[C <: whitebox.Context with Singleton] {
   }
 }
 
-object Stack {
+private[macros] object Stack {
   private val dummyContext: whitebox.Context = null
   private val threadLocalStack =
     ThreadLocal.withInitial[Stack[dummyContext.type]] { () =>

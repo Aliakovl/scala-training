@@ -65,8 +65,6 @@ private[macros] object State {
   def apply[S, A](f: S => (S, A)): State[S, A] = new State[S, A](f)
   def pure[S, A](a: A): State[S, A] = State(s => (s, a))
   def unit[S]: State[S, Unit] = State(s => (s, ()))
-  def none[S, A]: State[S, Option[A]] = State(s => (s, None))
-  def some[S, A](a: A): State[S, Option[A]] = State(s => (s, Some(a)))
   def get[S]: State[S, S] = State(s => (s, s))
   def modify[S](f: S => S): State[S, Unit] = State(s => (f(s), ()))
   def modifyFirst[S, T](f: S => S): State[(S, T), Unit] =
@@ -79,7 +77,7 @@ private[macros] object State {
     val iterator = ta.iterator
     val builder = bf.newBuilder(ta)
 
-    State.apply[S, C[B]] { initState =>
+    State[S, C[B]] { initState =>
       var state = initState
       while (iterator.hasNext) {
         val v = iterator.next()
