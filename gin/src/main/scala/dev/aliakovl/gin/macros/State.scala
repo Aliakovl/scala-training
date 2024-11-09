@@ -1,7 +1,7 @@
 package dev.aliakovl.gin
 package macros
 
-import scala.collection.BuildFrom
+import dev.aliakovl.gin.macros.fp.Applicative
 
 private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
   def map[B](f: A => B): State[S, B] = State { s =>
@@ -50,11 +50,13 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     (t1, a)
   }
 
-  def fallback[B](f: => State[S, B])(implicit ev: A <:< Option[B]): State[S, B] = State { s =>
+  def fallback[B](
+      f: => State[S, B]
+  )(implicit ev: A <:< Option[B]): State[S, B] = State { s =>
     val (s1, a) = run(s)
     ev(a) match {
       case Some(value) => (s1, value)
-      case None => f.run(s)
+      case None        => f.run(s)
     }
   }
 
@@ -71,45 +73,6 @@ private[macros] object State {
     State(p => ((f(p._1), p._2), ()))
   def modifySecond[S, T](f: T => T): State[(S, T), Unit] =
     State(p => ((p._1, f(p._2)), ()))
-  def traverse[S, C[+E] <: IterableOnce[E], A, B](ta: C[A])(
-      f: A => State[S, B]
-  )(implicit bf: BuildFrom[C[A], B, C[B]]): State[S, C[B]] = {
-    val iterator = ta.iterator
-    val builder = bf.newBuilder(ta)
-
-    State[S, C[B]] { initState =>
-      var state = initState
-      while (iterator.hasNext) {
-        val v = iterator.next()
-        val (s, b) = f(v).run(state)
-        state = s
-        builder += b
-      }
-
-      (state, builder.result())
-    }
-  }
-
-  def sequence[C[+E] <: IterableOnce[E], S, A](ta: C[State[S, A]])(implicit
-      bf: BuildFrom[C[State[S, A]], A, C[A]]
-  ): State[S, C[A]] = traverse(ta)(identity)
-
-  def sequence[S, A](ta: Option[State[S, A]]): State[S, Option[A]] =
-    ta.fold[State[S, Option[A]]](State.pure(None))(_.map(Some(_)))
-
-  def traverse[S, A, B](ta: Option[A])(f: A => State[S, B]): State[S, Option[B]] = sequence(ta.map(f))
-
-  def traverse[S, A, B](ta: Set[A])(
-      f: A => State[S, B]
-  ): State[S, Set[B]] = {
-    ta.foldLeft(State.pure[S, Set[B]](Set.empty)) { case (acc, value) =>
-      for {
-        set <- acc
-        b <- f(value)
-      } yield set + b
-    }
-  }
-
   def getOrElseUpdate[K, V](key: K, value: => V): State[Map[K, V], V] = {
     for {
       s <- State.get[Map[K, V]]
@@ -121,4 +84,18 @@ private[macros] object State {
       }
     } yield v
   }
+
+  implicit def applicationForState[S]
+      : Applicative[({ type M[A] = State[S, A] })#M] =
+    new Applicative[({ type M[A] = State[S, A] })#M] {
+      override def pure[A](a: A): State[S, A] = State.pure(a)
+
+      override def ap[A, B](
+          ff: State[S, A => B]
+      )(fa: State[S, A]): State[S, B] = State { s =>
+        val (s1, f) = ff.run(s)
+        val (s2, a) = fa.run(s1)
+        (s2, f(a))
+      }
+    }
 }

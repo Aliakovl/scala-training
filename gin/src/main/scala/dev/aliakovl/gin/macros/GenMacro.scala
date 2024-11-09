@@ -1,6 +1,9 @@
 package dev.aliakovl.gin
 package macros
 
+import dev.aliakovl.gin.macros.State._
+import dev.aliakovl.gin.macros.fp.syntax._
+
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 
@@ -67,7 +70,7 @@ object GenMacro {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
       } else if (isAbstractSealed(sym)) {
         val subtypes = subTypesOf(tpe)
-        State.traverse(subtypes) { subtype =>
+        subtypes.traverse { subtype =>
           getVariableName(subtype).map(subtype -> _)
         }.map(_.toMap).map { subclasses =>
           if (subclasses.isEmpty) fail(s"Class ${tpe.typeSymbol.name} does not have constructors")
@@ -76,13 +79,12 @@ object GenMacro {
           }
         }
       } else if (isConcreteClass(sym)) {
-        State.sequence {
-          notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
-            State.traverse(params) { param =>
-              getVariableName(param.info)
-            }
+        notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).traverse { params =>
+          params.traverse { param =>
+            getVariableName(param.info)
           }
-        }.map { fields =>
+        }
+        .map { fields =>
           withName { termName =>
             val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
             toGen(termName)(construct(tpe, args))
@@ -156,7 +158,7 @@ object GenMacro {
           _ <- updateIfNotExists(typeToGen, c.untypecheck(value.duplicate))
           _ <- createIfNotExists(typeToGen)
           variables <- State.get[VState].map(_._1)
-          _ <- State.traverse(variables.keySet - typeToGen) { tpe =>
+          _ <- (variables.keySet - typeToGen).traverse { tpe =>
             findImplicit(tpe).flatMap(updateIfNotExists(tpe, _))
           }
         } yield ()
@@ -177,8 +179,7 @@ object GenMacro {
         }
         next
       } else {
-        val subtypes = subTypesOf(tpe)
-        State.traverse(subtypes) { subtype =>
+        subTypesOf(tpe).traverse { subtype =>
           if (subtype.typeConstructor <:< toType.typeConstructor) {
             if (!(subtype <:< toType)) {
               fail(s"Type arguments of $toType must not be narrowed")
@@ -197,24 +198,22 @@ object GenMacro {
     def focusWithLens(tpe: c.Type, fromType: c.Type, field: c.TermName)(next: c.Symbol => VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
       val allParams = paramListsOf(publicConstructor(tpe), fromType)
       if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $tpe does not take $field argument")
-      State.sequence {
-        allParams.map { params =>
-          State.traverse(params) { param =>
-            val termName = param.name.toTermName
-            if (param.asTerm.name == field) {
-              next(param).map(termName -> _)
-            } else if (param.isImplicit) {
-              val impl = c.inferImplicitValue(param.info)
-              if (impl == EmptyTree) fail(s"Could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
-              State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
-            } else {
-              val paramType = param.info
-              State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
-                param.name.toTermName -> NotSpecified(name)
-              }
+      allParams.traverse { params =>
+        params.traverse { param =>
+          val termName = param.name.toTermName
+          if (param.asTerm.name == field) {
+            next(param).map(termName -> _)
+          } else if (param.isImplicit) {
+            val impl = c.inferImplicitValue(param.info)
+            if (impl == EmptyTree) fail(s"Could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
+            State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
+          } else {
+            val paramType = param.info
+            State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
+              param.name.toTermName -> NotSpecified(name)
             }
-          }.map(_.toMap)
-        }
+          }
+        }.map(_.toMap)
       }.map(SpecifiedCaseClass(tpe, _))
     }
 
@@ -343,7 +342,7 @@ object GenMacro {
     }
 
     def mergeMethods(methods: Methods): VarsState[Option[SpecifiedGen]] = {
-      State.traverse(methods)(_.toSpecifiedGen(typeToGen)).map { list =>
+      methods.traverse(_.toSpecifiedGen(typeToGen)).map { list =>
         list.foldLeft[Option[SpecifiedGen]](None) {
           case (Some(left), right) => Some(mergeSpecifications(left, right))
           case (None, value) => Some(value)
@@ -576,25 +575,24 @@ object GenMacro {
     }
 
     def make(prefix: c.Tree): FullState[Unit] = {
-      State.sequence {
-          Option.when(typeToGen.typeSymbol.isClass) {
-            mergeMethods(disassembleTree(prefix))
+      Option.when(typeToGen.typeSymbol.isClass) {
+        mergeMethods(disassembleTree(prefix))
+      }
+      .sequence
+      .map(_.flatten)
+      .flatTap { genOpt =>
+        genOpt.traverse { gen =>
+          State.modify[Variables](deleteUnused(gen, _))
+        }
+      }
+      .map { genOpt =>
+        genOpt.map { gen =>
+          withName { termName =>
+            toGen(termName)(specifiedTree(termName)(gen))
           }
         }
-        .map(_.flatten)
-        .flatTap { genOpt =>
-          State.traverse(genOpt) { gen =>
-            State.modify[Variables](deleteUnused(gen, _))
-          }
-        }
-        .map { genOpt =>
-          genOpt.map { gen =>
-            withName { termName =>
-              toGen(termName)(specifiedTree(termName)(gen))
-            }
-          }
-        }
-        .modifyState[VState].flatMap(initValues)
+      }
+      .modifyState[VState].flatMap(initValues)
     }
 
     def materialize(): FullState[Unit] = initValues(None)
