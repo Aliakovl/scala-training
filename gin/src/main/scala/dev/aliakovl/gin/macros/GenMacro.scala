@@ -1,6 +1,9 @@
 package dev.aliakovl.gin
 package macros
 
+import dev.aliakovl.gin.macros.State._
+import dev.aliakovl.gin.macros.fp.syntax._
+
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 
@@ -34,6 +37,8 @@ object GenMacro {
 
     def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
 
+    def withName[T](body: c.TermName => T): T = body(TermName(c.freshName()))
+
     def block[T](statements: List[c.Expr[Any]], expr: c.Expr[T]): c.Expr[T] =
       c.Expr[T](q"..$statements; $expr")
 
@@ -43,12 +48,12 @@ object GenMacro {
       }
 
       if (depth > 1) {
-        val name = TermName(c.freshName())
-        c.Expr[Gen[A]](
-          q"""{
+        withName { name =>
+          c.Expr[Gen[A]](q"""{
             lazy val $name: ${weakTypeOf[Gen[A]]} = ${LazyRef(weakTypeOf[Gen[A]], variables(typeToGen).decodedName.toString)}
             $name
-            }""")
+          }""")
+        }
       } else {
         val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
           lazyVal(variable, tpe, values(tpe))
@@ -65,24 +70,25 @@ object GenMacro {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
       } else if (isAbstractSealed(sym)) {
         val subtypes = subTypesOf(tpe)
-        State.traverse(subtypes) { subtype =>
+        subtypes.traverse { subtype =>
           getVariableName(subtype).map(subtype -> _)
         }.map(_.toMap).map { subclasses =>
-          if (subclasses.isEmpty) fail(s"Type ${tpe.typeSymbol.name} does not have constructors")
-          val termName = TermName(c.freshName())
-          toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
+          if (subclasses.isEmpty) fail(s"Class ${tpe.typeSymbol.name} does not have constructors")
+          withName { termName =>
+            toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
+          }
         }
       } else if (isConcreteClass(sym)) {
-        State.sequence {
-          notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).map { params =>
-            State.traverse(params) { param =>
-              getVariableName(param.info)
-            }
+        notImplicitParamLists(paramListsOf(publicConstructor(tpe), tpe)).traverse { params =>
+          params.traverse { param =>
+            getVariableName(param.info)
           }
-        }.map { fields =>
-          val termName = TermName(c.freshName())
-          val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
-          toGen(termName)(construct(tpe, args))
+        }
+        .map { fields =>
+          withName { termName =>
+            val args = fields.map(_.map(name => callApply(Ident(name))(termName)))
+            toGen(termName)(construct(tpe, args))
+          }
         }
       } else {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], try to provide it implicitly")
@@ -91,10 +97,10 @@ object GenMacro {
 
     def findImplicit(tpe: c.Type): FullState[c.Tree] = {
       val genType = constructType[Gen](tpe)
-      withState {
+      statefulSearch {
         Option(c.inferImplicitValue(genType))
           .filterNot(_ == EmptyTree)
-          .toRight(s"Fail to find implicit for type $tpe.")
+          .toRight(s"Fail to find implicit for type $tpe")
       }
         .map(_.fold(fail, identity))
         .map(tree => c.untypecheck(pullOutLazyVariables.transform(tree))) <* createIfNotExists(tpe)
@@ -111,11 +117,11 @@ object GenMacro {
       } yield ()
     }
 
-    def createIfNotExists(tpe: c.Type): State[VState, TermName] = {
+    def createIfNotExists(tpe: c.Type): State[VState, c.TermName] = {
       for {
         variables <- State.get[VState].map(_._1)
         name <- variables.get(tpe) match {
-          case Some(value) => State.pure[VState, TermName](value)
+          case Some(value) => State.pure[VState, c.TermName](value)
           case None =>
             val name = c.freshName(tpe.typeSymbol.name).toTermName
             State.modifyFirst[Variables, Values](_.updated(tpe, name)).as(name)
@@ -152,7 +158,7 @@ object GenMacro {
           _ <- updateIfNotExists(typeToGen, c.untypecheck(value.duplicate))
           _ <- createIfNotExists(typeToGen)
           variables <- State.get[VState].map(_._1)
-          _ <- State.traverse(variables.keySet - typeToGen) { tpe =>
+          _ <- (variables.keySet - typeToGen).traverse { tpe =>
             findImplicit(tpe).flatMap(updateIfNotExists(tpe, _))
           }
         } yield ()
@@ -169,15 +175,14 @@ object GenMacro {
     def focusWithPrism(tpe: c.Type, toType: c.Type)(next: VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
       if (tpe.typeConstructor =:= toType.typeConstructor) {
         tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
-          if (!(s =:= t)) fail(s"$toType type arguments must not be narrowed, fix: $t -> $s")
+          if (!(s =:= t)) fail(s"Type arguments of $toType must not be narrowed, fix: $t -> $s")
         }
         next
       } else {
-        val subtypes = subTypesOf(tpe)
-        State.traverse(subtypes) { subtype =>
+        subTypesOf(tpe).traverse { subtype =>
           if (subtype.typeConstructor <:< toType.typeConstructor) {
             if (!(subtype <:< toType)) {
-              fail(s"$toType type arguments must not be narrowed")
+              fail(s"Type arguments of $toType must not be narrowed")
             }
             next.map(subtype -> _)
           } else {
@@ -193,24 +198,22 @@ object GenMacro {
     def focusWithLens(tpe: c.Type, fromType: c.Type, field: c.TermName)(next: c.Symbol => VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
       val allParams = paramListsOf(publicConstructor(tpe), fromType)
       if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $tpe does not take $field argument")
-      State.sequence {
-        allParams.map { params =>
-          State.traverse(params) { param =>
-            val termName = param.name.toTermName
-            if (param.asTerm.name == field) {
-              next(param).map(termName -> _)
-            } else if (param.isImplicit) {
-              val impl = c.inferImplicitValue(param.info)
-              if (impl == EmptyTree) fail(s"could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
-              State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
-            } else {
-              val paramType = param.info
-              State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
-                param.name.toTermName -> NotSpecified(name)
-              }
+      allParams.traverse { params =>
+        params.traverse { param =>
+          val termName = param.name.toTermName
+          if (param.asTerm.name == field) {
+            next(param).map(termName -> _)
+          } else if (param.isImplicit) {
+            val impl = c.inferImplicitValue(param.info)
+            if (impl == EmptyTree) fail(s"Could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
+            State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
+          } else {
+            val paramType = param.info
+            State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
+              param.name.toTermName -> NotSpecified(name)
             }
-          }.map(_.toMap)
-        }
+          }
+        }.map(_.toMap)
       }.map(SpecifiedCaseClass(tpe, _))
     }
 
@@ -226,7 +229,7 @@ object GenMacro {
           val allParams = paramListsOf(publicConstructor(tpe), fromType)
           val defaultMap = defaults(patchedCompanionSymbolOf(tpe.typeSymbol))(allParams)
           focusWithLens(tpe, fromType, field) { param =>
-            defaultMap.get(param).fold(fail(s"$field does not have default argument")) { default =>
+            defaultMap.get(param).fold(fail(s"Constructor of $tpe parameter $field does not have default argument")) { default =>
               State.pure(Specified(DefaultArg(default)))
             }
           }
@@ -282,7 +285,7 @@ object GenMacro {
           val method = ExcludeMethod(selector)
           disassembleTree(other, method +: methods)
         case q"$module.custom[$_]" if module.symbol == genSymbol => methods
-        case _ => c.abort(tree.pos, "Unsupported syntax.")
+        case _ => c.abort(tree.pos, "Unsupported syntax")
       }
     }
 
@@ -300,25 +303,25 @@ object GenMacro {
             case _ => c.abort(fieldName.pos, "Only string literals supported")
           }
         case q"$module.GenCustomOps[$from]($other).when[$to]" if module.symbol == ginModule =>
-          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"$from is not sealed")
+          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
           val prism = Prism(to.tpe)
           disassembleSelector(other, prism :: selector)
         case q"$_[$from]($other).when[$to](..$_)" =>
-          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"$from is not sealed")
+          if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
           val toType = subclassType(to.symbol, from.tpe)
           val prism = Prism(toType)
           disassembleSelector(other, prism :: selector)
         case _: Ident => selector
-        case tree => c.abort(tree.pos, "Unsupported path element.")
+        case tree => c.abort(tree.pos, "Unsupported path element")
       }
     }
 
     sealed trait SpecifiedGen
-    case class SpecifiedCaseClass(sym: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
+    case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
     case class SpecifiedSealedTrait(subclasses: Map[c.Type, SpecifiedGen]) extends SpecifiedGen
     case class Specified(tree: Arg) extends SpecifiedGen
     case class NotSpecifiedImplicit(tree: c.Tree) extends SpecifiedGen
-    case class NotSpecified(tree: c.TermName) extends SpecifiedGen
+    case class NotSpecified(name: c.TermName) extends SpecifiedGen
     case object Excluded extends SpecifiedGen
 
     def usedVariables(gen: SpecifiedGen): Set[c.TermName] = gen match {
@@ -339,7 +342,7 @@ object GenMacro {
     }
 
     def mergeMethods(methods: Methods): VarsState[Option[SpecifiedGen]] = {
-      State.traverse(methods)(_.toSpecifiedGen(typeToGen)).map { list =>
+      methods.traverse(_.toSpecifiedGen(typeToGen)).map { list =>
         list.foldLeft[Option[SpecifiedGen]](None) {
           case (Some(left), right) => Some(mergeSpecifications(left, right))
           case (None, value) => Some(value)
@@ -387,7 +390,7 @@ object GenMacro {
       case _ => fail(s"Some specifications conflict")
     }
 
-    def specifiedTree(termName: TermName)(gen: SpecifiedGen): c.Tree = gen match {
+    def specifiedTree(termName: c.TermName)(gen: SpecifiedGen): c.Tree = gen match {
       case SpecifiedCaseClass(classSymbol, fields) =>
         val args = fields.foldLeft(List.empty[List[c.Tree]]) { case (acc, next) =>
           val params = next.values.map {
@@ -403,10 +406,10 @@ object GenMacro {
         constructCases(termName)(cases)(specifiedTree(termName))
       case Specified(GenArg(tree)) => callApply(tree)(termName)
       case Specified(ConstArg(tree)) => tree
-      case NotSpecified(tree) => callApply(Ident(tree))(termName)
+      case NotSpecified(name) => callApply(Ident(name))(termName)
       case NotSpecifiedImplicit(tree) => tree
       case Excluded => fail("All subtypes was excluded")
-      case _ => fail("unreachable")
+      case _ => fail("Unreachable")
     }
 
     def isAbstractSealed(sym: c.Symbol): Boolean = {
@@ -417,14 +420,14 @@ object GenMacro {
       sym.isClass && !sym.isAbstract
     }
 
-    def toGen(termName: TermName)(tree: c.Tree): c.Tree = {
+    def toGen(termName: c.TermName)(tree: c.Tree): c.Tree = {
       val f: c.Tree = Function(ValDef(Modifiers(Flag.PARAM), termName, TypeTree(), EmptyTree) :: Nil, tree)
       q"_root_.dev.aliakovl.gin.Gen.apply($f)"
     }
 
     def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.const($tree)"
 
-    def callApply(tree: c.Tree)(termName: TermName): c.Tree = q"$tree.apply(${Ident(termName)})"
+    def callApply(tree: c.Tree)(termName: c.TermName): c.Tree = q"$tree.apply(${Ident(termName)})"
 
     def constValueOf(tpe: c.Type): c.Tree = toConst(q"_root_.scala.Predef.valueOf[$tpe]")
 
@@ -437,13 +440,13 @@ object GenMacro {
       constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
     }
 
-    def constructCases[T](termName: TermName)(subclasses: Map[c.Type, T])(f: T => c.Tree): c.Tree = {
+    def constructCases[T](termName: c.TermName)(subclasses: Map[c.Type, T])(toTree: T => c.Tree): c.Tree = {
       val cases = subclasses.toList.sortBy(_._1.typeSymbol.fullName).map(_._2)
       cases match {
-        case singleCase :: Nil => f(singleCase)
+        case singleCase :: Nil => toTree(singleCase)
         case _ => q"$termName.nextInt(${cases.size}) match { case ..${
           cases.zipWithIndex.map {
-            case value -> index => cq"$index => ${f(value)}"
+            case value -> index => cq"$index => ${toTree(value)}"
           }
         } }"
       }
@@ -460,7 +463,7 @@ object GenMacro {
 
       concreteChildren.foreach { child =>
         if (!child.asClass.isFinal && !child.asClass.isCaseClass && !child.isModuleClass) {
-          fail(s"child $child of $parent is neither final nor a case class")
+          fail(s"Child $child of $parent is neither final nor a case class")
         }
       }
 
@@ -469,7 +472,7 @@ object GenMacro {
         if (childClass.isSealed) {
           subclassesOf(childClass)
         } else {
-          fail(s"child $child of $parent is not sealed")
+          fail(s"Child $child of $parent is not sealed")
         }
       }
     }
@@ -522,7 +525,7 @@ object GenMacro {
       constructors
         .find(_.isPrimaryConstructor)
         .orElse(constructors.headOption)
-        .getOrElse(fail(s"class ${tpe.typeSymbol.name} has no public constructors"))
+        .getOrElse(fail(s"Class ${tpe.typeSymbol.name} has no public constructors"))
     }
 
     // https://github.com/scalamacros/paradise/blob/c14c634923313dd03f4f483be3d7782a9b56de0e/plugin/src/main/scala/org/scalamacros/paradise/typechecker/Namers.scala#L568-L613
@@ -571,34 +574,38 @@ object GenMacro {
       }
     }
 
-    val isMake: Boolean = {
-      c.macroApplication match {
-        case q"$_.make" => true
-        case _ => false
+    def make(prefix: c.Tree): FullState[Unit] = {
+      Option.when(typeToGen.typeSymbol.isClass) {
+        mergeMethods(disassembleTree(prefix))
       }
-    }
-
-    withStateProvided {
-      State.sequence {
-          Option.when(typeToGen.typeSymbol.isClass && isMake) {
-            mergeMethods(disassembleTree(c.prefix.tree))
-          }
+      .sequence
+      .map(_.flatten)
+      .flatTap { genOpt =>
+        genOpt.traverse { gen =>
+          State.modify[Variables](deleteUnused(gen, _))
         }
-        .map(_.flatten)
-        .flatTap { genOpt =>
-          State.traverse(genOpt) { gen =>
-            State.modify[Variables](deleteUnused(gen, _))
-          }
-        }
-        .map { genOpt =>
-          genOpt.map { gen =>
-            val termName = TermName(c.freshName())
+      }
+      .map { genOpt =>
+        genOpt.map { gen =>
+          withName { termName =>
             toGen(termName)(specifiedTree(termName)(gen))
           }
         }
-        .modifyState[VState].flatMap(initValues)
+      }
+      .modifyState[VState].flatMap(initValues)
+    }
+
+    def materialize(): FullState[Unit] = initValues(None)
+
+    withStateProvided {
+      c.macroApplication match {
+        case q"$_.materialize[$_]" => materialize()
+        case q"$prefix.make" => make(prefix)
+      }
     }((genTree _).tupled)
   }
 
-  object Lazy { def apply[T](variable: String): T = ??? }
+  object Lazy {
+    def apply[T](variable: String): T = ???
+  }
 }

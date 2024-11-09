@@ -5,6 +5,7 @@ import dev.aliakovl.kernel.trans.reader.ReaderT
 import dev.aliakovl.kernel.Console
 
 import java.io.IOException
+import scala.reflect.ClassTag
 
 type ZIO[-R, +E, +A] = ReaderT[[T] =>> ExceptT[IO, E, T], R, A]
 
@@ -86,7 +87,7 @@ object ZIO:
       }
 
   extension [R, E <: Throwable, A](zio: ZIO[R, E, A])
-    def refineToOrDie[E1 <: E]: ZIO[R, E1, A] = zio.refineOrDie { case e: E1 =>
+    def refineToOrDie[E1 <: E: ClassTag]: ZIO[R, E1, A] = zio.refineOrDie { case e: E1 =>
       e
     }
 

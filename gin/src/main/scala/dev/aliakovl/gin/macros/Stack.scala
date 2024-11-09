@@ -1,9 +1,8 @@
 package dev.aliakovl.gin.macros
 
-import scala.reflect.macros.runtime.AbortMacroException
 import scala.reflect.macros.whitebox
 
-final class Stack[C <: whitebox.Context with Singleton] {
+private[macros] final class Stack[C <: whitebox.Context with Singleton] {
   type Variables = Map[C#Type, C#TermName]
   type Values = Map[C#Type, C#Tree]
   type VarsState[A] = State[Variables, A]
@@ -13,14 +12,6 @@ final class Stack[C <: whitebox.Context with Singleton] {
   private val init: VState = (Map.empty, Map.empty)
   private var states: List[VState] = List.empty
   private var error: Option[String] = None
-
-  def throwError(e: AbortMacroException): Nothing = {
-    error = Some(e.msg)
-    states = List.empty
-    throw e
-  }
-
-  def depth: Int = states.size
 
   private def push(state: VState): Unit = {
     states = state :: states
@@ -41,7 +32,17 @@ final class Stack[C <: whitebox.Context with Singleton] {
     states = states.drop(1)
   }
 
-  def withState[A](thunk: => Either[String, A]): FullState[Either[String, A]] = State { state =>
+  private def throwError(e: Throwable): Nothing = {
+    error = Some(e.getMessage)
+    states = List.empty
+    throw e
+  }
+
+  def isEmpty: Boolean = states.isEmpty
+
+  def depth: Int = states.size
+
+  def statefulSearch[A](thunk: => Either[String, A]): FullState[Either[String, A]] = State { state =>
     push(state)
     thunk match {
       case Left(msg) =>
@@ -71,10 +72,9 @@ final class Stack[C <: whitebox.Context with Singleton] {
       value
     }
   }
-
 }
 
-object Stack {
+private[macros] object Stack {
   private val dummyContext: whitebox.Context = null
   private val threadLocalStack =
     ThreadLocal.withInitial[Stack[dummyContext.type]] { () =>
@@ -85,8 +85,8 @@ object Stack {
     val stack: Stack[c.type] = threadLocalStack.get().asInstanceOf[Stack[c.type]]
     try f(stack)
     catch {
-      case e: AbortMacroException => stack.throwError(e)
-    } finally if (stack.depth <= 0) {
+      case e: Throwable => stack.throwError(e)
+    } finally if (stack.isEmpty) {
       threadLocalStack.remove()
     }
   }
