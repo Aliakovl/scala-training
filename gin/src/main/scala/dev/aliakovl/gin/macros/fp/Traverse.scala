@@ -59,4 +59,20 @@ object Traverse {
       }
     }
   }
+
+  implicit def traverseForIterator: Traverse[Iterator] =
+    new Traverse[Iterator] {
+      override def traverse[F[_], A, B](
+          ta: Iterator[A]
+      )(f: A => F[B])(implicit F: Applicative[F]): F[Iterator[B]] = {
+        F.map {
+          ta.iterator.foldLeft(F.pure(Iterator.newBuilder[B])) {
+            case (accF, a) =>
+              F.map2(accF, f(a)) { case (acc, b) =>
+                acc.addOne(b)
+              }
+          }
+        }(_.result())
+      }
+    }
 }

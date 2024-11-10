@@ -2,6 +2,7 @@ package dev.aliakovl.gin
 package macros
 
 import dev.aliakovl.gin.macros.State._
+import dev.aliakovl.gin.macros.fp.data.ValidatedC
 import dev.aliakovl.gin.macros.fp.syntax._
 
 import scala.annotation.tailrec
@@ -360,6 +361,8 @@ object GenMacro {
         }
       }
     }
+
+    case class Conflict(pos: c.Position, withPos: c.Position)
 
     def mergeSpecifications(
       left: CustomRepr,
