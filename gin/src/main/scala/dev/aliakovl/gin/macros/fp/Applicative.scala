@@ -19,4 +19,11 @@ trait Applicative[F[_]] {
 
 object Applicative {
   def apply[F[_]](implicit instance: Applicative[F]): Applicative[F] = instance
+
+  implicit val applicativeForOption: Applicative[Option] = new Applicative[Option] {
+    override def pure[A](a: A): Option[A] = Some(a)
+
+    override def ap[A, B](ff: Option[A => B])(fa: Option[A]): Option[B] =
+      ff.flatMap(fa.map)
+  }
 }

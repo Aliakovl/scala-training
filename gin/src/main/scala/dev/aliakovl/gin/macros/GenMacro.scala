@@ -2,7 +2,6 @@ package dev.aliakovl.gin
 package macros
 
 import dev.aliakovl.gin.macros.State._
-import dev.aliakovl.gin.macros.fp.data.ValidatedC
 import dev.aliakovl.gin.macros.fp.syntax._
 
 import scala.annotation.tailrec
@@ -317,15 +316,17 @@ object GenMacro {
       }
     }
 
+    trait HasPosition {
+      def pos: c.Position
+    }
+
     sealed trait CustomRepr
 
     sealed trait OpticRepr extends CustomRepr
     case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, CustomRepr]]) extends OpticRepr
     case class SpecifiedSealedTrait(subclasses: Map[c.Type, CustomRepr]) extends OpticRepr
 
-    sealed trait SpecifiedRepr extends CustomRepr {
-      def pos: c.Position
-    }
+    sealed trait SpecifiedRepr extends CustomRepr with HasPosition
     case class Specified(tree: Arg, pos: c.Position) extends SpecifiedRepr
     object Specified {
       def unapply(s: Specified): Option[Arg] = Some(s.tree)
@@ -356,43 +357,48 @@ object GenMacro {
     def mergeMethods(methods: Methods): VarsState[Option[CustomRepr]] = {
       methods.traverse(_.toSpecifiedGen(typeToGen)).map { list =>
         list.foldLeft[Option[CustomRepr]](None) {
-          case (Some(left), right) => Some(mergeSpecifications(left, right))
+          case (Some(left), right) => Some(mergeSpecifications(left, right).getOrElse(c.abort(c.enclosingPosition, "conflicts")))
           case (None, value) => Some(value)
         }
       }
     }
 
-    case class Conflict(pos: c.Position, withPos: c.Position)
+    case class Conflict(pos: c.Position, conflicts: List[c.Position])
 
     def mergeSpecifications(
       left: CustomRepr,
       right: CustomRepr
-    ): CustomRepr = (left, right) match {
-      case (SpecifiedCaseClass(leftClass, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
-        assert(leftClass == rightClass)
-        val fields = leftFields.zip(rightFields).map { case (leftArgs, rightArgs) =>
-          leftArgs.map { case (key, value) =>
-            key -> mergeSpecifications(value, rightArgs(key))
-          }
-        }
-        SpecifiedCaseClass(rightClass, fields)
+    ): Option[CustomRepr] = (left, right) match {
+      case (SpecifiedCaseClass(_, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
+        leftFields.zip(rightFields).traverse { case (leftArgs, rightArgs) =>
+          leftArgs.iterator.traverse { case (key, value) =>
+            mergeSpecifications(value, rightArgs(key)).map(key -> _)
+          }.map(_.toMap)
+        }.map(SpecifiedCaseClass(rightClass, _))
       case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
-        SpecifiedSealedTrait(leftSubclasses.map { case (key, left) =>
-          key -> mergeSpecifications(left, rightSubclasses(key))
-        })
-      case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
-        SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
-          subclass -> mergeSpecifications(leftSpecified, right)
-        })
-      case (_: SpecifiedCaseClass, SpecifiedSealedTrait(subclasses)) =>
-        SpecifiedSealedTrait(subclasses.map { case (subclass, rightSpecified) =>
-          subclass -> mergeSpecifications(left, rightSpecified)
-        })
-      case (_, _: NotSpecifiedRepr) => left
-      case (_: NotSpecifiedRepr, _) => right
-      case (_: SpecifiedRepr, r: SpecifiedRepr) => c.abort(r.pos, s"Some specifications conflict above")
-      case (l: SpecifiedRepr, _: OpticRepr) => c.abort(l.pos, s"Some specifications conflict below")
-      case (_: OpticRepr, l: SpecifiedRepr) => c.abort(l.pos, s"Some specifications conflict above")
+        leftSubclasses.iterator.traverse { case (key, left) =>
+          mergeSpecifications(left, rightSubclasses(key)).map(key -> _)
+        }.map(subclasses => SpecifiedSealedTrait(subclasses.toMap))
+      case (SpecifiedSealedTrait(subclasses), right: SpecifiedCaseClass) =>
+        subclasses.iterator.traverse { case (subclass, leftSpecified) =>
+          mergeSpecifications(leftSpecified, right).map(subclass -> _)
+        }.map(x => SpecifiedSealedTrait(x.toMap))
+      case (left: SpecifiedCaseClass, SpecifiedSealedTrait(subclasses)) =>
+        subclasses.iterator.traverse { case (subclass, rightSpecified) =>
+          mergeSpecifications(left, rightSpecified).map(subclass -> _)
+        }.map(x => SpecifiedSealedTrait(x.toMap))
+      case (left, _: NotSpecifiedRepr) => Some(left)
+      case (_: NotSpecifiedRepr, right) => Some(right)
+      case _ => None
+    }
+
+    def getPositions(customRepr: CustomRepr): List[c.Position] = {
+      customRepr match {
+        case SpecifiedCaseClass(_, fields) => fields.flatMap(_.values.flatMap(getPositions))
+        case SpecifiedSealedTrait(subclasses) => subclasses.values.flatMap(getPositions).toList
+        case repr: SpecifiedRepr => List(repr.pos)
+        case _: NotSpecifiedRepr => List()
+      }
     }
 
     def specifiedTree(termName: c.TermName)(gen: CustomRepr): c.Tree = gen match {

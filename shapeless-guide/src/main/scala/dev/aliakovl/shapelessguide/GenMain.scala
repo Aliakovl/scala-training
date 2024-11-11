@@ -62,6 +62,13 @@ object GenMain extends App {
   case class TypeClassLol[A <: Int](l: List[A]) extends TypeClass[List]
 
   Gen
+    .custom[Either[String, Int]]
+    .specifyConst(_.when[Left].value)("lol")
+    .specifyConst(_.when[Right].value)(3)
+    .specifyConst(x => x)(Left("wef"))
+    .make
+
+  Gen
     .custom[Opt[Int]]
     .specifyConst(_.when[Maybe].value)(34)
     .make

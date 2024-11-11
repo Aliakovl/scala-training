@@ -46,7 +46,7 @@ object Chain {
 
   implicit val semigroupKForChain: SemigroupK[Chain] = new SemigroupK[Chain] {
     override def combineK[A](a: Chain[A], b: Chain[A]): Chain[A] = a.concat(b)
-
-    override def algebra[A]: Semigroup[Chain[A]] = combineK[A]
   }
+
+  implicit def semigroupForChain[A]: Semigroup[Chain[A]] = semigroupKForChain.combineK[A]
 }

@@ -20,6 +20,8 @@ sealed abstract class Validated[+E, +A] {
       case i @ Invalid(_) => i
     }
   }
+
+  def getOrElse[A1 >: A](f: E => A1): A1 = fold(f, identity)
 }
 
 object Validated {
