@@ -20,10 +20,21 @@ trait Applicative[F[_]] {
 object Applicative {
   def apply[F[_]](implicit instance: Applicative[F]): Applicative[F] = instance
 
-  implicit val applicativeForOption: Applicative[Option] = new Applicative[Option] {
-    override def pure[A](a: A): Option[A] = Some(a)
+  implicit val applicativeForOption: Applicative[Option] =
+    new Applicative[Option] {
+      override def pure[A](a: A): Option[A] = Some(a)
 
-    override def ap[A, B](ff: Option[A => B])(fa: Option[A]): Option[B] =
-      ff.flatMap(fa.map)
-  }
+      override def ap[A, B](ff: Option[A => B])(fa: Option[A]): Option[B] =
+        ff.flatMap(fa.map)
+    }
+
+  implicit def applicativeForEither[E]
+      : Applicative[({ type M[A] = Either[E, A] })#M] =
+    new Applicative[({ type M[A] = Either[E, A] })#M] {
+      override def pure[A](a: A): Either[E, A] = Right(a)
+
+      override def ap[A, B](ff: Either[E, A => B])(
+          fa: Either[E, A]
+      ): Either[E, B] = ff.flatMap(fa.map)
+    }
 }

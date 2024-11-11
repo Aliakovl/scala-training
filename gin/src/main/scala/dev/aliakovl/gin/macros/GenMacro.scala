@@ -356,23 +356,44 @@ object GenMacro {
 
     def mergeMethods(methods: Methods): VarsState[Option[CustomRepr]] = {
       methods.traverse(_.toSpecifiedGen(typeToGen)).map { list =>
-        list.foldLeft[Option[CustomRepr]](None) {
-          case (Some(left), right) => Some(mergeSpecifications(left, right).getOrElse(c.abort(c.enclosingPosition, "conflicts")))
-          case (None, value) => Some(value)
+        list.reduceOption {
+          mergeSpecifications(_, _)
+            .getOrElse(fail(aggregateErrors(list)))
         }
       }
     }
 
-    case class Conflict(pos: c.Position, conflicts: List[c.Position])
+    case class Conflict(pos: c.Position, withPos: c.Position) {
+      override def toString: String =
+        s"""  ${pos}
+           |  ${withPos}
+           |""".stripMargin
+    }
+
+    def aggregateErrors(list: List[CustomRepr]): String = {
+      aggregate(list).zipWithIndex.map { case (conf, ind) =>
+        s"""${ind + 1}.
+           |$conf""".stripMargin
+      }.mkString("Conflicts:\n", "", "")
+    }
+
+    def aggregate(list: List[CustomRepr]): List[Conflict] = {
+      list.foldLeft((Set.empty[CustomRepr], List.empty[Conflict])) { case ((prev, acc), repr) =>
+        val res = prev.map(mergeSpecifications(_, repr)).collect {
+          case Left(value) => value
+        }
+        (prev + repr, acc ++ res)
+      }._2
+    }
 
     def mergeSpecifications(
       left: CustomRepr,
       right: CustomRepr
-    ): Option[CustomRepr] = (left, right) match {
+    ): Either[Conflict, CustomRepr] = (left, right) match {
       case (SpecifiedCaseClass(_, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
         leftFields.zip(rightFields).traverse { case (leftArgs, rightArgs) =>
-          leftArgs.iterator.traverse { case (key, value) =>
-            mergeSpecifications(value, rightArgs(key)).map(key -> _)
+          leftArgs.iterator.traverse { case (key, leftArg) =>
+            mergeSpecifications(leftArg, rightArgs(key)).map(key -> _)
           }.map(_.toMap)
         }.map(SpecifiedCaseClass(rightClass, _))
       case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
@@ -387,9 +408,11 @@ object GenMacro {
         subclasses.iterator.traverse { case (subclass, rightSpecified) =>
           mergeSpecifications(left, rightSpecified).map(subclass -> _)
         }.map(x => SpecifiedSealedTrait(x.toMap))
-      case (left, _: NotSpecifiedRepr) => Some(left)
-      case (_: NotSpecifiedRepr, right) => Some(right)
-      case _ => None
+      case (left, _: NotSpecifiedRepr) => Right(left)
+      case (_: NotSpecifiedRepr, right) => Right(right)
+      case (l: SpecifiedRepr, r: SpecifiedRepr) => Left(Conflict(l.pos, r.pos))
+      case (l: SpecifiedRepr, r: OpticRepr) => Left(Conflict(l.pos, getPositions(r).head))
+      case (l: OpticRepr, r: SpecifiedRepr) => Left(Conflict(getPositions(l).head, r.pos))
     }
 
     def getPositions(customRepr: CustomRepr): List[c.Position] = {
