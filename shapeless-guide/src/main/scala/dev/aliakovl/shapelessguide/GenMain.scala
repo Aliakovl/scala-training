@@ -63,10 +63,19 @@ object GenMain extends App {
 
   Gen
     .custom[Either[String, Int]]
-    .specifyConst(_.when[Left].value)("lol")
-    .specifyConst(_.when[Right].value)(3)
-    .specifyConst(x => x)(Left("wef"))
+    .specifyConst(
+      _.when[Left].value
+    )("lol")
+    .specifyConst(_.when[Right].value)(3).specifyConst(x => x)(Left("wef"))
     .make
+
+  Gen
+    .custom[Option[Int]]
+//    .specifyConst(_.when[Some])(Some(3))
+    .specifyConst { x =>
+      x.when[Some].value
+    }(3)
+    .specifyConst(_.when[Some].value)(2).make
 
   Gen
     .custom[Opt[Int]]

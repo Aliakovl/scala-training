@@ -5,6 +5,7 @@ import dev.aliakovl.gin.macros.State._
 import dev.aliakovl.gin.macros.fp.syntax._
 
 import scala.annotation.tailrec
+import scala.reflect.internal.util.Position
 import scala.reflect.macros.whitebox
 
 object GenMacro {
@@ -267,22 +268,24 @@ object GenMacro {
 
     @tailrec
     def disassembleTree(tree: c.Tree, methods: Methods = List.empty): Methods = {
+      def mkPos(other: c.Tree): c.Position = tree.pos.withStart(other.pos.end + 1)
+
       tree match {
         case q"$other.specify[$_](($_) => $selectorTree)($arg)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = SpecifyMethod(selector, GenArg(arg), selectorTree.pos)
+          val method = SpecifyMethod(selector, GenArg(arg), mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$other.specifyConst[$_](($_) => $selectorTree)($arg)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = SpecifyMethod(selector, ConstArg(arg), selectorTree.pos)
+          val method = SpecifyMethod(selector, ConstArg(arg), mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$other.useDefault[$_](($_) => $selectorTree)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = UseDefaultMethod(selector, selectorTree.pos)
+          val method = UseDefaultMethod(selector, mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$other.exclude[$_](($_) => $selectorTree)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = ExcludeMethod(selector, selectorTree.pos)
+          val method = ExcludeMethod(selector, mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$module.custom[$_]" if module.symbol == genSymbol => methods
         case _ => c.abort(tree.pos, "Unsupported syntax")
@@ -363,18 +366,28 @@ object GenMacro {
       }
     }
 
+    def showPos(pos: c.Position): String = {
+      val p = Position.range(pos.source, pos.start, pos.point, pos.end)
+      p.source.lines(
+        p.source.offsetToLine(p.start),
+        p.source.offsetToLine(p.end) + 1
+      ).mkString("\n")
+    }
+
     case class Conflict(pos: c.Position, withPos: c.Position) {
       override def toString: String =
-        s"""  ${pos}
-           |  ${withPos}
+        s"""${showPos(pos)}
+           |and
+           |${showPos(withPos)}
            |""".stripMargin
     }
 
     def aggregateErrors(list: List[CustomRepr]): String = {
       aggregate(list).zipWithIndex.map { case (conf, ind) =>
-        s"""${ind + 1}.
+        s"""
+           |${ind + 1}.
            |$conf""".stripMargin
-      }.mkString("Conflicts:\n", "", "")
+      }.mkString("Conflicts:", "", "")
     }
 
     def aggregate(list: List[CustomRepr]): List[Conflict] = {
