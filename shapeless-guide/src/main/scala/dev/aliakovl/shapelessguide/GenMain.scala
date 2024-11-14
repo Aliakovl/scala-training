@@ -71,7 +71,7 @@ object GenMain extends App {
 
   Gen
     .custom[Option[Int]]
-//    .specifyConst(_.when[Some])(Some(3))
+    .specifyConst(_.when[Some])(Some(3))
     .specifyConst { x =>
       x.when[Some].value
     }(3)

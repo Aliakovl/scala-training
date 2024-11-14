@@ -4,6 +4,8 @@ package macros
 import dev.aliakovl.gin.macros.State._
 import dev.aliakovl.gin.macros.fp.syntax._
 
+import java.lang.System.lineSeparator
+import scala.Console
 import scala.annotation.tailrec
 import scala.reflect.internal.util.Position
 import scala.reflect.macros.whitebox
@@ -268,7 +270,7 @@ object GenMacro {
 
     @tailrec
     def disassembleTree(tree: c.Tree, methods: Methods = List.empty): Methods = {
-      def mkPos(other: c.Tree): c.Position = tree.pos.withStart(other.pos.end + 1)
+      def mkPos(other: c.Tree): c.Position = tree.pos.withStart(other.pos.end)
 
       tree match {
         case q"$other.specify[$_](($_) => $selectorTree)($arg)" =>
@@ -367,27 +369,32 @@ object GenMacro {
     }
 
     def showPos(pos: c.Position): String = {
-      val p = Position.range(pos.source, pos.start, pos.point, pos.end)
-      p.source.lines(
-        p.source.offsetToLine(p.start),
-        p.source.offsetToLine(p.end) + 1
-      ).mkString("\n")
+      val sourceCode = pos.source.sourceAt {
+        Position.range(pos.source, pos.start, pos.point, pos.end)
+      }
+      sourceCode
+        .stripIndent()
+        .stripLeading()
+        .stripTrailing()
+        .linesIterator
+        .map(Console.BLACK_B + Console.RED + _ + Console.RESET)
+        .mkString(lineSeparator)
     }
 
     case class Conflict(pos: c.Position, withPos: c.Position) {
-      override def toString: String =
-        s"""${showPos(pos)}
-           |and
+      def asString(i: Int): String = {
+        s"""$i. ${pos.source.path}:${pos.line}
+           |${showPos(pos)}
+           |with ${withPos.source.path}:${withPos.line}
            |${showPos(withPos)}
            |""".stripMargin
+      }
     }
 
     def aggregateErrors(list: List[CustomRepr]): String = {
-      aggregate(list).zipWithIndex.map { case (conf, ind) =>
-        s"""
-           |${ind + 1}.
-           |$conf""".stripMargin
-      }.mkString("Conflicts:", "", "")
+      aggregate(list).zipWithIndex.map { case (conflict, ind) =>
+        conflict.asString(ind + 1)
+      }.mkString("Conflicts:\n", "", "")
     }
 
     def aggregate(list: List[CustomRepr]): List[Conflict] = {
