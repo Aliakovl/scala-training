@@ -18,8 +18,6 @@ trait Applicative[F[_]] {
 }
 
 object Applicative {
-  def apply[F[_]](implicit instance: Applicative[F]): Applicative[F] = instance
-
   implicit val applicativeForOption: Applicative[Option] =
     new Applicative[Option] {
       override def pure[A](a: A): Option[A] = Some(a)

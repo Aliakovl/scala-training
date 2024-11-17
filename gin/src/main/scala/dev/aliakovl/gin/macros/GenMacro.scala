@@ -360,10 +360,10 @@ object GenMacro {
     }
 
     def mergeMethods(methods: Methods): VarsState[Option[CustomRepr]] = {
-      methods.traverse(_.toSpecifiedGen(typeToGen)).map { list =>
-        list.reduceOption {
+      methods.traverse(_.toSpecifiedGen(typeToGen)).map { representations =>
+        representations.reduceOption {
           mergeSpecifications(_, _)
-            .getOrElse(fail(aggregateErrors(list)))
+            .getOrElse(fail(printConflicts(aggregateConflicts(representations))))
         }
       }
     }
@@ -391,18 +391,18 @@ object GenMacro {
       }
     }
 
-    def aggregateErrors(list: List[CustomRepr]): String = {
-      aggregate(list).zipWithIndex.map { case (conflict, ind) =>
+    def printConflicts(conflicts: List[Conflict]): String = {
+      conflicts.zipWithIndex.map { case (conflict, ind) =>
         conflict.asString(ind + 1)
       }.mkString("Conflicts:\n", "", "")
     }
 
-    def aggregate(list: List[CustomRepr]): List[Conflict] = {
-      list.foldLeft((Set.empty[CustomRepr], List.empty[Conflict])) { case ((prev, acc), repr) =>
-        val res = prev.map(mergeSpecifications(_, repr)).collect {
+    def aggregateConflicts(representations: List[CustomRepr]): List[Conflict] = {
+      representations.foldLeft((Set.empty[CustomRepr], List.empty[Conflict])) { case ((prevs, acc), repr) =>
+        val res = prevs.map(mergeSpecifications(_, repr)).collect {
           case Left(value) => value
         }
-        (prev + repr, acc ++ res)
+        (prevs + repr, acc ++ res)
       }._2
     }
 
