@@ -4,7 +4,10 @@ package macros
 import dev.aliakovl.gin.macros.State._
 import dev.aliakovl.gin.macros.fp.syntax._
 
+import java.lang.System.lineSeparator
+import scala.Console
 import scala.annotation.tailrec
+import scala.reflect.internal.util.Position
 import scala.reflect.macros.whitebox
 
 object GenMacro {
@@ -172,7 +175,7 @@ object GenMacro {
     case class Lens(fromType: c.Type, field: c.TermName, toType: c.Type) extends Optic
     case class Prism(toType: c.Type) extends Optic
 
-    def focusWithPrism(tpe: c.Type, toType: c.Type)(next: VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
+    def focusWithPrism(tpe: c.Type, toType: c.Type)(next: VarsState[CustomRepr]): VarsState[CustomRepr] = {
       if (tpe.typeConstructor =:= toType.typeConstructor) {
         tpe.typeArgs zip toType.typeArgs foreach { case (s, t) =>
           if (!(s =:= t)) fail(s"Type arguments of $toType must not be narrowed, fix: $t -> $s")
@@ -195,7 +198,7 @@ object GenMacro {
       }
     }
 
-    def focusWithLens(tpe: c.Type, fromType: c.Type, field: c.TermName)(next: c.Symbol => VarsState[SpecifiedGen]): VarsState[SpecifiedGen] = {
+    def focusWithLens(tpe: c.Type, fromType: c.Type, field: c.TermName)(next: c.Symbol => VarsState[CustomRepr]): VarsState[CustomRepr] = {
       val allParams = paramListsOf(publicConstructor(tpe), fromType)
       if (!allParams.flatten.map(_.name).contains(field)) c.abort(fromType.termSymbol.pos, s"Constructor of $tpe does not take $field argument")
       allParams.traverse { params =>
@@ -206,7 +209,7 @@ object GenMacro {
           } else if (param.isImplicit) {
             val impl = c.inferImplicitValue(param.info)
             if (impl == EmptyTree) fail(s"Could not find implicit value for parameter ${param.name}: ${param.info.typeSymbol.name}")
-            State.pure[Variables, SpecifiedGen](NotSpecifiedImplicit(impl)).map(termName -> _)
+            State.pure[Variables, CustomRepr](NotSpecifiedImplicit(impl)).map(termName -> _)
           } else {
             val paramType = param.info
             State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
@@ -218,19 +221,19 @@ object GenMacro {
     }
 
     sealed trait Method {
-      def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen]
+      def toSpecifiedGen(tpe: c.Type): VarsState[CustomRepr]
     }
 
-    case class UseDefaultMethod(selector: Selector) extends Method {
-      override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
+    case class UseDefaultMethod(selector: Selector, pos: c.Position) extends Method {
+      override def toSpecifiedGen(tpe: c.Type): VarsState[CustomRepr] = toSpecifiedGen(tpe, selector)
 
-      private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
+      private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[CustomRepr] = optics match {
         case Lens(fromType, field, _) :: Nil =>
           val allParams = paramListsOf(publicConstructor(tpe), fromType)
           val defaultMap = defaults(patchedCompanionSymbolOf(tpe.typeSymbol))(allParams)
           focusWithLens(tpe, fromType, field) { param =>
             defaultMap.get(param).fold(fail(s"Constructor of $tpe parameter $field does not have default argument")) { default =>
-              State.pure(Specified(DefaultArg(default)))
+              State.pure(Specified(DefaultArg(default), pos))
             }
           }
         case Lens(fromType, field, toType) :: tail => focusWithLens(tpe, fromType, field)(_ => toSpecifiedGen(toType, tail))
@@ -239,24 +242,24 @@ object GenMacro {
       }
     }
 
-    case class ExcludeMethod(selector: Selector) extends Method {
-      override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
+    case class ExcludeMethod(selector: Selector, pos: c.Position) extends Method {
+      override def toSpecifiedGen(tpe: c.Type): VarsState[CustomRepr] = toSpecifiedGen(tpe, selector)
 
-      private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
-        case Nil => State.pure(Excluded)
+      private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[CustomRepr] = optics match {
+        case Nil => State.pure(Excluded(pos))
         case Lens(_, field, _) :: Nil => fail(s"Path in .exclude(...) must end with .when[...], not with argument $field")
         case Prism(toType) :: tail => focusWithPrism(tpe, toType)(toSpecifiedGen(toType, tail))
         case Lens(fromType, field, toType) :: tail => focusWithLens(tpe, fromType, field)(_ => toSpecifiedGen(toType, tail))
       }
     }
 
-    case class SpecifyMethod(selector: Selector, arg: Arg) extends Method {
-      override def toSpecifiedGen(tpe: c.Type): VarsState[SpecifiedGen] = toSpecifiedGen(tpe, selector)
+    case class SpecifyMethod(selector: Selector, arg: Arg, pos: c.Position) extends Method {
+      override def toSpecifiedGen(tpe: c.Type): VarsState[CustomRepr] = toSpecifiedGen(tpe, selector)
 
-      private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[SpecifiedGen] = optics match {
+      private def toSpecifiedGen(tpe: c.Type, optics: List[Optic]): VarsState[CustomRepr] = optics match {
         case Prism(toType) :: tail => focusWithPrism(tpe, toType)(toSpecifiedGen(toType, tail))
         case Lens(fromType, field, toType) :: tail => focusWithLens(tpe, fromType, field)(_ => toSpecifiedGen(toType, tail))
-        case Nil => State.pure(Specified(arg))
+        case Nil => State.pure(Specified(arg, pos))
       }
     }
 
@@ -267,22 +270,24 @@ object GenMacro {
 
     @tailrec
     def disassembleTree(tree: c.Tree, methods: Methods = List.empty): Methods = {
+      def mkPos(other: c.Tree): c.Position = tree.pos.withStart(other.pos.end)
+
       tree match {
         case q"$other.specify[$_](($_) => $selectorTree)($arg)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = SpecifyMethod(selector, GenArg(arg))
+          val method = SpecifyMethod(selector, GenArg(arg), mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$other.specifyConst[$_](($_) => $selectorTree)($arg)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = SpecifyMethod(selector, ConstArg(arg))
+          val method = SpecifyMethod(selector, ConstArg(arg), mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$other.useDefault[$_](($_) => $selectorTree)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = UseDefaultMethod(selector)
+          val method = UseDefaultMethod(selector, mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$other.exclude[$_](($_) => $selectorTree)" =>
           val selector = disassembleSelector(selectorTree)
-          val method = ExcludeMethod(selector)
+          val method = ExcludeMethod(selector, mkPos(other))
           disassembleTree(other, method +: methods)
         case q"$module.custom[$_]" if module.symbol == genSymbol => methods
         case _ => c.abort(tree.pos, "Unsupported syntax")
@@ -316,15 +321,28 @@ object GenMacro {
       }
     }
 
-    sealed trait SpecifiedGen
-    case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, SpecifiedGen]]) extends SpecifiedGen
-    case class SpecifiedSealedTrait(subclasses: Map[c.Type, SpecifiedGen]) extends SpecifiedGen
-    case class Specified(tree: Arg) extends SpecifiedGen
-    case class NotSpecifiedImplicit(tree: c.Tree) extends SpecifiedGen
-    case class NotSpecified(name: c.TermName) extends SpecifiedGen
-    case object Excluded extends SpecifiedGen
+    trait HasPosition {
+      def pos: c.Position
+    }
 
-    def usedVariables(gen: SpecifiedGen): Set[c.TermName] = gen match {
+    sealed trait CustomRepr
+
+    sealed trait OpticRepr extends CustomRepr
+    case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, CustomRepr]]) extends OpticRepr
+    case class SpecifiedSealedTrait(subclasses: Map[c.Type, CustomRepr]) extends OpticRepr
+
+    sealed trait SpecifiedRepr extends CustomRepr with HasPosition
+    case class Specified(tree: Arg, pos: c.Position) extends SpecifiedRepr
+    object Specified {
+      def unapply(s: Specified): Option[Arg] = Some(s.tree)
+    }
+    case class Excluded(pos: c.Position) extends SpecifiedRepr
+
+    sealed trait NotSpecifiedRepr extends CustomRepr
+    case class NotSpecifiedImplicit(tree: c.Tree) extends NotSpecifiedRepr
+    case class NotSpecified(name: c.TermName) extends NotSpecifiedRepr
+
+    def usedVariables(gen: CustomRepr): Set[c.TermName] = gen match {
       case SpecifiedCaseClass(_, fields) => fields.flatten.flatMap { case (name, field) =>
         usedVariables(field) + name
       }.toSet
@@ -333,7 +351,7 @@ object GenMacro {
       case _ => Set.empty
     }
 
-    def deleteUnused(gen: SpecifiedGen, variables: Variables): Variables = {
+    def deleteUnused(gen: CustomRepr, variables: Variables): Variables = {
       val tpeA = typeToGen
       val used = usedVariables(gen)
       variables.filter { case (tpe, name) =>
@@ -341,56 +359,92 @@ object GenMacro {
       }
     }
 
-    def mergeMethods(methods: Methods): VarsState[Option[SpecifiedGen]] = {
-      methods.traverse(_.toSpecifiedGen(typeToGen)).map { list =>
-        list.foldLeft[Option[SpecifiedGen]](None) {
-          case (Some(left), right) => Some(mergeSpecifications(left, right))
-          case (None, value) => Some(value)
+    def mergeMethods(methods: Methods): VarsState[Option[CustomRepr]] = {
+      methods.traverse(_.toSpecifiedGen(typeToGen)).map { representations =>
+        representations.reduceOption {
+          mergeSpecifications(_, _)
+            .getOrElse(fail(printConflicts(aggregateConflicts(representations))))
         }
       }
     }
 
-    def mergeSpecifications(
-      left: SpecifiedGen,
-      right: SpecifiedGen
-    ): SpecifiedGen = (left, right) match {
-      case (SpecifiedCaseClass(leftClass, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
-        assert(leftClass == rightClass)
-        val fields = leftFields.zip(rightFields).map { case (leftArgs, rightArgs) =>
-          leftArgs.map { case (key, value) =>
-            key -> mergeSpecifications(value, rightArgs(key))
-          }
-        }
-        SpecifiedCaseClass(rightClass, fields)
-      case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
-        SpecifiedSealedTrait(leftSubclasses.map { case (key, left) =>
-          key -> mergeSpecifications(left, rightSubclasses(key))
-        })
-      case (SpecifiedSealedTrait(subclasses), _: SpecifiedCaseClass) =>
-        SpecifiedSealedTrait(subclasses.map { case (subclass, leftSpecified) =>
-          subclass -> mergeSpecifications(leftSpecified, right)
-        })
-      case (_: SpecifiedCaseClass, SpecifiedSealedTrait(subclasses)) =>
-        SpecifiedSealedTrait(subclasses.map { case (subclass, rightSpecified) =>
-          subclass -> mergeSpecifications(left, rightSpecified)
-        })
-      case (SpecifiedCaseClass(_, fields), _: NotSpecified | _: NotSpecifiedImplicit) =>
-        if (fields.nonEmpty) left else right
-      case (SpecifiedSealedTrait(subclasses), _: NotSpecified) =>
-        if (subclasses.nonEmpty) left else right
-      case (_: NotSpecified | _: NotSpecifiedImplicit, SpecifiedCaseClass(_, fields)) =>
-        if (fields.nonEmpty) right else left
-      case (_: NotSpecified | _: NotSpecifiedImplicit, SpecifiedSealedTrait(subclasses)) =>
-        if (subclasses.nonEmpty) right else left
-      case (_: NotSpecified | _: NotSpecifiedImplicit, _: NotSpecified | _: NotSpecifiedImplicit) => right
-      case (_: NotSpecified | _: NotSpecifiedImplicit, _: Specified) => right
-      case (_: Specified, _: NotSpecified | _: NotSpecifiedImplicit) => left
-      case (Excluded, _: NotSpecified | _: NotSpecifiedImplicit) => Excluded
-      case (_: NotSpecified | _: NotSpecifiedImplicit, Excluded) => Excluded
-      case _ => fail(s"Some specifications conflict")
+    def showPos(pos: c.Position): String = {
+      val sourceCode = pos.source.sourceAt {
+        Position.range(pos.source, pos.start, pos.point, pos.end)
+      }
+      sourceCode
+        .stripIndent()
+        .stripLeading()
+        .stripTrailing()
+        .linesIterator
+        .map(Console.BLACK_B + Console.RED + _ + Console.RESET)
+        .mkString(lineSeparator)
     }
 
-    def specifiedTree(termName: c.TermName)(gen: SpecifiedGen): c.Tree = gen match {
+    case class Conflict(pos: c.Position, withPos: c.Position) {
+      def asString(i: Int): String = {
+        s"""$i. ${pos.source.path}:${pos.line}
+           |${showPos(pos)}
+           |with ${withPos.source.path}:${withPos.line}
+           |${showPos(withPos)}
+           |""".stripMargin
+      }
+    }
+
+    def printConflicts(conflicts: List[Conflict]): String = {
+      conflicts.zipWithIndex.map { case (conflict, ind) =>
+        conflict.asString(ind + 1)
+      }.mkString("Conflicts:\n", "", "")
+    }
+
+    def aggregateConflicts(representations: List[CustomRepr]): List[Conflict] = {
+      representations.foldLeft((Set.empty[CustomRepr], List.empty[Conflict])) { case ((prevs, acc), repr) =>
+        val res = prevs.map(mergeSpecifications(_, repr)).collect {
+          case Left(value) => value
+        }
+        (prevs + repr, acc ++ res)
+      }._2
+    }
+
+    def mergeSpecifications(
+      left: CustomRepr,
+      right: CustomRepr
+    ): Either[Conflict, CustomRepr] = (left, right) match {
+      case (SpecifiedCaseClass(_, leftFields), SpecifiedCaseClass(rightClass, rightFields)) =>
+        leftFields.zip(rightFields).traverse { case (leftArgs, rightArgs) =>
+          leftArgs.iterator.traverse { case (key, leftArg) =>
+            mergeSpecifications(leftArg, rightArgs(key)).map(key -> _)
+          }.map(_.toMap)
+        }.map(SpecifiedCaseClass(rightClass, _))
+      case (SpecifiedSealedTrait(leftSubclasses), SpecifiedSealedTrait(rightSubclasses)) =>
+        leftSubclasses.iterator.traverse { case (key, left) =>
+          mergeSpecifications(left, rightSubclasses(key)).map(key -> _)
+        }.map(subclasses => SpecifiedSealedTrait(subclasses.toMap))
+      case (SpecifiedSealedTrait(subclasses), right: SpecifiedCaseClass) =>
+        subclasses.iterator.traverse { case (subclass, leftSpecified) =>
+          mergeSpecifications(leftSpecified, right).map(subclass -> _)
+        }.map(x => SpecifiedSealedTrait(x.toMap))
+      case (left: SpecifiedCaseClass, SpecifiedSealedTrait(subclasses)) =>
+        subclasses.iterator.traverse { case (subclass, rightSpecified) =>
+          mergeSpecifications(left, rightSpecified).map(subclass -> _)
+        }.map(x => SpecifiedSealedTrait(x.toMap))
+      case (left, _: NotSpecifiedRepr) => Right(left)
+      case (_: NotSpecifiedRepr, right) => Right(right)
+      case (l: SpecifiedRepr, r: SpecifiedRepr) => Left(Conflict(l.pos, r.pos))
+      case (l: SpecifiedRepr, r: OpticRepr) => Left(Conflict(l.pos, getPositions(r).head))
+      case (l: OpticRepr, r: SpecifiedRepr) => Left(Conflict(getPositions(l).head, r.pos))
+    }
+
+    def getPositions(customRepr: CustomRepr): List[c.Position] = {
+      customRepr match {
+        case SpecifiedCaseClass(_, fields) => fields.flatMap(_.values.flatMap(getPositions))
+        case SpecifiedSealedTrait(subclasses) => subclasses.values.flatMap(getPositions).toList
+        case repr: SpecifiedRepr => List(repr.pos)
+        case _: NotSpecifiedRepr => List()
+      }
+    }
+
+    def specifiedTree(termName: c.TermName)(gen: CustomRepr): c.Tree = gen match {
       case SpecifiedCaseClass(classSymbol, fields) =>
         val args = fields.foldLeft(List.empty[List[c.Tree]]) { case (acc, next) =>
           val params = next.values.map {
@@ -401,14 +455,14 @@ object GenMacro {
         }
         construct(classSymbol, args)
       case SpecifiedSealedTrait(subclasses) =>
-        val cases = subclasses.filterNot(_._2 == Excluded)
+        val cases = subclasses.filterNot(_._2.isInstanceOf[Excluded])
         if (cases.isEmpty) fail("All subtypes was excluded")
         constructCases(termName)(cases)(specifiedTree(termName))
       case Specified(GenArg(tree)) => callApply(tree)(termName)
       case Specified(ConstArg(tree)) => tree
       case NotSpecified(name) => callApply(Ident(name))(termName)
       case NotSpecifiedImplicit(tree) => tree
-      case Excluded => fail("All subtypes was excluded")
+      case Excluded(_) => fail("All subtypes was excluded")
       case _ => fail("Unreachable")
     }
 
