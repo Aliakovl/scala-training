@@ -1,5 +1,7 @@
 package dev.aliakovl.gin.macros
 
+import dev.aliakovl.gin.macros.fp.data.State
+
 import scala.reflect.macros.whitebox
 
 private[macros] final class Stack[C <: whitebox.Context with Singleton] {

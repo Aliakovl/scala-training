@@ -1,7 +1,7 @@
 package dev.aliakovl.gin
 package macros
 
-import dev.aliakovl.gin.macros.State._
+import dev.aliakovl.gin.macros.fp.data.State
 import dev.aliakovl.gin.macros.fp.syntax._
 
 import java.lang.System.lineSeparator
@@ -72,13 +72,12 @@ object GenMacro {
       } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
       } else if (isAbstractSealed(sym)) {
-        val subtypes = subTypesOf(tpe)
-        subtypes.traverse { subtype =>
+        subTypesOf(tpe).traverse { subtype =>
           getVariableName(subtype).map(subtype -> _)
-        }.map(_.toMap).map { subclasses =>
+        }.map { subclasses =>
           if (subclasses.isEmpty) fail(s"Class ${tpe.typeSymbol.name} does not have constructors")
           withName { termName =>
-            toGen(termName)(constructCases(termName)(subclasses) { name => callApply(Ident(name))(termName) })
+            toGen(termName)(constructCases(termName)(subclasses.toMap) { name => callApply(Ident(name))(termName) })
           }
         }
       } else if (isConcreteClass(sym)) {
@@ -106,36 +105,24 @@ object GenMacro {
           .toRight(s"Fail to find implicit for type $tpe")
       }
         .map(_.fold(fail, identity))
-        .map(tree => c.untypecheck(pullOutLazyVariables.transform(tree))) <* createIfNotExists(tpe)
+        .map(tree => c.untypecheck(pullOutLazyVariables.transform(tree))) <* createVariableIfNotExists(tpe)
     }
 
-    def updateIfNotExists(tpe: c.Type, value: c.Tree): State[VState, Unit] = {
-      for {
-        values <- State.get[VState].map(_._2)
-        _ <- if (values.contains(tpe)) {
-          State.unit[VState]
-        } else {
-          State.modifySecond[Variables, Values](_.updated(tpe, value))
-        }
-      } yield ()
+    def createValueIfNotExists(tpe: c.Type, value: c.Tree): FullState[Unit] = {
+      State.modifyUnless[VState](_._2.contains(tpe))(_.modify[Values](_.updated(tpe, value)))
     }
 
-    def createIfNotExists(tpe: c.Type): State[VState, c.TermName] = {
-      for {
-        variables <- State.get[VState].map(_._1)
-        name <- variables.get(tpe) match {
-          case Some(value) => State.pure[VState, c.TermName](value)
-          case None =>
-            val name = c.freshName(tpe.typeSymbol.name).toTermName
-            State.modifyFirst[Variables, Values](_.updated(tpe, name)).as(name)
-        }
-      } yield name
+    def createVariableIfNotExists(tpe: c.Type): FullState[Unit] = {
+      State.modifyUnless[VState](_._1.contains(tpe))(_.modify[Variables]{ variables =>
+        val name = c.freshName(tpe.typeSymbol.name).toTermName
+        variables.updated(tpe, name)
+      })
     }
 
     def getVariableName(tpe: c.Type): FullState[TermName] = for {
       variables <- State.get[VState].map(_._1)
       name <- State.pure(variables.get(tpe)).fallback {
-        findImplicit(tpe).flatMap(updateIfNotExists(tpe, _)) *> State.get[VState].map(_._1).map(_.apply(tpe))
+        findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _)) *> State.get[VState].map(_._1(tpe))
       }
     } yield name
 
@@ -145,9 +132,9 @@ object GenMacro {
           case Some(value) => State.pure(value)
           case None =>
             for {
-              _ <- createIfNotExists(tpe)
+              _ <- createVariableIfNotExists(tpe)
               value <- buildValue(tpe)
-              _ <- updateIfNotExists(tpe, value)
+              _ <- createValueIfNotExists(tpe, value)
             } yield value
         }
       }
@@ -155,14 +142,14 @@ object GenMacro {
 
     def initValues(tree: Option[c.Tree]): FullState[Unit] = {
       tree.fold {
-        getOrElseCreateValue(typeToGen).as(())
+        getOrElseCreateValue(typeToGen).unit
       } { value =>
         for {
-          _ <- updateIfNotExists(typeToGen, c.untypecheck(value.duplicate))
-          _ <- createIfNotExists(typeToGen)
+          _ <- createValueIfNotExists(typeToGen, c.untypecheck(value.duplicate))
+          _ <- createVariableIfNotExists(typeToGen)
           variables <- State.get[VState].map(_._1)
           _ <- (variables.keySet - typeToGen).traverse { tpe =>
-            findImplicit(tpe).flatMap(updateIfNotExists(tpe, _))
+            findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _))
           }
         } yield ()
       }
