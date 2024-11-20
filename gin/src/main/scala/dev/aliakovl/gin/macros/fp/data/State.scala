@@ -1,7 +1,7 @@
-package dev.aliakovl.gin
-package macros
+package dev.aliakovl.gin.macros.fp.data
 
 import dev.aliakovl.gin.macros.fp.Applicative
+import dev.aliakovl.gin.macros.fp.optics.Lens
 
 private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
   def map[B](f: A => B): State[S, B] = State { s =>
@@ -18,6 +18,8 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
     val (s1, _) = run(s)
     (s1, b)
   }
+
+  def unit: State[S, Unit] = as(())
 
   def zip[B](other: => State[S, B]): State[S, (A, B)] = State { s =>
     val (s1, a) = run(s)
@@ -66,13 +68,8 @@ private[macros] final class State[S, +A](val run: S => (S, A)) extends AnyVal {
 private[macros] object State {
   def apply[S, A](f: S => (S, A)): State[S, A] = new State[S, A](f)
   def pure[S, A](a: A): State[S, A] = State(s => (s, a))
-  def unit[S]: State[S, Unit] = State(s => (s, ()))
   def get[S]: State[S, S] = State(s => (s, s))
   def modify[S](f: S => S): State[S, Unit] = State(s => (f(s), ()))
-  def modifyFirst[S, T](f: S => S): State[(S, T), Unit] =
-    State(p => ((f(p._1), p._2), ()))
-  def modifySecond[S, T](f: T => T): State[(S, T), Unit] =
-    State(p => ((p._1, f(p._2)), ()))
   def getOrElseUpdate[K, V](key: K, value: => V): State[Map[K, V], V] = {
     for {
       s <- State.get[Map[K, V]]
@@ -84,6 +81,14 @@ private[macros] object State {
       }
     } yield v
   }
+
+  def modifyUnless[S](pred: S => Boolean)(f: S => S): State[S, Unit] = State(s =>
+    if (pred(s)) {
+      (s, ())
+    } else {
+      (f(s), ())
+    }
+  )
 
   implicit def applicationForState[S]
       : Applicative[({ type M[A] = State[S, A] })#M] =

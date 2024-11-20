@@ -1,15 +1,30 @@
 package dev.aliakovl.gin.macros
 
+import dev.aliakovl.gin.macros.fp.data.State
+import dev.aliakovl.gin.macros.fp.optics.Lens
+
 import scala.reflect.macros.whitebox
 
 private[macros] final class Stack[C <: whitebox.Context with Singleton] {
   type Variables = Map[C#Type, C#TermName]
   type Values = Map[C#Type, C#Tree]
   type VarsState[A] = State[Variables, A]
-  type VState = (Variables, Values)
+  case class VState(variables: Variables, values: Values)
   type FullState[A] = State[VState, A]
 
-  private val init: VState = (Map.empty, Map.empty)
+  object VState {
+    implicit def lensForVStateVariables: Lens[VState, Variables] = new Lens[VState, Variables] {
+      override def get(t: VState): Variables = t.variables
+      override def set(t: VState, s: Variables): VState = t.copy(variables = s)
+    }
+
+    implicit def lensForVStateValues: Lens[VState, Values] = new Lens[VState, Values] {
+      override def get(t: VState): Values = t.values
+      override def set(t: VState, s: Values): VState = t.copy(values = s)
+    }
+  }
+
+  private val init: VState = VState(Map.empty, Map.empty)
   private var states: List[VState] = List.empty
   private var error: Option[String] = None
 

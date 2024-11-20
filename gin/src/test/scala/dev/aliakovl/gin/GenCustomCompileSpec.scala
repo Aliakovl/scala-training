@@ -3,6 +3,8 @@ package dev.aliakovl.gin
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
+import scala.language.existentials
+
 class GenCustomCompileSpec extends AnyWordSpec with Matchers {
   "Gen.custom" should {
     "not compile" when {
@@ -215,6 +217,49 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
 
       }
 
+      "type is existential" in {
+        """
+          |Gen
+          |  .custom[T forSome { type T }]
+          |  .make
+          |""".stripMargin shouldNot compile
+
+        """
+          |Gen
+          |  .custom[List[_]]
+          |  .make
+          |""".stripMargin shouldNot compile
+      }
+
+      "type is refined" in {
+        trait A
+
+        """
+          |Gen
+          |  .custom[Option[Int] {}]
+          |  .make
+          |""".stripMargin shouldNot compile
+
+        """
+          |Gen
+          |  .custom[Option[Int] with A]
+          |  .make
+          |""".stripMargin shouldNot compile
+      }
+
+      "type is not class" in {
+
+        object Obj {
+          type Out
+        }
+
+        """
+          |Gen
+          |  .custom[Obj.Out]
+          |  .make
+          |""".stripMargin shouldNot compile
+
+      }
     }
 
     "compile" when {
@@ -234,7 +279,14 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
           |  .exclude(_.when[Right[String, A]])
           |  .make
           |""".stripMargin should compile
+      }
 
+      "uses type alias" in {
+        type A = (Int, String)
+
+        """
+          |Gen.custom[A].make
+          |""".stripMargin should compile
       }
     }
   }
