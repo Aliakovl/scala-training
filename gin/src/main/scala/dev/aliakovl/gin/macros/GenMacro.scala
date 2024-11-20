@@ -45,7 +45,10 @@ object GenMacro {
     def block[T](statements: List[c.Expr[Any]], expr: c.Expr[T]): c.Expr[T] =
       c.Expr[T](q"..$statements; $expr")
 
-    def genTree(variables: Variables, values: Values): c.Expr[Gen[A]] = {
+    def genTree(vState: VState): c.Expr[Gen[A]] = {
+      val variables = vState.variables
+      val values = vState.values
+
       def lazyVal(variable: c.TermName, tpe: c.Type, value: c.Tree): c.Expr[Any] = c.Expr[Any] {
         q"lazy val $variable: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
       }
@@ -109,25 +112,25 @@ object GenMacro {
     }
 
     def createValueIfNotExists(tpe: c.Type, value: c.Tree): FullState[Unit] = {
-      State.modifyUnless[VState](_._2.contains(tpe))(_.modify[Values](_.updated(tpe, value)))
+      State.modifyUnless[VState](_.values.contains(tpe))(_.modify[Values](_.updated(tpe, value)))
     }
 
     def createVariableIfNotExists(tpe: c.Type): FullState[Unit] = {
-      State.modifyUnless[VState](_._1.contains(tpe))(_.modify[Variables]{ variables =>
+      State.modifyUnless[VState](_.variables.contains(tpe))(_.modify[Variables]{ variables =>
         val name = c.freshName(tpe.typeSymbol.name).toTermName
         variables.updated(tpe, name)
       })
     }
 
     def getVariableName(tpe: c.Type): FullState[TermName] = for {
-      variables <- State.get[VState].map(_._1)
+      variables <- State.get[VState].map(_.variables)
       name <- State.pure(variables.get(tpe)).fallback {
-        findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _)) *> State.get[VState].map(_._1(tpe))
+        findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _)) *> State.get[VState].map(_.variables(tpe))
       }
     } yield name
 
     def getOrElseCreateValue(tpe: c.Type): FullState[c.Tree] = {
-      State.get[VState].map(_._2).flatMap { values =>
+      State.get[VState].map(_.values).flatMap { values =>
         values.get(tpe) match {
           case Some(value) => State.pure(value)
           case None =>
@@ -144,7 +147,7 @@ object GenMacro {
       for {
         _ <- createValueIfNotExists(typeToGen, c.untypecheck(value.duplicate))
         _ <- createVariableIfNotExists(typeToGen)
-        variables <- State.get[VState].map(_._1)
+        variables <- State.get[VState].map(_.variables)
         _ <- (variables.keySet - typeToGen).traverse { tpe =>
           findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _))
         }
@@ -653,7 +656,7 @@ object GenMacro {
         case q"$_.materialize[$_]" => materialize()
         case q"$prefix.make" => make(prefix)
       }
-    }((genTree _).tupled)
+    }(genTree)
   }
 
   object Lazy {
