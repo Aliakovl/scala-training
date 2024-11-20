@@ -344,10 +344,9 @@ object GenMacro {
     }
 
     def deleteUnused(gen: CustomRepr, variables: Variables): Variables = {
-      val tpeA = typeToGen
       val used = usedVariables(gen)
       variables.filter { case (tpe, name) =>
-        used.contains(name) || tpe == tpeA
+        used.contains(name) || tpe == typeToGen
       }
     }
 
