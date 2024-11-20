@@ -15,7 +15,7 @@ object GenMacro {
     import c.universe._
     import stack._
 
-    val typeToGen = weakTypeOf[A]
+    val typeToGen = weakTypeOf[A].dealias
     val genSymbol = symbolOf[Gen.type].asClass.module
     val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
 
@@ -616,11 +616,7 @@ object GenMacro {
     }
 
     def make(prefix: c.Tree): FullState[Unit] = {
-      Option.when(typeToGen.typeSymbol.isClass) {
-        mergeMethods(disassembleTree(prefix))
-      }
-      .sequence
-      .map(_.flatten)
+      mergeMethods(disassembleTree(prefix))
       .flatTap { genOpt =>
         genOpt.traverse { gen =>
           State.modify[Variables](deleteUnused(gen, _))
@@ -633,10 +629,22 @@ object GenMacro {
           }
         }
       }
-      .modifyState[VState].flatMap(initValues)
+      .modifyState[VState]
+      .flatMap(initValues)
     }
 
     def materialize(): FullState[Unit] = initValues(None)
+
+    def checkType(tpe: c.Type): Unit = {
+      tpe match {
+        case RefinedType(_, _) => fail(s"Could not infer Gen for refined type $tpe")
+        case ExistentialType(_, _) => fail(s"Could not infer Gen for existential type $tpe")
+        case t if !t.typeSymbol.isClass => fail(s"Could not infer Gen for non class type $tpe")
+        case _ => ()
+      }
+    }
+
+    checkType(typeToGen)
 
     withStateProvided {
       c.macroApplication match {
