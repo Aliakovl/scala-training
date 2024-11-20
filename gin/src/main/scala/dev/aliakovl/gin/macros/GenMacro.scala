@@ -4,46 +4,18 @@ package macros
 import dev.aliakovl.gin.macros.fp.data.State
 import dev.aliakovl.gin.macros.fp.syntax._
 
-import java.lang.System.lineSeparator
-import scala.Console
 import scala.annotation.tailrec
-import scala.reflect.internal.util.Position
 import scala.reflect.macros.whitebox
 
-object GenMacro {
-  def makeImpl[A: c.WeakTypeTag](c: whitebox.Context): c.Expr[Gen[A]] = Stack.withContext[Gen[A]](c) { stack =>
-    import c.universe._
+final class GenMacro(val c: whitebox.Context) extends Common {
+  import c.universe._
+
+  def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = Stack.withContext[Gen[A]](c) { stack =>
     import stack._
 
     val typeToGen = weakTypeOf[A].dealias
     val genSymbol = symbolOf[Gen.type].asClass.module
-    val ginModule = c.mirror.staticModule("dev.aliakovl.gin.package")
-
-    object LazyRef {
-      private val symbol = symbolOf[Lazy.type].asClass.module
-
-      def apply(tpe: c.Type, variable: String): c.Tree =
-        q"$symbol.apply[$tpe]($variable)"
-
-      def unapply(tree: c.Tree): Option[String] = tree match {
-        case q"$module.apply[$_](${Literal(Constant(variable: String))})" if module.symbol == symbol => Some(variable)
-        case _ => None
-      }
-    }
-
-    val pullOutLazyVariables = new Transformer {
-      override def transform(tre: c.Tree): c.Tree = tre match {
-        case LazyRef(variable) => Ident(TermName(variable))
-        case _                   => super.transform(tre)
-      }
-    }
-
-    def fail(message: String): Nothing = c.abort(c.enclosingPosition, message)
-
-    def withName[T](body: c.TermName => T): T = body(TermName(c.freshName()))
-
-    def block[T](statements: List[c.Expr[Any]], expr: c.Expr[T]): c.Expr[T] =
-      c.Expr[T](q"..$statements; $expr")
+    val ginModule = typeOf[dev.aliakovl.gin.`package`.type].termSymbol.asModule
 
     def genTree(vState: VState): c.Expr[Gen[A]] = {
       val variables = vState.variables
@@ -71,7 +43,7 @@ object GenMacro {
     def buildValue(tpe: c.Type): FullState[c.Tree] = {
       val sym = tpe.typeSymbol
       if (c.inferImplicitValue(constructType[ValueOf](tpe), withMacrosDisabled = true).nonEmpty) {
-        State.pure(constValueOf(tpe))
+        State.pure(toConst(toValueOf(tpe)))
       } else if (sym.isAbstract && sym.isClass && !sym.asClass.isSealed) {
         c.abort(c.enclosingPosition, s"Can not build Gen[$tpe], because abstract type $tpe is not sealed. Try to provide it implicitly")
       } else if (isAbstractSealed(sym)) {
@@ -359,19 +331,6 @@ object GenMacro {
       }
     }
 
-    def showPos(pos: c.Position): String = {
-      val sourceCode = pos.source.sourceAt {
-        Position.range(pos.source, pos.start, pos.point, pos.end)
-      }
-      sourceCode
-        .stripIndent()
-        .stripLeading()
-        .stripTrailing()
-        .linesIterator
-        .map(Console.BLACK_B + Console.RED + _ + Console.RESET)
-        .mkString(lineSeparator)
-    }
-
     case class Conflict(pos: c.Position, withPos: c.Position) {
       def asString(i: Int): String = {
         s"""$i. ${pos.source.path}:${pos.line}
@@ -457,14 +416,6 @@ object GenMacro {
       case _ => fail("Unreachable")
     }
 
-    def isAbstractSealed(sym: c.Symbol): Boolean = {
-      sym.isAbstract && sym.isClass && sym.asClass.isSealed
-    }
-
-    def isConcreteClass(sym: c.Symbol): Boolean = {
-      sym.isClass && !sym.isAbstract
-    }
-
     def toGen(termName: c.TermName)(tree: c.Tree): c.Tree = {
       val f: c.Tree = Function(ValDef(Modifiers(Flag.PARAM), termName, TypeTree(), EmptyTree) :: Nil, tree)
       q"_root_.dev.aliakovl.gin.Gen.apply($f)"
@@ -472,18 +423,7 @@ object GenMacro {
 
     def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.const($tree)"
 
-    def callApply(tree: c.Tree)(termName: c.TermName): c.Tree = q"$tree.apply(${Ident(termName)})"
-
-    def constValueOf(tpe: c.Type): c.Tree = toConst(q"_root_.scala.Predef.valueOf[$tpe]")
-
-    def constructType[F[_]](tpe: c.Type)(implicit weakTypeTag: WeakTypeTag[F[_]]): c.Type = {
-      appliedType(weakTypeTag.tpe.typeConstructor, tpe)
-    }
-
-    def construct(tpe: c.Type, constructorArgs: List[List[c.Tree]]): c.Tree = {
-      val constructionMethodTree: Tree = Select(New(Ident(tpe.dealias.typeSymbol)), termNames.CONSTRUCTOR)
-      constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
-    }
+    def toValueOf(tpe: c.Type): c.Tree = q"_root_.scala.Predef.valueOf[$tpe]"
 
     def constructCases[T](termName: c.TermName)(subclasses: Map[c.Type, T])(toTree: T => c.Tree): c.Tree = {
       val cases = subclasses.toList.sortBy(_._1.typeSymbol.fullName).map(_._2)
@@ -494,128 +434,6 @@ object GenMacro {
             case value -> index => cq"$index => ${toTree(value)}"
           }
         } }"
-      }
-    }
-
-    def subTypesOf(parent: c.Type): Set[c.Type] =
-      subclassesOf(parent.typeSymbol.asClass).map(subclassType(_, parent))
-
-    def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
-      val (abstractChildren, concreteChildren) =
-        parent.knownDirectSubclasses
-          .tapEach(_.info)
-          .partition(_.isAbstract)
-
-      concreteChildren.foreach { child =>
-        if (!child.asClass.isFinal && !child.asClass.isCaseClass && !child.isModuleClass) {
-          fail(s"Child $child of $parent is neither final nor a case class")
-        }
-      }
-
-      concreteChildren ++ abstractChildren.flatMap { child =>
-        val childClass = child.asClass
-        if (childClass.isSealed) {
-          subclassesOf(childClass)
-        } else {
-          fail(s"Child $child of $parent is not sealed")
-        }
-      }
-    }
-
-    def subclassType(subclass: c.Symbol, parent: c.Type): c.Type = {
-      val sEta = subclass.asType.toType.etaExpand
-      sEta.finalResultType.substituteTypes(
-        from = sEta
-          .baseType(parent.typeSymbol)
-          .typeArgs
-          .map(_.typeSymbol),
-        to = parent.typeArgs
-      )
-    }
-
-    def defaults(companion: c.Symbol)(params: List[List[c.Symbol]]): Map[c.Symbol, c.Tree] = {
-      val res: List[List[Option[c.Tree]]] = params.foldLeft(List.empty[List[Option[c.Tree]]]) { case (acc, next) =>
-        val defaultOpts: List[Option[c.Tree]] = next.zipWithIndex.map { case (sym, index) =>
-          Option.when(sym.asTerm.isParamWithDefault) {
-            val i = acc.flatten.size + index + 1
-            val default = companion.info.member(TermName(s"<init>$$default$$$i").encodedName)
-            q"$companion.$default"
-          }
-        }
-        acc :+ defaultOpts
-      }
-
-      params.flatten.zip(res.flatten).collect {
-        case sym -> Some(tree) => sym -> tree
-      }.toMap
-    }
-
-    def paramListsOf(method: c.Symbol, tpe: c.Type): List[List[c.Symbol]] = {
-      method.asMethod.infoIn(tpe).paramLists
-    }
-
-    def notImplicitParamLists(params: List[List[c.Symbol]]): List[List[c.Symbol]] = {
-      params.filterNot(_.headOption.exists(_.isImplicit))
-    }
-
-    def isPhantomConstructor(constructor: c.Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
-
-    def publicConstructor(tpe: c.Type): MethodSymbol = {
-      val members = tpe.members
-      val constructors: Iterable[MethodSymbol] = members
-        .filter(m => m.isMethod && m.asMethod.isConstructor && m.isPublic)
-        .filterNot(isPhantomConstructor)
-        .map(_.asMethod)
-
-      constructors
-        .find(_.isPrimaryConstructor)
-        .orElse(constructors.headOption)
-        .getOrElse(fail(s"Class ${tpe.typeSymbol.name} has no public constructors"))
-    }
-
-    // https://github.com/scalamacros/paradise/blob/c14c634923313dd03f4f483be3d7782a9b56de0e/plugin/src/main/scala/org/scalamacros/paradise/typechecker/Namers.scala#L568-L613
-    def patchedCompanionSymbolOf(original: c.Symbol): c.Symbol = {
-
-      val global = c.universe.asInstanceOf[scala.tools.nsc.Global]
-      val typer = c.asInstanceOf[scala.reflect.macros.runtime.Context].callsiteTyper.asInstanceOf[global.analyzer.Typer]
-      val ctx = typer.context
-      val owner = original.owner
-
-      import global.analyzer.Context
-
-      original.companion orElse {
-        import global._
-        implicit class PatchedContext(ctx: Context) {
-          trait PatchedLookupResult {
-            def suchThat(criterion: Symbol => Boolean): Symbol
-          }
-
-          def patchedLookup(name: Name, expectedOwner: Symbol) = new PatchedLookupResult {
-            override def suchThat(criterion: Symbol => Boolean): Symbol = {
-              var res: Symbol = NoSymbol
-              var ctx = PatchedContext.this.ctx
-              while (res == NoSymbol && ctx.outer != ctx) {
-                val s = {
-                  val lookupResult = ctx.scope.lookupAll(name).filter(criterion).toList
-                  lookupResult match {
-                    case Nil => NoSymbol
-                    case List(unique) => unique
-                    case _ => abort(s"unexpected multiple results for a companion symbol lookup for $original#{$original.id}")
-                  }
-                }
-                if (s != NoSymbol && s.owner == expectedOwner)
-                  res = s
-                else
-                  ctx = ctx.outer
-              }
-              res
-            }
-          }
-        }
-        ctx.patchedLookup(original.asInstanceOf[global.Symbol].name.companionName, owner.asInstanceOf[global.Symbol]).suchThat(sym =>
-          (original.isTerm || sym.hasModuleFlag) &&
-            (sym isCoDefinedWith original.asInstanceOf[global.Symbol])
-        ).asInstanceOf[c.Symbol]
       }
     }
 
@@ -656,9 +474,5 @@ object GenMacro {
         case q"$prefix.make" => make(prefix)
       }
     }(genTree)
-  }
-
-  object Lazy {
-    def apply[T](variable: String): T = ???
   }
 }
