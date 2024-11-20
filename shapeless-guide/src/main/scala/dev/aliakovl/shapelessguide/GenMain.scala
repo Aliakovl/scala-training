@@ -61,65 +61,6 @@ object GenMain extends App {
   case class TypeClassInst[F[_]]() extends TypeClass[F]
   case class TypeClassLol[A <: Int](l: List[A]) extends TypeClass[List]
 
-//  Gen
-//    .custom[Either[String, Int]]
-//    .specifyConst(
-//      _.when[Left].value
-//    )("lol")
-//    .specifyConst(_.when[Right].value)(3).specifyConst(x => x)(Left("wef"))
-//    .make
-
-//  Gen
-//    .custom[Option[Int]]
-//    .specifyConst(_.when[Some])(Some(3))
-//    .specifyConst { x =>
-//      x.when[Some].value
-//    }(3)
-//    .specifyConst(_.when[Some].value)(2).make
-
-//  sealed trait AA
-//  final class A extends AA
-//
-//  sealed trait BB
-//  final class B extends BB
-//
-//  sealed trait CC extends AA with BB
-//
-//  trait GG[F]
-//
-//  sealed trait F {
-//    def h: Int
-//  }
-//
-//  final class FF[T](t: T) extends F {
-//    def h: Int = 4
-//  }
-//
-//  class HHH(h: List[_])
-//
-//  Gen.custom[T forSome { type T }]
-//    .make
-//    .tap(println)
-//    .run()
-//
-//  Gen.custom[HHH]
-//    .make
-//    .tap(println)
-//    .run()
-//
-//  Gen.custom[F]
-//    .make
-//    .tap(println)
-//    .run()
-//
-//  Gen.custom[FF[Int] with GG[String]]
-//    .make
-//
-//  type H = Option[Int]
-//
-//  Gen.custom[H].make
-//  Gen.custom[Option[Int]].make
-
   Gen
     .custom[Opt[Int]]
     .specifyConst(_.when[Maybe].value)(34)

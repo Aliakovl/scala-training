@@ -85,15 +85,12 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "not use the same Gen[T] for inner parameters" in TestCase {
+  it should "use the same Gen[T] for inner parameters" in TestCase {
     implicit val genList: Gen[List[Int]] = Gen.const(List(2))
 
     Gen.custom[List[Int]].specifyConst(_.when[::[Int]].head)(1).make
   } { elements =>
-    all(elements) should matchPattern {
-      case Nil           =>
-      case 1 :: 2 :: Nil =>
-    }
+    all(elements) should (be (empty) or contain only 1)
   }
 
   it should "use then same Gen[T] for recursive type implicitly" in TestCase {

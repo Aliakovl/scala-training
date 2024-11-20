@@ -140,19 +140,21 @@ object GenMacro {
       }
     }
 
+    def createDependencies(value: c.Tree): FullState[Unit] = {
+      for {
+        _ <- createValueIfNotExists(typeToGen, c.untypecheck(value.duplicate))
+        _ <- createVariableIfNotExists(typeToGen)
+        variables <- State.get[VState].map(_._1)
+        _ <- (variables.keySet - typeToGen).traverse { tpe =>
+          findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _))
+        }
+      } yield ()
+    }
+
     def initValues(tree: Option[c.Tree]): FullState[Unit] = {
       tree.fold {
         getOrElseCreateValue(typeToGen).unit
-      } { value =>
-        for {
-          _ <- createValueIfNotExists(typeToGen, c.untypecheck(value.duplicate))
-          _ <- createVariableIfNotExists(typeToGen)
-          variables <- State.get[VState].map(_._1)
-          _ <- (variables.keySet - typeToGen).traverse { tpe =>
-            findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _))
-          }
-        } yield ()
-      }
+      }(createDependencies)
     }
 
     type Methods = List[Method]
@@ -633,7 +635,7 @@ object GenMacro {
       .flatMap(initValues)
     }
 
-    def materialize(): FullState[Unit] = initValues(None)
+    def materialize(): FullState[Unit] = getOrElseCreateValue(typeToGen).unit
 
     def checkType(tpe: c.Type): Unit = {
       tpe match {
