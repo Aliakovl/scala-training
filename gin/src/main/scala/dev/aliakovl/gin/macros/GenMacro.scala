@@ -7,12 +7,8 @@ import dev.aliakovl.gin.macros.fp.syntax._
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 
-final class GenMacro(val c: whitebox.Context) extends Common {
+final class GenMacro(val c: whitebox.Context) extends Common with MacroState {
   import c.universe._
-
-  private val ops = StateOps.getOps(c)
-
-  import ops._
 
   def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = Stack.withContext[VState, Gen[A]](c) { stack =>
     import stack._

@@ -1,39 +1,8 @@
 package dev.aliakovl.gin.macros
 
 import dev.aliakovl.gin.macros.fp.data.State
-import dev.aliakovl.gin.macros.fp.optics.Lens
 
 import scala.reflect.macros.whitebox
-
-class StateOps[C <: whitebox.Context with Singleton] {
-  type Variables = Map[C#Type, C#TermName]
-  type Values = Map[C#Type, C#Tree]
-  type VarsState[A] = State[Variables, A]
-  case class VState(variables: Variables, values: Values)
-  type FullState[A] = State[VState, A]
-
-  object VState {
-    implicit def lensForVStateVariables: Lens[VState, Variables] =
-      new Lens[VState, Variables] {
-        override def get(t: VState): Variables = t.variables
-        override def set(t: VState, s: Variables): VState =
-          t.copy(variables = s)
-      }
-
-    implicit def lensForVStateValues: Lens[VState, Values] =
-      new Lens[VState, Values] {
-        override def get(t: VState): Values = t.values
-        override def set(t: VState, s: Values): VState = t.copy(values = s)
-      }
-  }
-}
-
-object StateOps {
-  val dummyContext: whitebox.Context = null
-  private val threadLocalStateOps = new StateOps[dummyContext.type]
-  def getOps(c: whitebox.Context): StateOps[c.type] = threadLocalStateOps.asInstanceOf[StateOps[c.type]]
-  def getOps: StateOps[dummyContext.type] = threadLocalStateOps
-}
 
 private[macros] final class Stack[S](
     private val init: S,
@@ -103,11 +72,15 @@ private[macros] final class Stack[S](
   }
 }
 
-private[macros] object Stack {
+private[macros] object Stack extends MacroState {
+  private val dummyContext: whitebox.Context = null
+
+  val c: whitebox.Context = dummyContext
+
   private val threadLocalStack =
     ThreadLocal.withInitial { () =>
       new Stack(
-        init = StateOps.getOps.VState(Map.empty, Map.empty),
+        init = VState(Map.empty, Map.empty),
         states = List.empty,
         error = None
       )
