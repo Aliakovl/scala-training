@@ -159,6 +159,19 @@ trait Common {
     }
   }
 
+  def toValueOf(tpe: c.Type): c.Tree = q"_root_.scala.Predef.valueOf[$tpe]"
+
+  def toGen(termName: c.TermName)(tree: c.Tree): c.Tree = {
+    val f: c.Tree = Function(ValDef(Modifiers(Flag.PARAM), termName, TypeTree(), EmptyTree) :: Nil, tree)
+    q"_root_.dev.aliakovl.gin.Gen.apply($f)"
+  }
+
+  def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.const($tree)"
+
+  def lazyVal(variable: c.TermName, tpe: c.Type, value: c.Tree): c.Expr[Any] = c.Expr[Any] {
+    q"lazy val $variable: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
+  }
+
   // https://github.com/scalamacros/paradise/blob/c14c634923313dd03f4f483be3d7782a9b56de0e/plugin/src/main/scala/org/scalamacros/paradise/typechecker/Namers.scala#L568-L613
   def patchedCompanionSymbolOf(original: c.Symbol): c.Symbol = {
 

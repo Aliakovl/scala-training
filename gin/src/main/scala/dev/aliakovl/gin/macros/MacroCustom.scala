@@ -354,4 +354,20 @@ trait MacroCustom extends { self: GenMacro with Common =>
     case Excluded(_) => fail("All subtypes was excluded")
     case _ => fail("Unreachable")
   }
+
+  def mkCustomValue(prefix: c.Tree, typeToGen: c.Type): VarsState[Option[c.Tree]] = {
+    mergeMethods(disassembleTree(prefix), typeToGen)
+      .flatTap { genOpt =>
+        genOpt.traverse { gen =>
+          State.modify[Variables](deleteUnused(gen, _, typeToGen))
+        }
+      }
+      .map { genOpt =>
+        genOpt.map { gen =>
+          withName { termName =>
+            toGen(termName)(specifiedTree(termName)(gen))
+          }
+        }
+      }
+  }
 }

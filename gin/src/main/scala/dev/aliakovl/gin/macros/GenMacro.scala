@@ -18,10 +18,6 @@ final class GenMacro(val c: whitebox.Context) extends Common with MacroState wit
       val variables = vState.variables
       val values = vState.values
 
-      def lazyVal(variable: c.TermName, tpe: c.Type, value: c.Tree): c.Expr[Any] = c.Expr[Any] {
-        q"lazy val $variable: _root_.dev.aliakovl.gin.Gen[$tpe] = $value"
-      }
-
       if (depth > 1) {
         withName { name =>
           c.Expr[Gen[A]](q"""{
@@ -129,29 +125,8 @@ final class GenMacro(val c: whitebox.Context) extends Common with MacroState wit
       }(createDependencies)
     }
 
-    def toGen(termName: c.TermName)(tree: c.Tree): c.Tree = {
-      val f: c.Tree = Function(ValDef(Modifiers(Flag.PARAM), termName, TypeTree(), EmptyTree) :: Nil, tree)
-      q"_root_.dev.aliakovl.gin.Gen.apply($f)"
-    }
-
-    def toConst(tree: c.Tree): c.Tree = q"_root_.dev.aliakovl.gin.Gen.const($tree)"
-
-    def toValueOf(tpe: c.Type): c.Tree = q"_root_.scala.Predef.valueOf[$tpe]"
-
     def make(prefix: c.Tree): FullState[Unit] = {
-      mergeMethods(disassembleTree(prefix), typeToGen)
-      .flatTap { genOpt =>
-        genOpt.traverse { gen =>
-          State.modify[Variables](deleteUnused(gen, _, typeToGen))
-        }
-      }
-      .map { genOpt =>
-        genOpt.map { gen =>
-          withName { termName =>
-            toGen(termName)(specifiedTree(termName)(gen))
-          }
-        }
-      }
+      mkCustomValue(prefix, typeToGen)
       .modifyState[VState]
       .flatMap(initValues)
     }
