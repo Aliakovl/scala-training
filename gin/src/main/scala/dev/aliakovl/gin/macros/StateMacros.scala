@@ -5,7 +5,7 @@ import dev.aliakovl.gin.macros.fp.optics.Lens
 
 import scala.reflect.macros.whitebox
 
-private[macros] trait MacroState {
+private[macros] trait StateMacros {
   val c: whitebox.Context
 
   type Variables = Map[c.Type, c.TermName]

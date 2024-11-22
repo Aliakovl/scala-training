@@ -4,7 +4,7 @@ import java.lang.System.lineSeparator
 import scala.reflect.internal.util.Position
 import scala.reflect.macros.whitebox
 
-trait Common {
+private[macros] trait Common {
   val c: whitebox.Context
 
   import c.universe._

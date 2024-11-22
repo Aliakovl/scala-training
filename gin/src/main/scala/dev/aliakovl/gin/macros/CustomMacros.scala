@@ -6,7 +6,7 @@ import dev.aliakovl.gin.macros.fp.syntax._
 
 import scala.annotation.tailrec
 
-trait MacroCustom extends { self: GenMacro with Common =>
+private[macros] trait CustomMacros { self: StateMacros with Common =>
   import c.universe._
 
   val genSymbol: Symbol = symbolOf[Gen.type].asClass.module

@@ -7,7 +7,7 @@ import scala.reflect.macros.whitebox
 private[macros] final class Stack[S](
     private val init: S,
     private var states: List[S],
-    private var error: Option[String],
+    private var error: Option[String]
 ) {
   private def push(state: S): Unit = {
     states = state :: states
@@ -72,21 +72,20 @@ private[macros] final class Stack[S](
   }
 }
 
-private[macros] object Stack extends MacroState {
+private[macros] object Stack extends StateMacros {
   private val dummyContext: whitebox.Context = null
 
   val c: whitebox.Context = dummyContext
 
-  private val threadLocalStack =
-    ThreadLocal.withInitial { () =>
-      new Stack(
-        init = VState(Map.empty, Map.empty),
-        states = List.empty,
-        error = None
-      )
-    }
+  private val threadLocalStack = ThreadLocal.withInitial { () =>
+    new Stack(
+      init = VState(Map.empty, Map.empty),
+      states = List.empty,
+      error = None
+    )
+  }
 
-  def withContext[S, A](
+  def withContext[S <: StateMacros#VState, A](
       c: whitebox.Context
   )(f: Stack[S] => c.Expr[A]): c.Expr[A] = {
     val stack: Stack[S] = threadLocalStack.get().asInstanceOf[Stack[S]]
