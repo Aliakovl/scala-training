@@ -147,6 +147,18 @@ trait Common {
       .getOrElse(fail(s"Class ${tpe.typeSymbol.name} has no public constructors"))
   }
 
+  def constructCases[T](termName: c.TermName)(subclasses: Map[c.Type, T])(toTree: T => c.Tree): c.Tree = {
+    val cases = subclasses.toList.sortBy(_._1.typeSymbol.fullName).map(_._2)
+    cases match {
+      case singleCase :: Nil => toTree(singleCase)
+      case _ => q"$termName.nextInt(${cases.size}) match { case ..${
+        cases.zipWithIndex.map {
+          case value -> index => cq"$index => ${toTree(value)}"
+        }
+      } }"
+    }
+  }
+
   // https://github.com/scalamacros/paradise/blob/c14c634923313dd03f4f483be3d7782a9b56de0e/plugin/src/main/scala/org/scalamacros/paradise/typechecker/Namers.scala#L568-L613
   def patchedCompanionSymbolOf(original: c.Symbol): c.Symbol = {
 
