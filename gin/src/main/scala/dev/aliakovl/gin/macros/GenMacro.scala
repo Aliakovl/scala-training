@@ -10,7 +10,11 @@ import scala.reflect.macros.whitebox
 final class GenMacro(val c: whitebox.Context) extends Common {
   import c.universe._
 
-  def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = Stack.withContext[Gen[A]](c) { stack =>
+  private val ops = StateOps.getOps(c)
+
+  import ops._
+
+  def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = Stack.withContext[VState, Gen[A]](c) { stack =>
     import stack._
 
     val typeToGen = weakTypeOf[A].dealias
