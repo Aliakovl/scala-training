@@ -7,7 +7,7 @@ import dev.aliakovl.gin.macros.fp.syntax._
 import scala.annotation.tailrec
 import scala.reflect.macros.whitebox
 
-private[macros] trait CustomMacros { self: StateMacros with Common =>
+private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   val c: whitebox.Context
 
   import c.universe._

@@ -6,7 +6,7 @@ import dev.aliakovl.gin.macros.fp.syntax._
 
 import scala.reflect.macros.whitebox
 
-final class GenMacros(val c: whitebox.Context) extends Common with StateMacros with CustomMacros {
+final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMacros with GenCustomMacros {
   import c.universe._
 
   sealed trait Func
