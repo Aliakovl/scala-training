@@ -5,8 +5,11 @@ import dev.aliakovl.gin.macros.fp.data.State
 import dev.aliakovl.gin.macros.fp.syntax._
 
 import scala.annotation.tailrec
+import scala.reflect.macros.whitebox
 
 private[macros] trait CustomMacros { self: StateMacros with Common =>
+  val c: whitebox.Context
+
   import c.universe._
 
   val genSymbol: Symbol = symbolOf[Gen.type].asClass.module

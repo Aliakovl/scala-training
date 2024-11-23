@@ -88,7 +88,7 @@ private[macros] object Stack extends StateMacros {
   def withContext[S <: StateMacros#VState, A](
       c: whitebox.Context
   )(f: Stack[S] => c.Expr[A]): c.Expr[A] = {
-    val stack: Stack[S] = threadLocalStack.get().asInstanceOf[Stack[S]]
+    val stack = threadLocalStack.get().asInstanceOf[Stack[S]]
     try f(stack)
     catch {
       case e: Throwable => stack.throwError(e)
