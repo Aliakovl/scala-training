@@ -9,7 +9,15 @@ import scala.reflect.macros.whitebox
 final class GenMacros(val c: whitebox.Context) extends Common with StateMacros with CustomMacros {
   import c.universe._
 
-  def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = Stack.withContext[VState, Gen[A]](c) { stack =>
+  sealed trait Func
+  case object Make extends Func
+  case object Materialize extends Func
+
+  def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = impl[A](Make)
+
+  def materializeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = impl[A](Materialize)
+
+  def impl[A: c.WeakTypeTag](func: Func): c.Expr[Gen[A]] = Stack.withContext[VState, Gen[A]](c) { stack =>
     import stack._
 
     val typeToGen = weakTypeOf[A].dealias
@@ -19,9 +27,10 @@ final class GenMacros(val c: whitebox.Context) extends Common with StateMacros w
       val values = vState.values
 
       if (depth > 1) {
+        val genType = weakTypeOf[Gen[A]]
         withName { name =>
           c.Expr[Gen[A]](q"""{
-            lazy val $name: ${weakTypeOf[Gen[A]]} = ${LazyRef(weakTypeOf[Gen[A]], variables(typeToGen).decodedName.toString)}
+            lazy val $name: $genType = ${LazyRef(genType, variables(typeToGen).decodedName.toString)}
             $name
           }""")
         }
@@ -125,8 +134,8 @@ final class GenMacros(val c: whitebox.Context) extends Common with StateMacros w
       }(createDependencies)
     }
 
-    def make(prefix: c.Tree): FullState[Unit] = {
-      mkCustomValue(prefix, typeToGen)
+    def make(): FullState[Unit] = {
+      mkCustomValue(c.prefix.tree, typeToGen)
       .modifyState[VState]
       .flatMap(initValues)
     }
@@ -145,9 +154,9 @@ final class GenMacros(val c: whitebox.Context) extends Common with StateMacros w
     checkType(typeToGen)
 
     withStateProvided {
-      c.macroApplication match {
-        case q"$_.materialize[$_]" => materialize()
-        case q"$prefix.make" => make(prefix)
+      func match {
+        case Make => make()
+        case Materialize => materialize()
       }
     }(genTree)
   }
