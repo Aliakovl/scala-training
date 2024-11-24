@@ -9,15 +9,15 @@ import scala.reflect.macros.whitebox
 final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMacros with GenCustomMacros {
   import c.universe._
 
-  sealed trait Func
-  case object Make extends Func
-  case object Materialize extends Func
-
   def makeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = impl[A](Make)
 
   def materializeImpl[A: c.WeakTypeTag]: c.Expr[Gen[A]] = impl[A](Materialize)
 
-  def impl[A: c.WeakTypeTag](func: Func): c.Expr[Gen[A]] = Stack.withContext[VState, Gen[A]](c) { stack =>
+  private sealed trait GenFunction
+  private case object Make extends GenFunction
+  private case object Materialize extends GenFunction
+
+  private def impl[A: c.WeakTypeTag](func: GenFunction): c.Expr[Gen[A]] = Stack.withContext[VState, Gen[A]](c) { stack =>
     import stack._
 
     val typeToGen = weakTypeOf[A].dealias
@@ -103,7 +103,7 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
       }
     } yield name
 
-    def getOrElseCreateValue(tpe: c.Type): FullState[c.Tree] = {
+    def getOrElseBuildValue(tpe: c.Type): FullState[c.Tree] = {
       State.get[VState].map(_.values).flatMap { values =>
         values.get(tpe) match {
           case Some(value) => State.pure(value)
@@ -130,7 +130,7 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
 
     def initValues(tree: Option[c.Tree]): FullState[Unit] = {
       tree.fold {
-        getOrElseCreateValue(typeToGen).unit
+        getOrElseBuildValue(typeToGen).unit
       }(createDependencies)
     }
 
@@ -140,7 +140,7 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
       .flatMap(initValues)
     }
 
-    def materialize(): FullState[Unit] = getOrElseCreateValue(typeToGen).unit
+    def materialize(): FullState[Unit] = getOrElseBuildValue(typeToGen).unit
 
     def checkType(tpe: c.Type): Unit = {
       tpe match {
