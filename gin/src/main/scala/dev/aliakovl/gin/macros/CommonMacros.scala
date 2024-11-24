@@ -71,28 +71,6 @@ private[macros] trait CommonMacros {
     constructorArgs.foldLeft(constructionMethodTree)(Apply.apply)
   }
 
-  def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
-    val (abstractChildren, concreteChildren) =
-      parent.knownDirectSubclasses
-        .tapEach(_.info)
-        .partition(_.isAbstract)
-
-    concreteChildren.foreach { child =>
-      if (!child.asClass.isFinal && !child.asClass.isCaseClass && !child.isModuleClass) {
-        fail(s"Child $child of $parent is neither final nor a case class")
-      }
-    }
-
-    concreteChildren ++ abstractChildren.flatMap { child =>
-      val childClass = child.asClass
-      if (childClass.isSealed) {
-        subclassesOf(childClass)
-      } else {
-        fail(s"Child $child of $parent is not sealed")
-      }
-    }
-  }
-
   def subclassType(subclass: c.Symbol, parent: c.Type): c.Type = {
     val sEta = subclass.asType.toType.etaExpand
     sEta.finalResultType.substituteTypes(
@@ -131,8 +109,6 @@ private[macros] trait CommonMacros {
   def notImplicitParamLists(params: List[List[c.Symbol]]): List[List[c.Symbol]] = {
     params.filterNot(_.headOption.exists(_.isImplicit))
   }
-
-  def isPhantomConstructor(constructor: c.Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
 
   def publicConstructor(tpe: c.Type): MethodSymbol = {
     val members = tpe.members
@@ -217,4 +193,28 @@ private[macros] trait CommonMacros {
       ).asInstanceOf[c.Symbol]
     }
   }
+
+  private def subclassesOf(parent: ClassSymbol): Set[c.Symbol] = {
+    val (abstractChildren, concreteChildren) =
+      parent.knownDirectSubclasses
+        .tapEach(_.info)
+        .partition(_.isAbstract)
+
+    concreteChildren.foreach { child =>
+      if (!child.asClass.isFinal && !child.asClass.isCaseClass && !child.isModuleClass) {
+        fail(s"Child $child of $parent is neither final nor a case class")
+      }
+    }
+
+    concreteChildren ++ abstractChildren.flatMap { child =>
+      val childClass = child.asClass
+      if (childClass.isSealed) {
+        subclassesOf(childClass)
+      } else {
+        fail(s"Child $child of $parent is not sealed")
+      }
+    }
+  }
+
+  private def isPhantomConstructor(constructor: c.Symbol): Boolean = constructor.asMethod.fullName.endsWith("$init$")
 }
