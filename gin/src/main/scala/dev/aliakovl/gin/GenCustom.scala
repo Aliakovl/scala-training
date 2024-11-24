@@ -1,6 +1,6 @@
 package dev.aliakovl.gin
 
-import dev.aliakovl.gin.macros.GenMacro
+import dev.aliakovl.gin.macros.GenMacros
 
 import scala.annotation.compileTimeOnly
 
@@ -17,5 +17,5 @@ final class GenCustom[A] private[gin] {
   @compileTimeOnly("Illegal reference to dev.aliakovl.gin.GenSpecify.exclude, try to call .make at the end")
   def exclude[P](selector: A => P): GenCustom[A] = ???
 
-  def make: Gen[A] = macro GenMacro.makeImpl[A]
+  def make: Gen[A] = macro GenMacros.makeImpl[A]
 }

@@ -1,40 +1,21 @@
 package dev.aliakovl.gin.macros
 
 import dev.aliakovl.gin.macros.fp.data.State
-import dev.aliakovl.gin.macros.fp.optics.Lens
 
 import scala.reflect.macros.whitebox
 
-private[macros] final class Stack[C <: whitebox.Context with Singleton] {
-  type Variables = Map[C#Type, C#TermName]
-  type Values = Map[C#Type, C#Tree]
-  type VarsState[A] = State[Variables, A]
-  case class VState(variables: Variables, values: Values)
-  type FullState[A] = State[VState, A]
-
-  object VState {
-    implicit def lensForVStateVariables: Lens[VState, Variables] = new Lens[VState, Variables] {
-      override def get(t: VState): Variables = t.variables
-      override def set(t: VState, s: Variables): VState = t.copy(variables = s)
-    }
-
-    implicit def lensForVStateValues: Lens[VState, Values] = new Lens[VState, Values] {
-      override def get(t: VState): Values = t.values
-      override def set(t: VState, s: Values): VState = t.copy(values = s)
-    }
-  }
-
-  private val init: VState = VState(Map.empty, Map.empty)
-  private var states: List[VState] = List.empty
-  private var error: Option[String] = None
-
-  private def push(state: VState): Unit = {
+private[macros] final class Stack[S](
+    private val init: S,
+    private var states: List[S],
+    private var error: Option[String]
+) {
+  private def push(state: S): Unit = {
     states = state :: states
   }
 
-  private def top(): Option[VState] = states.headOption
+  private def top(): Option[S] = states.headOption
 
-  private def pullWithTop(): VState = {
+  private def pullWithTop(): S = {
     top().fold(init) { top =>
       pop()
       pop()
@@ -57,7 +38,9 @@ private[macros] final class Stack[C <: whitebox.Context with Singleton] {
 
   def depth: Int = states.size
 
-  def statefulSearch[A](thunk: => Either[String, A]): FullState[Either[String, A]] = State { state =>
+  def statefulSearch[A](
+      thunk: => Either[String, A]
+  ): State[S, Either[String, A]] = State { state =>
     push(state)
     thunk match {
       case Left(msg) =>
@@ -69,8 +52,8 @@ private[macros] final class Stack[C <: whitebox.Context with Singleton] {
     }
   }
 
-  def withStateProvided[A](state: => FullState[Any])(f: VState => A): A = {
-    def evaluate(from: VState): (VState, A) = {
+  def withStateProvided[A](state: => State[S, Any])(f: S => A): A = {
+    def evaluate(from: S): (S, A) = {
       val to = state.eval(from)
       (to, f(to))
     }
@@ -89,15 +72,23 @@ private[macros] final class Stack[C <: whitebox.Context with Singleton] {
   }
 }
 
-private[macros] object Stack {
+private[macros] object Stack extends StateMacros {
   private val dummyContext: whitebox.Context = null
-  private val threadLocalStack =
-    ThreadLocal.withInitial[Stack[dummyContext.type]] { () =>
-      new Stack[dummyContext.type]
-    }
 
-  def withContext[A](c: whitebox.Context)(f: Stack[c.type] => c.Expr[A]): c.Expr[A] = {
-    val stack: Stack[c.type] = threadLocalStack.get().asInstanceOf[Stack[c.type]]
+  val c: whitebox.Context = dummyContext
+
+  private val threadLocalStack = ThreadLocal.withInitial { () =>
+    new Stack(
+      init = VState(Map.empty, Map.empty),
+      states = List.empty,
+      error = None
+    )
+  }
+
+  def withContext[S <: StateMacros#VState, A](
+      c: whitebox.Context
+  )(f: Stack[S] => c.Expr[A]): c.Expr[A] = {
+    val stack = threadLocalStack.get().asInstanceOf[Stack[S]]
     try f(stack)
     catch {
       case e: Throwable => stack.throwError(e)
