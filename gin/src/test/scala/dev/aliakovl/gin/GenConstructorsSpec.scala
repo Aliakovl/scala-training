@@ -3,8 +3,6 @@ package dev.aliakovl.gin
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import java.awt.Color
-
 class GenConstructorsSpec extends AnyFlatSpec with Matchers {
   behavior of "function"
 

@@ -14,7 +14,7 @@ lazy val `scala-training` = (project in file("."))
     `recursion-schemes`,
     `shapeless-guide`,
     reflex,
-    gin,
+    gin
   )
 
 lazy val core = (project in file("./core"))
@@ -137,7 +137,9 @@ lazy val gin = (project in file("./gin"))
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scala-compiler" % scalaVersion.value,
       "org.typelevel" %% "cats-core" % "2.12.0",
-      "org.scalatest" %% "scalatest" % "3.2.19" % Test
+      "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+      "org.typelevel" %% "cats-laws" % "2.12.0" % Test,
+      "org.typelevel" %% "discipline-scalatest" % "2.3.0" % Test
     ),
     scalacOptions ++= Seq(
       "--language:experimental.macros",
