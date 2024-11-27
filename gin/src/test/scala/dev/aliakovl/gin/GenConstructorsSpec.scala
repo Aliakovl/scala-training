@@ -19,7 +19,7 @@ class GenConstructorsSpec extends AnyFlatSpec with Matchers {
   it should "create from generated values" in TestCase(
     Gen.fromFunction { is: (Int, String) => s"${is._1}: ${is._2}" }
   ) { elements =>
-    all(elements) should contain(':')
+    every(elements) should contain(':')
   }
 
   behavior of "enumerationGen"
@@ -33,7 +33,7 @@ class GenConstructorsSpec extends AnyFlatSpec with Matchers {
     }
 
     TestCase(Gen.random[Colours.Colour]) { elements =>
-      elements.distinct should contain theSameElementsAs Colours.values
+      elements should contain allElementsOf Colours.values
     }
   }
 }

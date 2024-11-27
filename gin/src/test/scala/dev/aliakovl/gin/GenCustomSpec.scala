@@ -40,7 +40,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.custom[Person].make
   } { elements =>
-    all(elements) should have(
+    every(elements) should have(
       'name("sample-name"),
       'age(21)
     )
@@ -53,7 +53,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.custom[WierdClass].make
   } { elements =>
-    all(elements) should have(
+    every(elements) should have(
       'a(D),
       'str("second-value"),
       'name("weirdo"),
@@ -67,7 +67,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.custom[ClassWithImplicit].make
   } { elements =>
-    all(elements) should have(
+    every(elements) should have(
       'value("value"),
       'impl("implicit")
     )
@@ -80,7 +80,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.random[Person]
   } { elements =>
-    all(elements) should have(
+    every(elements) should have(
       'age(123)
     )
   }
@@ -90,7 +90,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.custom[List[Int]].specifyConst(_.when[::[Int]].head)(1).make
   } { elements =>
-    all(elements) should (be (empty) or contain only 1)
+    every(elements) should (be (empty) or contain only 1)
   }
 
   it should "use then same Gen[T] for recursive type implicitly" in TestCase {
@@ -99,7 +99,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.random[List[Int]]
   } { elements =>
-    all(elements) should (be (empty) or contain only 1)
+    every(elements) should (be (empty) or contain only 1)
   }
 
   it should "use then same Gen[T] for recursive type manually" in TestCase {
@@ -121,7 +121,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.custom[ComplexClass].make
   } { elements =>
-    all(elements) should matchPattern {
+    every(elements) should matchPattern {
       case ComplexClass(42, Some(_)) =>
     }
   }
@@ -132,7 +132,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
 
     Gen.random[Option[Int]]
   } { elements =>
-    all(elements) should matchPattern {
+    every(elements) should matchPattern {
       case Some(42) =>
     }
   }

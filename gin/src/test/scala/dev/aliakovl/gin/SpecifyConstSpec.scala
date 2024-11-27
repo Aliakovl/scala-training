@@ -15,7 +15,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
         .specifyConst(_.age)(19)
         .make
     ) { elements =>
-      all(elements) should have(
+      every(elements) should have(
         'age(19)
       )
     }
@@ -31,7 +31,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
         .specifyConst(_.name)("Ann")
         .make
     ) { elements =>
-      all(elements) should have(
+      every(elements) should have(
         'age(19),
         'name("Ann")
       )
@@ -49,7 +49,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
         .specifyConst(_.arg("age"))(19)
         .make
     ) { elements =>
-      all(elements) should have(
+      every(elements) should have(
         'age(19)
       )
     }
@@ -71,7 +71,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
         .specifyConst(_.id)("uno")
         .make
     ) { elements =>
-      all(elements) should have(
+      every(elements) should have(
         'age(23),
         'name("Igor"),
         'id("uno")
@@ -85,7 +85,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
       .specifyConst(_.when[Right].value.when[Some].value)(11)
       .make
   ) { elements =>
-    all(elements) should matchPattern {
+    every(elements) should matchPattern {
       case Left(_)         =>
       case Right(None)     =>
       case Right(Some(11)) =>
