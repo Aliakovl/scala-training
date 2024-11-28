@@ -11,7 +11,7 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
 
   def apply(random: Random): A = unsafeRun(random)
 
-  def runWithCtx()(implicit random: Random): A = unsafeRun(random)
+  def runWithCtx(implicit random: Random): A = unsafeRun(random)
 
   def runWithSeed(seed: Long): A = unsafeRun(new Random(seed))
 
