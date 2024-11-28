@@ -5,7 +5,7 @@ import cats.Monad
 
 import scala.annotation.tailrec
 
-trait GenLowPriority {
+trait GenCats {
   implicit val catsMonadForGen: Monad[Gen] = new Monad[Gen] {
     override def pure[A](x: A): Gen[A] = Gen.const(x)
 

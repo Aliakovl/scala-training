@@ -48,7 +48,7 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
 }
 
 object Gen
-    extends GenLowPriority
+    extends GenCats
     with GenInstances
     with GenOneOf {
 
