@@ -3,6 +3,7 @@ package internal
 
 import dev.aliakovl.gin.internal.GenOneOf.OneOfTypePartiallyApplied
 
+import scala.collection.immutable.TreeMap
 import scala.util.Random
 
 trait GenOneOf {
@@ -11,6 +12,38 @@ trait GenOneOf {
   def one[W]: OneOfTypePartiallyApplied[W] = new OneOfTypePartiallyApplied[W]()
 
   def oneOfGen[A](values: Gen[A]*): Gen[A] = GenOneOf.oneOfGenImpl(values: _*)
+
+  def frequencyGen[A](cases: (Int, Gen[A])*): Gen[A] = {
+    if (cases.isEmpty) {
+      throw new IllegalArgumentException("cases must not be empty")
+    }
+
+    cases.foreach { case (x, _) =>
+      if (x <= 0) {
+        throw new IllegalArgumentException("weights mast be positive")
+      }
+    }
+
+    val (max, backets) = {
+      var max = 0L
+      val builder = TreeMap.newBuilder[Long, Gen[A]]
+
+      cases.foreach { case (weight, value) =>
+        max += weight
+        builder += (max -> value)
+      }
+
+      (max, builder.result())
+    }
+
+    Gen.between(1L, max + 1).flatMap { next =>
+      backets.rangeFrom(next).head._2
+    }
+  }
+
+  def frequency[A](cases: (Int, A)*): Gen[A] = frequencyGen[A](cases.map { case (weight, value) =>
+    weight -> Gen.const(value)
+  }: _*)
 }
 
 object GenOneOf {

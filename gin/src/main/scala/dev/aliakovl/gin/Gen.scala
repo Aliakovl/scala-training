@@ -41,6 +41,10 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
     Gen { random =>
       Iterable.fill(size)(unsafeRun(random)).toMap
     }
+
+  def stream: Gen[LazyList[A]] = Gen { random =>
+    LazyList.continually(unsafeRun(random))
+  }
 }
 
 object Gen
@@ -84,6 +88,10 @@ object Gen
   }
 
   def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = Gen {
+    _.between(minInclusive, maxExclusive)
+  }
+
+  def between(minInclusive: Long, maxExclusive: Long): Gen[Long] = Gen {
     _.between(minInclusive, maxExclusive)
   }
 }

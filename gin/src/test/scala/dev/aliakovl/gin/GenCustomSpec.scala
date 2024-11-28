@@ -93,7 +93,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
     every(elements) should (be (empty) or contain only 1)
   }
 
-  it should "use then same Gen[T] for recursive type implicitly" in TestCase {
+  it should "use the same Gen[T] for recursive type implicitly" in TestCase {
     implicit lazy val genList: Gen[List[Int]] =
       Gen.custom[List[Int]].specifyConst(_.when[::[Int]].head)(1).make
 
