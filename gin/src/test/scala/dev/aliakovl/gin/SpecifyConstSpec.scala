@@ -82,13 +82,39 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
   it should "specify inner class parameter" in TestCase(
     Gen
       .custom[Either[String, Option[Int]]]
-      .specifyConst(_.when[Right].value.when[Some].value)(11)
+      .specifyConst(_.when[Right].value.when[Some].value)(20)
       .make
   ) { elements =>
     every(elements) should matchPattern {
       case Left(_)         =>
       case Right(None)     =>
-      case Right(Some(11)) =>
+      case Right(Some(20)) =>
     }
   }
+
+  it should "specify class parameters on multiple levels" in TestCase(
+    Gen
+      .custom[Either[String, Option[Int]]]
+      .specifyConst(_.when[Right].value.when[Some])(Some(20))
+      .specifyConst(_.when[Left].value)("unique")
+      .make
+  ) { elements =>
+    every(elements) should matchPattern {
+      case Left("unique")  =>
+      case Right(None)     =>
+      case Right(Some(20)) =>
+    }
+  }
+
+  it should "???" in TestCase(
+     Gen
+       .custom[Either[String, Option[Int]]]
+       .specifyConst(_.when[Right].value.when[Some])(Some(10))
+       .make
+  ).forall(
+    Gen
+      .custom[Either[String, Option[Int]]]
+      .specifyConst(_.when[Right].value.when[Some].value)(10)
+      .make
+  )(_ shouldBe _)
 }
