@@ -16,7 +16,6 @@ private[macros] trait CommonMacros {
       Position.range(pos.source, pos.start, pos.point, pos.end)
     }
     sourceCode
-      .stripIndent()
       .stripLeading()
       .stripTrailing()
       .linesIterator
