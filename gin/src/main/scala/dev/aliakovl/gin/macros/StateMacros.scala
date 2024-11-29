@@ -16,16 +16,13 @@ private[macros] trait StateMacros {
 
   object VState {
     implicit def lensForVStateVariables: Lens[VState, Variables] =
-      new Lens[VState, Variables] {
-        override def get(t: VState): Variables = t.variables
-        override def set(t: VState, s: Variables): VState =
-          t.copy(variables = s)
-      }
+      Lens[VState, Variables](_.variables)(state =>
+        variables => state.copy(variables = variables)
+      )
 
     implicit def lensForVStateValues: Lens[VState, Values] =
-      new Lens[VState, Values] {
-        override def get(t: VState): Values = t.values
-        override def set(t: VState, s: Values): VState = t.copy(values = s)
-      }
+      Lens[VState, Values](_.values)(state =>
+        values => state.copy(values = values)
+      )
   }
 }
