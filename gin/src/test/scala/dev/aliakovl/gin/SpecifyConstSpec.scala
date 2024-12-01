@@ -92,7 +92,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "specify inner class parameter" in TestCase(
+  it should "specify deep class parameter" in TestCase(
     Gen
       .custom[Either[String, Option[Int]]]
       .specifyConst(_.when[Right].value.when[Some].value)(20)
@@ -126,6 +126,22 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
       .make
   ) { elements =>
     every(elements) should (be(empty) or contain only 15)
+  }
+
+  it should "specify deep fields for recursive type" in TestCase(
+    Gen
+      .custom[List[String]]
+      .specifyConst(_.when[::].head)("first")
+      .specifyConst(_.when[::].arg[List[String]]("next").when[::].head)("second")
+      .specifyConst(_.when[::].arg[List[String]]("next").when[::].arg[List[String]]("next").when[::].head)("third")
+      .make
+  ) { elements =>
+    every(elements) should matchPattern {
+      case Nil =>
+      case "first" :: _ =>
+      case "first" :: "second" :: _ =>
+      case "first" :: "second" :: "third" :: _ =>
+    }
   }
 
   it should "???" in TestCase(

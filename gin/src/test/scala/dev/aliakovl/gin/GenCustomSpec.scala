@@ -85,7 +85,7 @@ class GenCustomSpec extends AnyFlatSpec with Matchers {
     )
   }
 
-  it should "use the same Gen[T] for inner parameters" in TestCase {
+  it should "use the same Gen[T] for deep parameters" in TestCase {
     implicit val genList: Gen[List[Int]] = Gen.const(List(2))
 
     Gen.custom[List[Int]].specifyConst(_.when[::[Int]].head)(1).make

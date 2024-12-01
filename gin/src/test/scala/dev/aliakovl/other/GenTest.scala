@@ -73,35 +73,15 @@ object GenTest {
     Gen.random[MyClass2],
     Gen.custom[MyClass2].make,
     Gen.custom[List[MyClass1]].make,
-    Gen
-      .custom[MyClass]
-      .specify(_.when[MyClass1].m.when[MyClass1].m.when[MyClass2].mc2field)(
-        Gen.uglyString(100)
-      )
-      .specifyConst(_.when[MyClass1].m.when[MyClass2].lst)(Cons(3, LNil))
-      .specifyConst(_.when[MyClass2].lst)(Cons(4, LNil))
-      .make,
     Gen.custom[Lst[Int]].make.many[List](10),
     Gen.custom[Unit].make,
     Gen.custom[G].specify(_.int)(Gen.oneOf(1, 5)).make,
-    Gen
-      .custom[List[String]]
-      .specifyConst(_.when[::].head)("wefwefef")
-      .make,
     Gen
       .custom[Lst[String]]
       .specify(_.when[Cons].tail.when[Cons].head)(
         Gen.uglyString(10)
       )
       .make,
-    Gen
-      .custom[Lst[String]]
-      .specifyConst(_.when[Cons].head)("kek")
-      .specifyConst(_.when[Cons].tail.when[Cons].head)(
-        "lol"
-      )
-      .make
-      .many[List](10),
     Gen
       .custom[Lst[String]]
       .specify(_.when[Cons].head)(
@@ -112,15 +92,6 @@ object GenTest {
       .many[List](10)
       .map(_.mkString(", ")),
     Gen.random[Lst[String]].many[List](10),
-    Gen
-      .oneOfGen(
-        Gen
-          .custom[MyClass1]
-          .specifyConst(_.m.when[MyClass2].mc2field)("wef")
-          .make,
-        Gen.custom[MyClass3].make
-      )
-      .many[List](3),
     Gen.random[MyClass3].many[List](10),
     Gen.random[y.type],
     Gen
@@ -132,26 +103,7 @@ object GenTest {
     Gen.one[String].of["RRRRR", "PPPPPP"].many[List](10),
     Gen.one[MyClass].of[MyClass1, MyClass2, MyClass3],
     Gen.one[Any].of[String, Int].many[List](10),
-    Gen
-      .custom[MyClass]
-      .specify(_.when[MyClass1].m)(Gen.random[MyClass4.type])
-      .specifyConst(_.when[MyClass2])(MyClass2(null, null)(null))
-      .make,
     Gen.custom[Talk].make,
-    Gen
-      .custom[Talk]
-      .specifyConst[List[Int]](_.gerg)(List(3, 2, 1))
-      .specifyConst(_.wefwef)(Some(0))
-      .make,
-    Gen
-      .custom[Talk]
-      .specifyConst(f => f.gerg)(List(9, 8, 7))
-      .make,
-    Gen
-      .custom[MyClass]
-      .specifyConst(_.when[KJH])(K("YES"))
-      .make
-      .many[List](10),
     Gen.custom[MyClass4.type].make,
     Gen
       .custom[MyClass1]
@@ -163,14 +115,6 @@ object GenTest {
       .useDefault(_.arg("other"))
       .make,
     Gen.fromFunction { lst: Lst[Int] => MyClass2(lst)() },
-    Gen
-      .custom[TestClass]
-      .specifyConst(_.g)(1000)
-      .make,
-    Gen
-      .custom[TestClass2]
-      .specifyConst(_.arg("t"))("I am private")
-      .make,
     Gen.fromFunction { new TestClass2("I am private", _) },
     Gen
       .fromFunction {
@@ -179,7 +123,6 @@ object GenTest {
       },
     Gen.fromFunction(new T(2134, _)),
     Gen.fromFunction(T.apply _).many[List](3),
-    Gen.custom[T].specifyConst(_.arg[Int]("a"))(2134).make,
     Gen.fromFunction(
       Some(
         _: String,
