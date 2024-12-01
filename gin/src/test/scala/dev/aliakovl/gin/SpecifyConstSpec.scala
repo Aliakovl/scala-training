@@ -57,11 +57,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "specify multiple parameter in multiple parameter lists" in {
-    class User(val age: Int, val name: String)(val id: String) {
-      def getAge(): Int = age
-      def getName(): String = name
-      def getId(): String = id
-    }
+    class User(val age: Int, val name: String)(val id: String)
 
     TestCase(
       Gen
@@ -137,10 +133,10 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
       .make
   ) { elements =>
     every(elements) should matchPattern {
-      case Nil =>
-      case "first" :: _ =>
-      case "first" :: "second" :: _ =>
       case "first" :: "second" :: "third" :: _ =>
+      case "first" :: "second" :: Nil =>
+      case "first" :: Nil =>
+      case Nil =>
     }
   }
 
