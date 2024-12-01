@@ -38,7 +38,7 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "specify class parameter" in {
+  it should "specify private class parameter" in {
     class User(age: Int, name: String) {
       def getAge(): Int = age
     }
@@ -79,6 +79,19 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
     }
   }
 
+  it should "specify multiple subtypes" in TestCase(
+    Gen
+      .custom[Either[String, Int]]
+      .specifyConst(_.when[Right])(Right(54))
+      .specifyConst(_.when[Left])(Left("error"))
+      .make
+  ) { elements =>
+    every(elements) should matchPattern {
+      case Left("error") =>
+      case Right(54)     =>
+    }
+  }
+
   it should "specify inner class parameter" in TestCase(
     Gen
       .custom[Either[String, Option[Int]]]
@@ -112,14 +125,14 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
       .specifyConst(_.when[::].head)(15)
       .make
   ) { elements =>
-    every(elements) should (be (empty) or contain only 15)
+    every(elements) should (be(empty) or contain only 15)
   }
 
   it should "???" in TestCase(
-     Gen
-       .custom[Either[String, Option[Int]]]
-       .specifyConst(_.when[Right].value.when[Some])(Some(10))
-       .make
+    Gen
+      .custom[Either[String, Option[Int]]]
+      .specifyConst(_.when[Right].value.when[Some])(Some(10))
+      .make
   ).forall(
     Gen
       .custom[Either[String, Option[Int]]]
