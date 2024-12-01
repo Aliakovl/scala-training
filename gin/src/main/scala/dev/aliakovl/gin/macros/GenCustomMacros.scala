@@ -210,7 +210,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
     def unapply(tree: c.Tree): Option[(Prism, c.Tree)] = tree match {
       case q"$module.GenCustomOps[$from]($other).when[$to]" if module.symbol == ginModule =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
-        val prism = Prism(to.tpe)
+        val prism = Prism(to.tpe.dealias)
         Some((prism, other))
       case _ => None
     }
@@ -220,7 +220,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
     def unapply(tree: c.Tree): Option[(Prism, c.Tree)] = tree match {
       case q"$_[$from]($other).when[$to](..$_)" =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
-        val toType = subclassType(to.symbol, from.tpe)
+        val toType = subclassType(to.symbol, from.tpe.dealias)
         val prism = Prism(toType)
         Some((prism, other))
       case _ => None

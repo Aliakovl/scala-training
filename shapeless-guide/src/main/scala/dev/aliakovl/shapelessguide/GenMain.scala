@@ -268,4 +268,22 @@ object GenMain extends App {
     .tap(println)
     .run()
 
+  Gen
+    .custom[List[String]]
+    .specifyConst(_.when[::[String]].head)("15")
+    .make
+    .many[List](10)
+    .tap(println)
+    .run()
+
+  println
+
+  Gen
+    .custom[List[String]]
+    .specifyConst(_.when[::].head)("15")
+    .make
+    .many[List](10)
+    .tap(println)
+    .run()
+
 }
