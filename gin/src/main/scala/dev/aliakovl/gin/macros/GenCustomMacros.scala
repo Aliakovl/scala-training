@@ -52,12 +52,12 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
           }
           next.map(subtype -> _)
         } else {
-          State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
+          State.getOrElseUpdate(subtype.wrap, c.freshName(subtype.typeSymbol.name).toTermName)
             .map { name =>
               subtype -> NotSpecified(name)
             }
         }
-      }.map(_.toMap).map(SpecifiedSealedTrait)
+      }.map(_.map{ case (k, v) => (k.wrap, v) }).map(_.toMap).map(SpecifiedSealedTrait)
     }
   }
 
@@ -75,12 +75,12 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
           State.pure[Variables, CustomRepr](NotSpecifiedImplicit(impl)).map(termName -> _)
         } else {
           val paramType = param.info
-          State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
+          State.getOrElseUpdate(paramType.wrap, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
             param.name.toTermName -> NotSpecified(name)
           }
         }
       }.map(_.toMap)
-    }.map(SpecifiedCaseClass(tpe, _))
+    }.map(SpecifiedCaseClass(tpe.wrap, _))
   }
 
   private sealed trait Method {
@@ -250,8 +250,8 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   private sealed trait CustomRepr
 
   private sealed trait OpticRepr extends CustomRepr
-  private case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, CustomRepr]]) extends OpticRepr
-  private case class SpecifiedSealedTrait(subclasses: Map[c.Type, CustomRepr]) extends OpticRepr
+  private case class SpecifiedCaseClass(tpe: WrappedType, fields: List[Map[c.TermName, CustomRepr]]) extends OpticRepr
+  private case class SpecifiedSealedTrait(subclasses: Map[WrappedType, CustomRepr]) extends OpticRepr
 
   private sealed trait SpecifiedRepr extends CustomRepr with HasPosition
   private case class Specified(tree: Arg, pos: c.Position) extends SpecifiedRepr
@@ -276,7 +276,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   private def deleteUnused(gen: CustomRepr, variables: Variables, typeToGen: c.Type): Variables = {
     val used = usedVariables(gen)
     variables.filter { case (tpe, name) =>
-      used.contains(name) || tpe =:= typeToGen
+      used.contains(name) || tpe.tpe =:= typeToGen
     }
   }
 
@@ -361,9 +361,9 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
         }.toList
         acc :+ params
       }
-      construct(classSymbol, args)
+      construct(classSymbol.tpe, args)
     case SpecifiedSealedTrait(subclasses) =>
-      val cases = subclasses.filterNot(_._2.isInstanceOf[Excluded])
+      val cases = subclasses.filterNot(_._2.isInstanceOf[Excluded]).map{ case (k, v) => (k.tpe, v) }
       if (cases.isEmpty) fail("All subtypes was excluded")
       constructCases(termName)(cases)(specifiedTree(termName))
     case Specified(GenArg(tree)) => callApply(tree)(termName)

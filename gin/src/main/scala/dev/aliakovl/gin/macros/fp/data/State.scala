@@ -79,9 +79,8 @@ private[macros] object State {
     }
   )
 
-  implicit def applicationForState[S]
-      : Applicative[({ type M[A] = State[S, A] })#M] =
-    new Applicative[({ type M[A] = State[S, A] })#M] {
+  implicit def applicationForState[S]: Applicative[State[S, *]] =
+    new Applicative[State[S, *]] {
       override def pure[A](a: A): State[S, A] = State.pure(a)
 
       override def ap[A, B](

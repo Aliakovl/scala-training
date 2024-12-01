@@ -2,6 +2,7 @@ package dev.aliakovl.gin.macros
 
 import dev.aliakovl.gin.macros.fp.data.State
 
+import scala.collection.immutable.ListMap
 import scala.reflect.macros.whitebox
 
 private[macros] final class Stack[S](
@@ -37,6 +38,8 @@ private[macros] final class Stack[S](
   def isEmpty: Boolean = states.isEmpty
 
   def depth: Int = states.size
+
+  def get: Option[S] = states.headOption
 
   def statefulSearch[A](
       thunk: => Either[String, A]
@@ -79,7 +82,7 @@ private[macros] object Stack extends StateMacros {
 
   private val threadLocalStack = ThreadLocal.withInitial { () =>
     new Stack(
-      init = VState(Map.empty, Map.empty),
+      init = VState(ListMap.empty, ListMap.empty),
       states = List.empty,
       error = None
     )

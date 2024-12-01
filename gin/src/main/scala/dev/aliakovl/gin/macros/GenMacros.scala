@@ -22,6 +22,14 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
 
     val typeToGen = weakTypeOf[A].dealias
 
+    println(s"$typeToGen")
+    println(s"${stack.get.map(_.variables)}")
+    println(s"${stack.get.map(_.values)}")
+
+    if (depth > 10) {
+      fail("to match")
+    }
+
     def genTree(vState: VState): c.Expr[Gen[A]] = {
       val variables = vState.variables
       val values = vState.values
@@ -30,15 +38,15 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
         val genType = weakTypeOf[Gen[A]]
         withName { name =>
           c.Expr[Gen[A]](q"""{
-            lazy val $name: $genType = ${LazyRef(genType, variables(typeToGen).decodedName.toString)}
+            lazy val $name: $genType = ${LazyRef(genType, variables(typeToGen.wrap).decodedName.toString)}
             $name
           }""")
         }
       } else {
         val declarations: List[c.Expr[Any]] = variables.map { case (tpe, variable) =>
-          lazyVal(variable, tpe, values(tpe))
+          lazyVal(variable, tpe.tpe, values(tpe))
         }.toList
-        block(declarations, c.Expr[Gen[A]](Ident(variables(typeToGen))))
+        block(declarations, c.Expr[Gen[A]](Ident(variables(typeToGen.wrap))))
       }
     }
 
@@ -86,34 +94,30 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
     }
 
     def createValueIfNotExists(tpe: c.Type, value: c.Tree): FullState[Unit] = {
-      State.modifyUnless[VState](_.values.contains(tpe))(_.modify[Values](_.updated(tpe, value)))
+      State.modifyUnless[VState](_.values.contains(tpe.wrap))(_.modify[Values](_.updated(tpe.wrap, value)))
     }
 
     def createVariableIfNotExists(tpe: c.Type): FullState[Unit] = {
-      State.modifyUnless[VState](_.variables.contains(tpe))(_.modify[Variables]{ variables =>
+      State.modifyUnless[VState](_.variables.contains(tpe.wrap))(_.modify[Variables]{ variables =>
         val name = c.freshName(tpe.typeSymbol.name).toTermName
-        variables.updated(tpe, name)
+        variables.updated(tpe.wrap, name)
       })
     }
 
-    def getVariableName(tpe: c.Type): FullState[TermName] = for {
-      variables <- State.get[VState].map(_.variables)
-      name <- State.pure(variables.get(tpe)).fallback {
-        findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _)) *> State.get[VState].map(_.variables(tpe))
-      }
-    } yield name
+    def getVariableName(tpe: c.Type): FullState[TermName] = {
+      State.get[VState].map(_.variables.get(tpe.wrap))
+        .fallback {
+          findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _)) *> State.get[VState].map(x => x.variables.getOrElse(tpe.wrap, fail(s"${tpe.wrap} - ${x.variables}")))
+        }
+    }
 
     def getOrElseBuildValue(tpe: c.Type): FullState[c.Tree] = {
-      State.get[VState].map(_.values).flatMap { values =>
-        values.get(tpe) match {
-          case Some(value) => State.pure(value)
-          case None =>
-            for {
-              _ <- createVariableIfNotExists(tpe)
-              value <- buildValue(tpe)
-              _ <- createValueIfNotExists(tpe, value)
-            } yield value
-        }
+      State.get[VState].map(_.values.get(tpe.wrap)).fallback {
+        for {
+          _ <- createVariableIfNotExists(tpe)
+          value <- buildValue(tpe)
+          _ <- createValueIfNotExists(tpe, value)
+        } yield value
       }
     }
 
@@ -122,8 +126,8 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
         _ <- createValueIfNotExists(typeToGen, c.untypecheck(value.duplicate))
         _ <- createVariableIfNotExists(typeToGen)
         variables <- State.get[VState].map(_.variables)
-        _ <- (variables.keySet - typeToGen).traverse { tpe =>
-          findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _))
+        _ <- (variables.keySet - typeToGen.wrap).traverse { tpe =>
+          findImplicit(tpe.tpe).flatMap(createValueIfNotExists(tpe.tpe, _))
         }
       } yield ()
     }
