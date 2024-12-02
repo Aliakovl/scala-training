@@ -33,7 +33,37 @@ class GenConstructorsSpec extends AnyFlatSpec with Matchers {
     }
 
     TestCase(Gen.random[Colours.Colour]) { elements =>
-      elements should contain allElementsOf Colours.values
+      every(elements) should matchPattern {
+        case Colours.Blue  =>
+        case Colours.Red   =>
+        case Colours.Green =>
+      }
+    }
+  }
+
+  behavior of "one of"
+
+  it should "create Gen for sum of provided singleton types" in TestCase(
+    Gen.one[String].of["A", "B"]
+  ) { elements =>
+    every(elements) should matchPattern {
+      case "A" =>
+      case "B" =>
+    }
+  }
+
+  it should "create Gen for sum of provided sum types" in {
+    trait A
+    class B extends A
+    class C extends A
+    class D extends A
+
+    TestCase(Gen.one[A].of[B, C, D]) { elements =>
+      every(elements) should matchPattern {
+        case _: B =>
+        case _: C =>
+        case _: D =>
+      }
     }
   }
 }
