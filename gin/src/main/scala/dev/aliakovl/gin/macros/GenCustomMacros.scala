@@ -16,14 +16,14 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   private val ginModule: ModuleSymbol = typeOf[dev.aliakovl.gin.`package`.type].termSymbol.asModule
 
   def mkCustomValue(prefix: c.Tree, typeToGen: c.Type): VarsState[Option[c.Tree]] = {
-    mergeMethods(disassembleTree(prefix), typeToGen)
-      .flatTap { genOpt =>
-        genOpt.traverse { gen =>
+    mergeMethods(parseMethods(prefix), typeToGen)
+      .flatTap {
+        _.traverse { gen =>
           State.modify[Variables](deleteUnused(gen, _, typeToGen))
         }
       }
-      .map { genOpt =>
-        genOpt.map { gen =>
+      .map {
+        _.map { gen =>
           withName { termName =>
             toGen(termName)(specifiedTree(termName)(gen))
           }
@@ -52,7 +52,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
           }
           next.map(subtype -> _)
         } else {
-          State.getOrElseUpdate(subtype, c.freshName(subtype.typeSymbol.name).toTermName)
+          State.getOrElseUpdate(subtype.wrap, c.freshName(subtype.typeSymbol.name).toTermName)
             .map { name =>
               subtype -> NotSpecified(name)
             }
@@ -75,7 +75,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
           State.pure[Variables, CustomRepr](NotSpecifiedImplicit(impl)).map(termName -> _)
         } else {
           val paramType = param.info
-          State.getOrElseUpdate(paramType, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
+          State.getOrElseUpdate(paramType.wrap, c.freshName(paramType.typeSymbol.name).toTermName).map { name =>
             param.name.toTermName -> NotSpecified(name)
           }
         }
@@ -173,12 +173,12 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   }
 
   @tailrec
-  private def disassembleTree(tree: c.Tree, methods: Methods = List.empty): Methods = {
+  private def parseMethods(tree: c.Tree, methods: Methods = List.empty): Methods = {
     tree match {
-      case SpecifyRef(method, other) => disassembleTree(other, method +: methods)
-      case SpecifyConstRef(method, other) => disassembleTree(other, method +: methods)
-      case UseDefaultRef(method, other) => disassembleTree(other, method +: methods)
-      case ExcludeRef(method, other) => disassembleTree(other, method +: methods)
+      case SpecifyRef(method, other) => parseMethods(other, method +: methods)
+      case SpecifyConstRef(method, other) => parseMethods(other, method +: methods)
+      case UseDefaultRef(method, other) => parseMethods(other, method +: methods)
+      case ExcludeRef(method, other) => parseMethods(other, method +: methods)
       case CustomRef(_) => methods
       case _ => c.abort(tree.pos, "Unsupported syntax")
     }
@@ -210,7 +210,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
     def unapply(tree: c.Tree): Option[(Prism, c.Tree)] = tree match {
       case q"$module.GenCustomOps[$from]($other).when[$to]" if module.symbol == ginModule =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
-        val prism = Prism(to.tpe)
+        val prism = Prism(to.tpe.dealias)
         Some((prism, other))
       case _ => None
     }
@@ -220,7 +220,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
     def unapply(tree: c.Tree): Option[(Prism, c.Tree)] = tree match {
       case q"$_[$from]($other).when[$to](..$_)" =>
         if (from.symbol.isAbstract && !from.symbol.asClass.isSealed) c.abort(to.pos, s"Type $from is not sealed")
-        val toType = subclassType(to.symbol, from.tpe)
+        val toType = subclassType(to.symbol, from.tpe.dealias)
         val prism = Prism(toType)
         Some((prism, other))
       case _ => None
@@ -228,16 +228,16 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   }
 
   private object SelectorRef {
-    def unapply(tree: c.Tree): Option[Selector] = Some(disassembleSelector(tree))
+    def unapply(tree: c.Tree): Option[Selector] = Some(parseSelector(tree))
   }
 
   @tailrec
-  private def disassembleSelector(tree: c.Tree, selector: Selector = List.empty): Selector = {
+  private def parseSelector(tree: c.Tree, selector: Selector = List.empty): Selector = {
     tree match {
-      case LensRef(lens, other) => disassembleSelector(other, lens :: selector)
-      case ArgLensRef(lens, other) => disassembleSelector(other, lens :: selector)
-      case PrismRef(prism, other) => disassembleSelector(other, prism :: selector)
-      case SpecialPrismRef(prism, other) => disassembleSelector(other, prism :: selector)
+      case LensRef(lens, other) => parseSelector(other, lens :: selector)
+      case ArgLensRef(lens, other) => parseSelector(other, lens :: selector)
+      case PrismRef(prism, other) => parseSelector(other, prism :: selector)
+      case SpecialPrismRef(prism, other) => parseSelector(other, prism :: selector)
       case _: Ident => selector
       case tree => c.abort(tree.pos, "Unsupported path element")
     }
@@ -276,7 +276,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   private def deleteUnused(gen: CustomRepr, variables: Variables, typeToGen: c.Type): Variables = {
     val used = usedVariables(gen)
     variables.filter { case (tpe, name) =>
-      used.contains(name) || tpe == typeToGen
+      used.contains(name) || tpe.tpe =:= typeToGen
     }
   }
 

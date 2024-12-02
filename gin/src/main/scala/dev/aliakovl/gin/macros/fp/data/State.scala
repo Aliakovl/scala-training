@@ -65,15 +65,10 @@ private[macros] object State {
   def get[S]: State[S, S] = State(s => (s, s))
   def modify[S](f: S => S): State[S, Unit] = State(s => (f(s), ()))
   def getOrElseUpdate[K, V](key: K, value: => V): State[Map[K, V], V] = {
-    for {
-      s <- State.get[Map[K, V]]
-      v <- s.get(key) match {
-        case Some(v) => State.pure[Map[K, V], V](v)
-        case None =>
-          val v = value
-          State.modify[Map[K, V]](_.updated(key, v)).as(v)
-      }
-    } yield v
+    State.get[Map[K, V]].map(_.get(key)).fallback {
+      val v = value
+      State.modify[Map[K, V]](_.updated(key, v)).as(v)
+    }
   }
 
   def modifyUnless[S](pred: S => Boolean)(f: S => S): State[S, Unit] = State(s =>
@@ -84,9 +79,8 @@ private[macros] object State {
     }
   )
 
-  implicit def applicationForState[S]
-      : Applicative[({ type M[A] = State[S, A] })#M] =
-    new Applicative[({ type M[A] = State[S, A] })#M] {
+  implicit def applicationForState[S]: Applicative[State[S, *]] =
+    new Applicative[State[S, *]] {
       override def pure[A](a: A): State[S, A] = State.pure(a)
 
       override def ap[A, B](

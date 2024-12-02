@@ -1,5 +1,6 @@
 package dev.aliakovl.gin
 
+import dev.aliakovl.gin.GenCustomCompileSpec.AnyValClass
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -287,7 +288,43 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
         """
           |Gen.custom[A].make
           |""".stripMargin should compile
+
+        """
+          |Gen
+          |  .custom[({ type T = Either[None.type, Int] })#T]
+          |  .make
+          |""".stripMargin should compile
+      }
+
+      "constructor is private, but there is other publish constructor" in {
+        class A private (x: Int, y: String) {
+          def this(x: Int) = {
+            this(x, x.toString)
+          }
+        }
+
+        """
+          |Gen.custom[A].make
+          |""".stripMargin should compile
+      }
+
+      "constructor argument is private" in {
+        class A(private val x: Int)
+
+        """
+          |Gen.custom[A].make
+          |""".stripMargin should compile
+      }
+
+      "class is AnyVal" in {
+        """
+          |Gen.custom[AnyValClass].make
+          |""".stripMargin should compile
       }
     }
   }
+}
+
+object GenCustomCompileSpec {
+  final class AnyValClass(private val value: String) extends AnyVal
 }

@@ -11,7 +11,7 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
 
   def apply(random: Random): A = unsafeRun(random)
 
-  def runWithCtx()(implicit random: Random): A = unsafeRun(random)
+  def runWithCtx(implicit random: Random): A = unsafeRun(random)
 
   def runWithSeed(seed: Long): A = unsafeRun(new Random(seed))
 
@@ -41,10 +41,14 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
     Gen { random =>
       Iterable.fill(size)(unsafeRun(random)).toMap
     }
+
+  def stream: Gen[LazyList[A]] = Gen { random =>
+    LazyList.continually(unsafeRun(random))
+  }
 }
 
 object Gen
-    extends GenLowPriority
+    extends GenCats
     with GenInstances
     with GenOneOf {
 
@@ -84,6 +88,10 @@ object Gen
   }
 
   def between(minInclusive: Int, maxExclusive: Int): Gen[Int] = Gen {
+    _.between(minInclusive, maxExclusive)
+  }
+
+  def between(minInclusive: Long, maxExclusive: Long): Gen[Long] = Gen {
     _.between(minInclusive, maxExclusive)
   }
 }

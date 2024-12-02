@@ -26,9 +26,8 @@ object Applicative {
         ff.flatMap(fa.map)
     }
 
-  implicit def applicativeForEither[E]
-      : Applicative[({ type M[A] = Either[E, A] })#M] =
-    new Applicative[({ type M[A] = Either[E, A] })#M] {
+  implicit def applicativeForEither[E]: Applicative[Either[E, *]] =
+    new Applicative[Either[E, *]] {
       override def pure[A](a: A): Either[E, A] = Right(a)
 
       override def ap[A, B](ff: Either[E, A => B])(
