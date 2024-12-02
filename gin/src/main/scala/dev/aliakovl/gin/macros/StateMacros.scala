@@ -8,8 +8,28 @@ import scala.reflect.macros.whitebox
 private[macros] trait StateMacros {
   val c: whitebox.Context
 
-  type Variables = Map[c.Type, c.TermName]
-  type Values = Map[c.Type, c.Tree]
+  class WrappedType(val tpe: c.Type) {
+    override def equals(obj: Any): Boolean = {
+      if (obj.isInstanceOf[WrappedType]) {
+        obj.asInstanceOf[WrappedType].tpe =:= tpe
+      } else {
+        false
+      }
+    }
+
+    override def toString: String = tpe.toString
+  }
+
+  object WrappedType {
+    def apply(tpe: c.Type) = new WrappedType(tpe)
+  }
+
+  implicit class WrappedTypeOps(private val value: c.Type) {
+    def wrap: WrappedType = WrappedType(value)
+  }
+
+  type Variables = Map[WrappedType, c.TermName]
+  type Values = Map[WrappedType, c.Tree]
   type VarsState[A] = State[Variables, A]
   case class VState(variables: Variables, values: Values)
   type FullState[A] = State[VState, A]

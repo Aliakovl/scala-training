@@ -132,12 +132,19 @@ class SpecifySpec extends AnyFlatSpec with Matchers {
       .specify(_.when[::].arg[List[String]]("next").when[::].head)(Gen.oneOf("2", "second"))
       .specify(_.when[::].arg[List[String]]("next").when[::].arg[List[String]]("next").when[::].head)(Gen.oneOf("3", "third"))
       .make
-  ) { elements =>
-    every(elements) should matchPattern {
-      case ("1" | "first") :: ("2" | "second") :: ("3" | "third") :: _ =>
-      case ("1" | "first") :: ("2" | "second") :: Nil =>
-      case ("1" | "first") :: Nil =>
-      case Nil =>
+  ).foreach { element =>
+
+    def recursive(lst: List[Any]): Boolean = {
+      lst should matchPattern {
+        case ("1" | "first") :: ("2" | "second") :: ("3" | "third") :: other if recursive(other) =>
+        case ("1" | "first") :: ("2" | "second") :: Nil =>
+        case ("1" | "first") :: Nil =>
+        case Nil =>
+      }
+
+      true
     }
+
+    recursive(element)
   }
 }

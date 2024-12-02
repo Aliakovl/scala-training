@@ -11,7 +11,7 @@ case class Cons[B](head: B, tail: Lst[B]) extends Lst[B]
 sealed trait MyClass
 case class MyClass1(m: MyClass = MyClass4) extends MyClass
 case class MyClass2(lst: Lst[Int], mc2field: String = "lol-default")(
-    other: Lst[Long] = Cons(mc2field.length.toLong, LNil)
+  other: Lst[Long] = Cons(mc2field.length.toLong, LNil)
 ) extends MyClass {
   override def toString: String = s"MyClass2($lst, $mc2field)($other)"
 }
@@ -30,13 +30,13 @@ class G(val int: Int) {
 }
 
 case class Talk(int: Int)(
-    val string: String,
-    val gerg: List[Int],
-    val mc: Option[MyClass] = None
+  val string: String,
+  val gerg: List[Int],
+  val mc: Option[MyClass] = None
 )(implicit
-    val wefwef: Option[Long],
-    sec: Int
-) {
+  val wefwef: Option[Long],
+  sec: Int
+               ) {
   override def toString: String =
     s"Talk($int)($string, $gerg, $mc)($wefwef, $sec)"
 }

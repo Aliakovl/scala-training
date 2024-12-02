@@ -144,7 +144,8 @@ lazy val gin = (project in file("./gin"))
     scalacOptions ++= Seq(
       "--language:experimental.macros",
       "--language:implicitConversions"
-    )
+    ),
+    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.3" cross CrossVersion.full)
   )
 
 lazy val reflex = (project in file("./reflex"))

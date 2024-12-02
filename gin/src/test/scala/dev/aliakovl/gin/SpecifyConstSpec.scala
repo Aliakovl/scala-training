@@ -131,13 +131,20 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
       .specifyConst(_.when[::].arg[List[String]]("next").when[::].head)("second")
       .specifyConst(_.when[::].arg[List[String]]("next").when[::].arg[List[String]]("next").when[::].head)("third")
       .make
-  ) { elements =>
-    every(elements) should matchPattern {
-      case "first" :: "second" :: "third" :: _ =>
-      case "first" :: "second" :: Nil =>
-      case "first" :: Nil =>
-      case Nil =>
+  ).foreach { element =>
+
+    def recursive(lst: List[Any]): Boolean = {
+      lst should matchPattern {
+        case "first" :: "second" :: "third" :: other if recursive(other) =>
+        case "first" :: "second" :: Nil =>
+        case "first" :: Nil =>
+        case Nil =>
+      }
+
+      true
     }
+
+    recursive(element)
   }
 
   it should "???" in TestCase(
