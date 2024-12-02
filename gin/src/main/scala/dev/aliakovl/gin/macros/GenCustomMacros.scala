@@ -50,11 +50,11 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
           if (!(subtype <:< toType)) {
             fail(s"Type arguments of $toType must not be narrowed")
           }
-          next.map(subtype.wrap -> _)
+          next.map(subtype -> _)
         } else {
           State.getOrElseUpdate(subtype.wrap, c.freshName(subtype.typeSymbol.name).toTermName)
             .map { name =>
-              subtype.wrap -> NotSpecified(name)
+              subtype -> NotSpecified(name)
             }
         }
       }.map(_.toMap).map(SpecifiedSealedTrait)
@@ -80,7 +80,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
           }
         }
       }.map(_.toMap)
-    }.map(SpecifiedCaseClass(tpe.wrap, _))
+    }.map(SpecifiedCaseClass(tpe, _))
   }
 
   private sealed trait Method {
@@ -250,8 +250,8 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
   private sealed trait CustomRepr
 
   private sealed trait OpticRepr extends CustomRepr
-  private case class SpecifiedCaseClass(tpe: WrappedType, fields: List[Map[c.TermName, CustomRepr]]) extends OpticRepr
-  private case class SpecifiedSealedTrait(subclasses: Map[WrappedType, CustomRepr]) extends OpticRepr
+  private case class SpecifiedCaseClass(tpe: c.Type, fields: List[Map[c.TermName, CustomRepr]]) extends OpticRepr
+  private case class SpecifiedSealedTrait(subclasses: Map[c.Type, CustomRepr]) extends OpticRepr
 
   private sealed trait SpecifiedRepr extends CustomRepr with HasPosition
   private case class Specified(tree: Arg, pos: c.Position) extends SpecifiedRepr
@@ -361,9 +361,9 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
         }.toList
         acc :+ params
       }
-      construct(classSymbol.tpe, args)
+      construct(classSymbol, args)
     case SpecifiedSealedTrait(subclasses) =>
-      val cases = subclasses.filterNot(_._2.isInstanceOf[Excluded]).map { case (k, v) => (k.tpe, v) }
+      val cases = subclasses.filterNot(_._2.isInstanceOf[Excluded])
       if (cases.isEmpty) fail("All subtypes was excluded")
       constructCases(termName)(cases)(specifiedTree(termName))
     case Specified(GenArg(tree)) => callApply(tree)(termName)
