@@ -129,17 +129,25 @@ class SpecifySpec extends AnyFlatSpec with Matchers {
     Gen
       .custom[List[String]]
       .specify(_.when[::].head)(Gen.oneOf("1", "first"))
-      .specify(_.when[::].arg[List[String]]("next").when[::].head)(Gen.oneOf("2", "second"))
-      .specify(_.when[::].arg[List[String]]("next").when[::].arg[List[String]]("next").when[::].head)(Gen.oneOf("3", "third"))
+      .specify(_.when[::].arg[List[String]]("next").when[::].head)(
+        Gen.oneOf("2", "second")
+      )
+      .specify(
+        _.when[::]
+          .arg[List[String]]("next")
+          .when[::]
+          .arg[List[String]]("next")
+          .when[::]
+          .head
+      )(Gen.oneOf("3", "third"))
       .make
   ).foreach { element =>
-
     def recursive(lst: List[Any]): Boolean = {
       lst should matchPattern {
         case ("1" | "first") :: ("2" | "second") :: ("3" | "third") :: other if recursive(other) =>
         case ("1" | "first") :: ("2" | "second") :: Nil =>
-        case ("1" | "first") :: Nil =>
-        case Nil =>
+        case ("1" | "first") :: Nil                     =>
+        case Nil                                        =>
       }
 
       true
@@ -147,4 +155,15 @@ class SpecifySpec extends AnyFlatSpec with Matchers {
 
     recursive(element)
   }
+
+  it should "???" in TestCase {
+    def g: Gen[List[String]] = Gen
+      .custom[List[String]]
+      .specify(_.when[::].arg("next"))(g)
+      .make
+
+    g
+  }.forall(
+    Gen.random[List[String]]
+  )(_ shouldBe _)
 }

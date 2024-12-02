@@ -115,13 +115,22 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
     }
   }
 
-  it should "use the same Gen[T] for recursive type" in TestCase(
+  it should "use the same Gen[T] for recursive type (1)" in TestCase(
     Gen
-      .custom[List[Int]]
-      .specifyConst(_.when[::].head)(15)
+      .custom[List[String]]
+      .specifyConst(_.when[::].head)("15")
       .make
   ) { elements =>
-    every(elements) should (be(empty) or contain only 15)
+    every(elements) should (be(empty) or contain only "15")
+  }
+
+  it should "use the same Gen[T] for recursive type (2)" in TestCase(
+    Gen
+      .custom[List[String]]
+      .specifyConst(_.when[::[String]].head)("15")
+      .make
+  ) { elements =>
+    every(elements) should (be(empty) or contain only "15")
   }
 
   it should "specify deep fields for recursive type" in TestCase(
