@@ -22,14 +22,6 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
 
     val typeToGen = weakTypeOf[A].dealias
 
-    println(s"$typeToGen")
-    println(s"${stack.get.map(_.variables)}")
-    println(s"${stack.get.map(_.values)}")
-
-    if (depth > 10) {
-      fail("to match")
-    }
-
     def genTree(vState: VState): c.Expr[Gen[A]] = {
       val variables = vState.variables
       val values = vState.values
@@ -107,7 +99,7 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
     def getVariableName(tpe: c.Type): FullState[TermName] = {
       State.get[VState].map(_.variables.get(tpe.wrap))
         .fallback {
-          findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _)) *> State.get[VState].map(x => x.variables.getOrElse(tpe.wrap, fail(s"${tpe.wrap} - ${x.variables}")))
+          findImplicit(tpe).flatMap(createValueIfNotExists(tpe, _)) *> State.get[VState].map(_.variables(tpe.wrap))
         }
     }
 
@@ -126,7 +118,7 @@ final class GenMacros(val c: whitebox.Context) extends CommonMacros with StateMa
         _ <- createValueIfNotExists(typeToGen, c.untypecheck(value.duplicate))
         _ <- createVariableIfNotExists(typeToGen)
         variables <- State.get[VState].map(_.variables)
-        _ <- (variables.keySet - typeToGen.wrap).traverse { tpe =>
+        _ <- variables.keysIterator.filterNot(_ == typeToGen.wrap).traverse { tpe =>
           findImplicit(tpe.tpe).flatMap(createValueIfNotExists(tpe.tpe, _))
         }
       } yield ()

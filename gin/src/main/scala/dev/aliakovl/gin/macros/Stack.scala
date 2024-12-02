@@ -39,8 +39,6 @@ private[macros] final class Stack[S](
 
   def depth: Int = states.size
 
-  def get: Option[S] = states.headOption
-
   def statefulSearch[A](
       thunk: => Either[String, A]
   ): State[S, Either[String, A]] = State { state =>

@@ -3,7 +3,6 @@ package dev.aliakovl.gin.macros
 import dev.aliakovl.gin.macros.fp.data.State
 import dev.aliakovl.gin.macros.fp.optics.Lens
 
-import scala.language.implicitConversions
 import scala.reflect.macros.whitebox
 
 private[macros] trait StateMacros {
@@ -11,9 +10,10 @@ private[macros] trait StateMacros {
 
   class WrappedType(val tpe: c.Type) {
     override def equals(obj: Any): Boolean = {
-      obj match {
-        case WrappedType(o) => tpe =:= o
-        case _ => false
+      if (obj.isInstanceOf[WrappedType]) {
+        obj.asInstanceOf[WrappedType].tpe =:= tpe
+      } else {
+        false
       }
     }
 
@@ -22,14 +22,11 @@ private[macros] trait StateMacros {
 
   object WrappedType {
     def apply(tpe: c.Type) = new WrappedType(tpe)
-    def unapply(wt: WrappedType): Option[c.Type] = Some(wt.tpe)
   }
 
   implicit class WrappedTypeOps(private val value: c.Type) {
     def wrap: WrappedType = WrappedType(value)
   }
-
-//  implicit def wrapType(tpe: c.Type): WrappedType = WrappedType(tpe)
 
   type Variables = Map[WrappedType, c.TermName]
   type Values = Map[WrappedType, c.Tree]

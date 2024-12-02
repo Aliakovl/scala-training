@@ -50,14 +50,14 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
           if (!(subtype <:< toType)) {
             fail(s"Type arguments of $toType must not be narrowed")
           }
-          next.map(subtype -> _)
+          next.map(subtype.wrap -> _)
         } else {
           State.getOrElseUpdate(subtype.wrap, c.freshName(subtype.typeSymbol.name).toTermName)
             .map { name =>
-              subtype -> NotSpecified(name)
+              subtype.wrap -> NotSpecified(name)
             }
         }
-      }.map(_.map{ case (k, v) => (k.wrap, v) }).map(_.toMap).map(SpecifiedSealedTrait)
+      }.map(_.toMap).map(SpecifiedSealedTrait)
     }
   }
 
@@ -363,7 +363,7 @@ private[macros] trait GenCustomMacros { self: StateMacros with CommonMacros =>
       }
       construct(classSymbol.tpe, args)
     case SpecifiedSealedTrait(subclasses) =>
-      val cases = subclasses.filterNot(_._2.isInstanceOf[Excluded]).map{ case (k, v) => (k.tpe, v) }
+      val cases = subclasses.filterNot(_._2.isInstanceOf[Excluded]).map { case (k, v) => (k.tpe, v) }
       if (cases.isEmpty) fail("All subtypes was excluded")
       constructCases(termName)(cases)(specifiedTree(termName))
     case Specified(GenArg(tree)) => callApply(tree)(termName)
