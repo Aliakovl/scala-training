@@ -137,6 +137,7 @@ lazy val gin = (project in file("./gin"))
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scala-lang" % "scala-compiler" % scalaVersion.value,
       "org.typelevel" %% "cats-core" % "2.12.0",
+      "dev.zio" %% "zio" % "2.1.6",
       "org.scalatest" %% "scalatest" % "3.2.19" % Test,
       "org.typelevel" %% "cats-laws" % "2.12.0" % Test,
       "org.typelevel" %% "discipline-scalatest" % "2.3.0" % Test
@@ -145,7 +146,9 @@ lazy val gin = (project in file("./gin"))
       "--language:experimental.macros",
       "--language:implicitConversions"
     ),
-    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.3" cross CrossVersion.full)
+    addCompilerPlugin(
+      "org.typelevel" % "kind-projector" % "0.13.3" cross CrossVersion.full
+    )
   )
 
 lazy val reflex = (project in file("./reflex"))

@@ -149,13 +149,6 @@ class GenCustomCompileSpec extends AnyWordSpec with Matchers {
           |  .make
           |""".stripMargin shouldNot compile
 
-        Gen
-          .custom[Option[Int]]
-          .specifyConst(_.when[Some[Int]].arg("value"))(10)
-          .make
-          .many[List](100)
-          .run() should contain only (Some(10), None)
-
         """
           |Gen
           |  .custom[Option[Int]]

@@ -4,7 +4,6 @@ package internal
 import dev.aliakovl.gin.internal.GenOneOf.OneOfTypePartiallyApplied
 
 import scala.collection.immutable.TreeMap
-import scala.util.Random
 
 trait GenOneOf {
   def oneOf[A](values: A*): Gen[A] = Gen(random => GenOneOf.oneOfImpl(random)(values))

@@ -5,17 +5,17 @@ import dev.aliakovl.gin.internal._
 import scala.annotation.compileTimeOnly
 import scala.collection.Factory
 import scala.language.implicitConversions
-import scala.util.Random
 
-final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends AnyVal {
+final class Gen[A] private (private[gin] val unsafeRun: Random => A)
+    extends AnyVal {
 
   def apply(random: Random): A = unsafeRun(random)
 
   def runWithCtx(implicit random: Random): A = unsafeRun(random)
 
-  def runWithSeed(seed: Long): A = unsafeRun(new Random(seed))
+  def runWithSeed(seed: Long): A = unsafeRun(new Random.Unsafe(seed))
 
-  def run(): A = unsafeRun(Random)
+  def run(): A = unsafeRun(Random.Unsafe)
 
   def map[B](f: A => B): Gen[B] = Gen { random =>
     f(unsafeRun(random))
@@ -47,10 +47,7 @@ final class Gen[A] private (private[gin] val unsafeRun: Random => A) extends Any
   }
 }
 
-object Gen
-    extends GenCats
-    with GenInstances
-    with GenOneOf {
+object Gen extends GenCats with GenInstances with GenOneOf {
 
   def apply[A](eval: Random => A): Gen[A] = new Gen(eval)
 
@@ -60,7 +57,9 @@ object Gen
 
   def random[A](implicit inst: Gen[A]): Gen[A] = inst
 
-  @compileTimeOnly("Illegal reference to dev.aliakovl.gin.Gen.custom, try to call .make after it")
+  @compileTimeOnly(
+    "Illegal reference to dev.aliakovl.gin.Gen.custom, try to call .make after it"
+  )
   def custom[A]: GenCustom[A] = ???
 
   def fromFunction[In](in: In)(implicit
