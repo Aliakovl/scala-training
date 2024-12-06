@@ -141,19 +141,37 @@ class SpecifyConstSpec extends AnyFlatSpec with Matchers {
       .specifyConst(_.when[::].arg[List[String]]("next").when[::].arg[List[String]]("next").when[::].head)("third")
       .make
   ).foreach { element =>
-
     def recursive(lst: List[Any]): Boolean = {
       lst should matchPattern {
         case "first" :: "second" :: "third" :: other if recursive(other) =>
-        case "first" :: "second" :: Nil =>
-        case "first" :: Nil =>
-        case Nil =>
+        case "first" :: "second" :: Nil                                  =>
+        case "first" :: Nil                                              =>
+        case Nil                                                         =>
       }
 
       true
     }
 
     recursive(element)
+  }
+
+  it should "specify implicit parameter" in {
+    case class T(int: Int)(implicit str: String) {
+      def getStr: String = str
+    }
+
+    implicit val implStr: String = "implicit"
+
+    TestCase(
+      Gen
+        .custom[T]
+        .specifyConst(_.arg("str"))("const")
+        .make
+    ) { elements =>
+      every(elements) should matchPattern {
+        case t: T if t.getStr == "const" =>
+      }
+    }
   }
 
   it should "???" in TestCase(

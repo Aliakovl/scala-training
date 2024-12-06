@@ -156,6 +156,25 @@ class SpecifySpec extends AnyFlatSpec with Matchers {
     recursive(element)
   }
 
+  it should "specify implicit parameter" in {
+    case class T(int: Int)(implicit str: String) {
+      def getStr: String = str
+    }
+
+    implicit val implStr: String = "implicit"
+
+    TestCase(
+      Gen
+        .custom[T]
+        .specify(_.arg("str"))(Gen.oneOf("const", "CONST"))
+        .make
+    ) { elements =>
+      every(elements) should matchPattern {
+        case t: T if t.getStr == "const" || t.getStr == "CONST" =>
+      }
+    }
+  }
+
   it should "???" in TestCase {
     def g: Gen[List[String]] = Gen
       .custom[List[String]]
